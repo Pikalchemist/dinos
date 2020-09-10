@@ -164,6 +164,9 @@ class Engine(object):
     def initPhysics(self):
         pass
 
+    def updatePhysics(self, dt):
+        pass
+
     # Frames
     def checkJumpFrame(self):
         self.displayThisFrame = True
@@ -185,7 +188,7 @@ class Engine(object):
         if self.skippedFrames > 0:
             jump = 'displays 1 frame every {} frames'.format(
                 self.skippedFrames)
-        return 'Environment {}\nGUI: {} - fps {} - {}\n'.format(self.engine, graphical, speed, jump)
+        return 'Environment {}\nGUI: {} - fps {} - {}\n'.format(self.__class__.__name__, graphical, speed, jump)
 
     # Main loop
     def run(self, duration=None):
@@ -200,11 +203,11 @@ class Engine(object):
             # Update physics
             if self.PHYSICAL:
                 subdt = dt / float(self.PHYSICS_STEPS)
-                for x in range(self.PHYSICS_STEPS):
+                for _ in range(self.PHYSICS_STEPS):
                     self.updatePhysics(subdt)
 
                     # Update
-                    self.update(subdt)
+                    self.environment.world.update(subdt)
 
             # Flip screen
             if self.displayThisFrame:

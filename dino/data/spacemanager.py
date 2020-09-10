@@ -15,7 +15,7 @@ from dino.representation.entity import Entity
 
 from .data import *
 from .space import Space, SpaceKind
-# from .space import Space, MultiColSpace, MultiColDataSpace, MultiRowDataSpace, SpaceKind
+from .multispace import MultiColSpace, MultiColDataSpace, MultiRowDataSpace
 
 
 # import graphviz
@@ -28,6 +28,7 @@ class SpaceManager(Serializable):
         self.options = options
 
         self.world = entityCls('root', spaceManager=self)
+        self.conserveRoot = False
 
         self.multiColSpaces = []
         self.multiRowSpaces = []
@@ -49,6 +50,9 @@ class SpaceManager(Serializable):
         #           for space in dict_.get('spaces', [])]
         return obj
     
+    def __repr__(self):
+        return f'SpaceManager({len(self.spaces)} spaces and {len(self.world.cascadingChildren()) + 1} entities)'
+    
     @property
     def size(self):
         return len(self.spaces)
@@ -66,9 +70,11 @@ class SpaceManager(Serializable):
         self.outcomeSpaces = self.getOutcomeSpaces(self.spaces)
 
     def _multiSpace(self, spaces, list_, type_):
-        # spaces = list(set([subSpace for space in spaces for subSpace in space]))
+        # Only 1 space -> return the space itself
         if len(spaces) == 1:
             return spaces[0]
+
+        # Look for exisiting multi space
         r = [s for s in list_ if set(s.spaces) == set(spaces)]
         if len(r) == 0:
             s = type_(self, spaces)
@@ -79,35 +85,45 @@ class SpaceManager(Serializable):
 
     def _multiSpaceWeighted(self, spaces, list_, type_, weight=None):
         space = self._multiSpace(spaces, list_, type_)
+
         if weight:
             space.clearSpaceWeight()
             for subspace in spaces:
                 space.spaceWeight(weight, subspace)
+
         return space
 
-    # def multiColSpace(self, spaces, canStoreData=None, weight=None):
-    #     spaces = list(
-    #         set([subSpace for space in spaces for subSpace in space.cols]))
-    #     if len(spaces) == 1:
-    #         return spaces[0]
-    #     if canStoreData is None:
-    #         if spaces:
-    #             dataSpaces = list(set([space.canStoreData()
-    #                                    for space in spaces]))
-    #             if len(dataSpaces) > 1:
-    #                 raise Exception(
-    #                     "All spaces should be a DataSpace or none: {}".format(spaces))
-    #             canStoreData = dataSpaces[0]
-    #         else:
-    #             canStoreData = False
-    #     return self._multiSpaceWeighted(spaces, list_=self.multiColSpaces, type_=MultiColDataSpace if canStoreData else
-    #                                     MultiColSpace, weight=weight)
+    def multiColSpace(self, spaces, canStoreData=None, weight=None):
+        # Flatten the list of spaces
+        spaces = list(set([subSpace for space in spaces for subSpace in space.cols if space is not None]))
 
-    # def multiRowSpace(self, spaces, canStoreData=None):
-    #     #spaces = list(set([subSpace for space in spaces for subSpace in space]))
-    #     if len(spaces) == 1:
-    #         return spaces[0]
-    #     return self._multiSpaceWeighted(spaces, list_=self.multiRowSpaces, type_=MultiRowDataSpace)
+        if len(spaces) == 1:
+            return spaces[0]
+
+        if canStoreData is None:
+            if spaces:
+                dataSpaces = list(set([space.canStoreData()
+                                       for space in spaces]))
+                if len(dataSpaces) > 1:
+                    raise Exception(
+                        "All spaces should be a DataSpace or none: {}".format(spaces))
+                canStoreData = dataSpaces[0]
+            else:
+                canStoreData = False
+
+        return self._multiSpaceWeighted(spaces, list_=self.multiColSpaces,
+                                        type_=MultiColDataSpace if canStoreData else MultiColSpace, weight=weight)
+
+    def multiRowSpace(self, spaces, canStoreData=None):
+        # spaces = list(set([subSpace for space in spaces for subSpace in space]))
+        spaces = list(set([space for space in spaces if space is not None]))
+
+        if not spaces:
+            return
+        if len(spaces) == 1:
+            return spaces[0]
+
+        return self._multiSpaceWeighted(spaces, list_=self.multiRowSpaces, type_=MultiRowDataSpace)
 
     def getActionSpaces(self, spaces):
         return [s for s in spaces if s.controllable() and s.kind == SpaceKind.BASIC]
@@ -135,11 +151,12 @@ class SpaceManager(Serializable):
     def convertSpace(self, space, kind=None, toData=None):
         toData = toData if toData is not None else self.storesData  # space.canStoreData()
         kind = kind if kind else space.kind
+
         relatedSpace = ([s for s in self.spaces if s.linkedTo(
             space) and s.kind == kind] + [None])[0]
-
         if relatedSpace:
             return relatedSpace
+
         if toData:
             return space.createDataSpace(self, kind)
         else:
@@ -150,3 +167,15 @@ class SpaceManager(Serializable):
 
     def convertData(self, data, kind=None, toData=None):
         return data.convertTo(self, kind=kind, toData=toData)
+    
+    def convertEntity(self, entity, proxy=True):
+        relatedEntity = ([e for e in self.world.cascadingChildren() if e.linkedTo(entity)] + [None])[0]
+        if relatedEntity:
+            return relatedEntity
+
+        entity = entity.createLinkedEntity(self, proxy=proxy)
+        if entity.isRoot() and not self.conserveRoot:
+            self.world = entity
+        elif not entity.parent:
+            self.world.addChild(entity)
+        return entity

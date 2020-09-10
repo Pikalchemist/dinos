@@ -10,10 +10,10 @@ from sklearn.neighbors import NearestNeighbors
 
 from exlab.interface.serializer import Serializable
 
-from ..utils.io import getVisual, plotData, visualize
-from ..utils.maths import popn
-from ..utils.logging import Logger
-from .data import *
+from dino.data.data import SingleData, Data, Goal, Action
+from .space import Space, SpaceKind
+
+# from ..utils.io import getVisual, plotData, visualize
 from . import operations
 
 

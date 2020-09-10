@@ -14,6 +14,9 @@ from dino.data.space import Space
 # from dino.data.state import *
 from dino.data.spacemanager import SpaceManager
 
+from dino.representation.live_entity import LiveEntity
+from dino.representation.property import Property
+
 from .engines.engine import Engine
 from .scene import SceneSetup
 
@@ -46,8 +49,7 @@ class Environment(SpaceManager):
     def __init__(self, sceneCls=None, options={}):
         """
         """
-        SpaceManager.__init__(self, storesData=False)
-        # self.dataset = dataset
+        SpaceManager.__init__(self, storesData=False, entityCls=LiveEntity)
         # self.name = options.get('name', 'Environment')
 
         assert(self.__class__.ENGINE is not None)
@@ -85,12 +87,12 @@ class Environment(SpaceManager):
                                                                        self.__class__.DESCRIPTION,
                                                                        '\n'.join(spacesDescription))
 
-    def setup(self, dataset=None):
-        # self.bindSpaces()
-        self.computeSpaces()
-        if dataset:
-            for space in self.actionExplorationSpaces:
-                self.dataset.convertSpace(space)
+    # def setup(self, dataset=None):
+    #     # self.bindSpaces()
+    #     self.computeSpaces()
+    #     if dataset:
+    #         for space in self.actionExplorationSpaces:
+    #             self.dataset.convertSpace(space)
 
     @property
     def name(self):
@@ -126,7 +128,7 @@ class Environment(SpaceManager):
 
     def findScene(self, nameCls):
         sceneCls = next(
-            (s for s in self.sceneClasses if s.__name__ == name), nameCls)
+            (s for s in self.sceneClasses if s.__name__ == nameCls), None)
         if sceneCls is None:
             raise Exception(
                 'Scene named \'{}\' not found for environment {}'.format(nameCls, self))
@@ -146,11 +148,11 @@ class Environment(SpaceManager):
         self.scene.setupPreTest(test)
 
     def state(self, dataset=None):
-        return State(self, self.observe().flat(), dataset=dataset)
+        return State(self, self.world.observe().flat(), dataset=dataset)
 
     # Entities
     def clear(self):
-        self.clearChildren()
+        self.world.clearChildren()
 
     def reset(self):
         self._reset()
@@ -166,7 +168,7 @@ class Environment(SpaceManager):
             self.scene.setup()
 
     def addAgent(self, agent):
-        self.add(agent)
+        self.world.add(agent)
         self.agents.append(agent)
         agent.env = self
 
@@ -264,46 +266,46 @@ class Environment(SpaceManager):
     #     for property in self.properties():
     #         property.bindSpace(self.spaces)
 
-    def generateTestbench(self):
-        testbench = {}
-        number = 20
-        print(self.testbenchs)
-        for tbconfig in self.testbenchs.get('spaces', []):
-            print(self.space)
-            space = SpaceManager.space(self, tbconfig['space'])
+    # def generateTestbench(self):
+    #     testbench = {}
+    #     number = 20
+    #     print(self.testbenchs)
+    #     for tbconfig in self.testbenchs.get('spaces', []):
+    #         print(self.space)
+    #         space = SpaceManager.space(self, tbconfig['space'])
 
-            tbSpace = []
+    #         tbSpace = []
 
-            '''for v in np.linspace(minb, maxb, num=number):
-            point = []
-            for d, minb, maxb in enumerate(zip(space.bounds['min'], space.bounds['max'])):
-                for v in np.linspace(minb, maxb, num=number):
-                    point.append(v)'''
-            # TODO  id:9
-            '''tbSpace = np.zeros((space.dim ** number, space.dim))
-            for d, minb, maxb in enumerate(zip(space.bounds['min'], space.bounds['max'])):
-                for x in np.linspace(minb, maxb, num=number):
-                    tbSpace[]
+    #         '''for v in np.linspace(minb, maxb, num=number):
+    #         point = []
+    #         for d, minb, maxb in enumerate(zip(space.bounds['min'], space.bounds['max'])):
+    #             for v in np.linspace(minb, maxb, num=number):
+    #                 point.append(v)'''
+    #         # TODO  id:9
+    #         '''tbSpace = np.zeros((space.dim ** number, space.dim))
+    #         for d, minb, maxb in enumerate(zip(space.bounds['min'], space.bounds['max'])):
+    #             for x in np.linspace(minb, maxb, num=number):
+    #                 tbSpace[]
 
-            def rec(space, depth=0):
-                data = []
-                for x in np.linspace(-50, 50, num=20):
-                    data.append = np.array([x])
-                if depth >= space.dim:'''
-            N = 5
-            if space.dim == 1:
-                for x in np.linspace(tbconfig['bounds']['min'][0], tbconfig['bounds']['max'][0], num=N):
-                    tbSpace.append(np.array([x]))
-            elif space.dim == 2:
-                for x in np.linspace(tbconfig['bounds']['min'][0], tbconfig['bounds']['max'][0], num=N):
-                    for y in np.linspace(tbconfig['bounds']['min'][1], tbconfig['bounds']['max'][1], num=N):
-                        tbSpace.append(np.array([x, y]))
-                '''for x in np.linspace(20, 70, num=20):
-                    for y in np.linspace(-10, 10, num=20):
-                        tbSpace.append(np.array([x, y]))'''
-            testbench[space.name] = tbSpace
-        # print(testbench.keys())
-        # print("Generated testbench for {}".format(', '.join(testbench.keys())))
-        Logger.main().info("Testbench generated for {}".format(
-            ', '.join(list(testbench.keys()))))
-        return testbench
+    #         def rec(space, depth=0):
+    #             data = []
+    #             for x in np.linspace(-50, 50, num=20):
+    #                 data.append = np.array([x])
+    #             if depth >= space.dim:'''
+    #         N = 5
+    #         if space.dim == 1:
+    #             for x in np.linspace(tbconfig['bounds']['min'][0], tbconfig['bounds']['max'][0], num=N):
+    #                 tbSpace.append(np.array([x]))
+    #         elif space.dim == 2:
+    #             for x in np.linspace(tbconfig['bounds']['min'][0], tbconfig['bounds']['max'][0], num=N):
+    #                 for y in np.linspace(tbconfig['bounds']['min'][1], tbconfig['bounds']['max'][1], num=N):
+    #                     tbSpace.append(np.array([x, y]))
+    #             '''for x in np.linspace(20, 70, num=20):
+    #                 for y in np.linspace(-10, 10, num=20):
+    #                     tbSpace.append(np.array([x, y]))'''
+    #         testbench[space.name] = tbSpace
+    #     # print(testbench.keys())
+    #     # print("Generated testbench for {}".format(', '.join(testbench.keys())))
+    #     Logger.main().info("Testbench generated for {}".format(
+    #         ', '.join(list(testbench.keys()))))
+    #     return testbench

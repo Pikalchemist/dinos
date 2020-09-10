@@ -9,6 +9,3 @@ class InternalEngine(Engine):
         self._updatePhysics(dt)
         self.iteration += 1
         self.time += dt
-
-    def _updatePhysics(self, dt):
-        pass

@@ -50,7 +50,7 @@ class Property(Serializable):
         if self._dim is None:
             raise Exception(
                 'You should specify the dimension of the effector parameter space for {}'.format(self))
-        self.space = Space(self.entity.root, self._dim)
+        self.space = Space(self.entity.spaceManager, self._dim)
         self.space._property = self
 
     # def gid(self):

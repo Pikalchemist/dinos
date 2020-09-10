@@ -1,6 +1,6 @@
 import setuptools
 from distutils.core import setup
-# from Cython.Build import cythonize
+from Cython.Build import cythonize
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -14,7 +14,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Pikalchemist/dino",
-    # ext_modules=cythonize("lems/lib/operations.pyx"),
+    ext_modules=cythonize("dino/data/operations.pyx"),
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

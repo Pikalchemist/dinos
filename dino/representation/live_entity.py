@@ -48,8 +48,9 @@ class LiveEntity(Entity):
     DISCRETE_ACTIONS = False
     CAN_BE_DISCRETIZED = False
 
-    def __init__(self, kind, absoluteName='', disconnected=False):
-        super().__init__(kind, absoluteName, disconnected)
+    def __init__(self, kind, absoluteName='', disconnected=False, spaceManager=None):
+        super().__init__(kind, absoluteName, disconnected, spaceManager=spaceManager)
+        self.host = False
         self.physicals = []
         self.actionQueue = []
 
@@ -71,6 +72,18 @@ class LiveEntity(Entity):
     #     obj = obj if obj else cls(dict_.get('kind'), dict_.get(
     #         'absoluteName', ''), disconnected=True)
     #     return obj
+
+    def markAsHost(self):
+        self.host = True
+    
+    def hosts(self):
+        children = self.cascadingChildren()
+        return [host for host in children if host.host]
+    
+    def findHost(self, name=''):
+        if not name:
+            return next(iter(self.hosts()), None)
+        return next((host for host in self.hosts() if host.absoluteName == name), None)
 
     @property
     def discretizeStates(self):
@@ -136,6 +149,9 @@ class LiveEntity(Entity):
                 if spaces is None or y.space in spaces:
                     ys.append(y)
         return Observation(*ys)
+
+    def observeFrom(self, spaces=None, formatParameters=None):
+        return self.world.observe(spaces=spaces, formatParameters=formatParameters)
 
     def currentContext(self, dataset=None, spaces=None):
         obs = self.observe(spaces=spaces)

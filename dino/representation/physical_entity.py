@@ -4,8 +4,8 @@ from .live_entity import LiveEntity
 class PhysicalEntity(LiveEntity):
     PHYSICAL = True
 
-    def __init__(self, kind, name=''):
-        super().__init__(kind, name)
+    def __init__(self, kind, name='', spaceManager=None):
+        super().__init__(kind, name, spaceManager=spaceManager)
         self.shape = None
 
     def _activate(self):

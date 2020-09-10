@@ -24,18 +24,19 @@ class Cylinder(PhysicalEntity):
         self.color = color if color else (
             (0, 224, 128) if movable else (255, 0, 0))
         self.mass = 200. if movable else 1000000.
-        # MethodObservable(self, "position", self.absolutePosition,
-        #                  discretization=xydiscretization)
+
+        MethodObservable(self, 'position', self.absolutePosition,
+                         discretization=xydiscretization)
         # MethodObservable(self, "positionToAgent", self.positionToAgent,
         #                  discretization=xydiscretization)  # .learnable = False
         # AttributeObservable(self, "color", 'color', discretization=128)
         # AttributeObservable(self, "radius", 'radius', discretization=10)
         # AttributeObservable(self, "mass", 'mass', discretization=100)
 
-    def relativePosition(self, property=None):
-        # - self.env.agents[0].shape.body.position
-        relativePosition = self.body.position
-        return [relativePosition.x, relativePosition.y]
+    # def relativePosition(self, property=None):
+    #     # - self.env.agents[0].shape.body.position
+    #     relativePosition = self.body.position
+    #     return [relativePosition.x, relativePosition.y]
 
     def absolutePosition(self, property=None):
         return [self.shape.body.position.x, self.shape.body.position.y]

@@ -1,6 +1,7 @@
 from dino.environments.scene import SceneSetup
 from .environment import PlaygroundEnvironment
 from .cylinder import Cylinder
+from .agent import Agent
 
 
 class EmptyRoomScene(SceneSetup):
@@ -8,8 +9,10 @@ class EmptyRoomScene(SceneSetup):
                   'Use: learning how to move.'
 
     def _setup(self):
-        self.cylinder = Cylinder((200, 400))
-        self.world.addChild(self.cylinder)
+        # self.cylinder = Cylinder((200, 400))
+        self.world.addChild(Agent((300, 300), name='Agent'))
+        self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
+        self.world.addChild(Cylinder((400, 300), name='Cylinder2'))
         # Add agent
         # self.agent = Agent((200, 400), radius=30, name='agent',
         #                    omni=True, xydiscretization=self.world.xydiscretization)

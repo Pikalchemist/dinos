@@ -10,11 +10,9 @@ from sklearn.neighbors import NearestNeighbors
 
 from exlab.interface.serializer import Serializable
 
-from ..utils.io import getVisual, plotData, visualize
-from ..utils.maths import popn
-from ..utils.logging import Logger
 from .data import *
-from . import operations
+from .space import Space
+from .dataspace import DataSpace
 
 
 class MultiColSpace(Space):

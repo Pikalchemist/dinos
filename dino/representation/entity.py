@@ -33,15 +33,21 @@ class Entity(Serializable):
     number = 0
     indexes = {}
 
-    def __init__(self, kind, absoluteName='', disconnected=False, spaceManager=None):
+    def __init__(self, kind, absoluteName='', disconnected=False, spaceManager=None, native=None, proxy=None):
         self.absoluteName = absoluteName
         self.kind = kind
+
+        self.proxy = proxy
 
         self._spaceManager = spaceManager
 
         self.disconnected = disconnected
         self._discretizeStates = False
         self._discretizeActions = False
+
+        if proxy:
+            native = proxy
+        self.native = native if native else self
 
         # Indexing
         self.index = Entity.number
@@ -51,8 +57,6 @@ class Entity(Serializable):
 
         self._properties = {}
         self._children = []
-        self.physicals = []
-        self.actionQueue = []
         self.parent = None
         self.activated = False
 
@@ -62,6 +66,24 @@ class Entity(Serializable):
         dict_ = serializer.serialize(
             self, ['kind', 'absoluteName', 'index', 'indexKind', 'parent', '_children', '_properties'])
         return dict_
+    
+    def convertTo(self, spaceManager=None, proxy=True):
+        spaceManager = spaceManager if spaceManager else self.spaceManager
+        return spaceManager.convertEntity(self, proxy=proxy)
+    
+    def linkedTo(self, entity):
+        return self.native == entity.native
+    
+    def createLinkedEntity(self, spaceManager, proxy=True):
+        if self.parent:
+            parent = self.parent.convertTo(spaceManager)
+        if proxy:
+            entity = ProxyEntity(self, spaceManager=spaceManager)
+        else:
+            entity = Entity(self.kind, self.absoluteName, spaceManager=spaceManager, native=self)
+        if self.parent:
+            parent.addChild(entity)
+        return entity
     
     # Children
     def addChild(self, entity):
@@ -100,6 +122,9 @@ class Entity(Serializable):
     @property
     def spaceManager(self):
         return self.root._spaceManager
+    
+    def isRoot(self):
+        return not self.parent and self.kind == 'root'
     
     def child(self, filter_=None):
         # self.findAbsoluteName(name, fromRoot=fromRoot, onlyEntities=True)
@@ -148,7 +173,16 @@ class Entity(Serializable):
         return None
     
     # Properties
+    @property
+    def _proxifiedProperties(self):
+        if self.proxy:
+            return self.proxy._properties
+        else:
+            return self._properties
+
     def addProperty(self, prop):
+        if self.proxy:
+            raise Exception('Cannot add a new property to a Proxy Entity!')
         self._properties[prop.name] = prop
 
     def removeProperty(self, prop):
@@ -160,7 +194,7 @@ class Entity(Serializable):
 
     def properties(self, filter_=None):
         if not filter_:
-            return list(self._properties.values())
+            return list(self._proxifiedProperties.values())
 
         # Omit first dot
         if filter_[0] == '.':
@@ -172,7 +206,7 @@ class Entity(Serializable):
             def filtered(property):
                 return property.name == filter_
 
-        return list(filter(filtered, self._properties.values()))
+        return list(filter(filtered, self._proxifiedProperties.values()))
 
     def cascadingProperties(self, filter_=None):
         filterChildren, filterProperties = None, None
@@ -242,3 +276,10 @@ class Entity(Serializable):
         if self.parent:
             s += " bound to {}".format(self.parent.reference())
         return s
+    
+
+class ProxyEntity(Entity):
+    def __init__(self, entity, spaceManager=None):
+        spaceManager = spaceManager if spaceManager else entity.spaceManager
+        super().__init__(entity.kind, entity.absoluteName,
+                         spaceManager=spaceManager, proxy=entity)

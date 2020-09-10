@@ -18,16 +18,14 @@ from exlab.interface.serializer import Serializable
 
 # from dino.utils.io import getVisual, plotData, visualize
 # from dino.utils.logging import Logger
-# from dino.utils.maths import popn
+from dino.utils.maths import popn
 from dino.data.data import SingleData, Data, Goal, Action
 
 
 class SpaceKind(Enum):
     # NATIVE = 'native'
-    PRE = 'pre'
     BASIC = 'basic'
-    PRIMITIVE_ACTION = 'primitive_action'
-    OBSERVABLE = 'observation'
+    PRE = 'pre'
 
 
 """
@@ -43,7 +41,7 @@ class Space(Serializable):
     RESERVE_STEP = 10000
     _number = 0
 
-    def __init__(self, spaceManager, dim, options={}, native=None, kind=SpaceKind.BASIC, spaces=None):
+    def __init__(self, spaceManager, dim, options={}, native=None, kind=SpaceKind.BASIC, spaces=None, property=None):
         self.id = Space._number
         Space._number += 1
 
@@ -54,7 +52,7 @@ class Space(Serializable):
 
         self.native = native if native else self
         self.kind = kind
-        self._property = None
+        self._property = property
 
         self.dim = dim
         self.options = options
@@ -250,6 +248,8 @@ class Space(Serializable):
 
     @property
     def boundProperty(self):
+        if self._property:
+            return self._property
         return self.nativeRoot()._property
 
     @property
@@ -352,15 +352,16 @@ class Space(Serializable):
         self._validate()
         return copy.deepcopy(self._bounds)
 
-    def createLinkedSpace(self, dataset=None, kind=None):
+    def createLinkedSpace(self, spaceManager=None, kind=None):
         kind = kind if kind else self.kind
-        dataset = dataset if dataset else self.spaceManager
-        return Space(dataset, self.dim, native=self.native, kind=kind)
+        spaceManager = spaceManager if spaceManager else self.spaceManager
+        return Space(spaceManager, self.dim, native=self.native, kind=kind)
 
-    def createDataSpace(self, dataset=None, kind=None):
+    def createDataSpace(self, spaceManager=None, kind=None):
+        from .dataspace import DataSpace
         kind = kind if kind else self.kind
-        dataset = dataset if dataset else self.spaceManager
-        return DataSpace(dataset, self.dim, native=self.native, kind=kind)
+        spaceManager = spaceManager if spaceManager else self.spaceManager
+        return DataSpace(spaceManager, self.dim, native=self.native, kind=kind)
 
     # Validation
     def invalidate(self):
