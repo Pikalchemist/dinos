@@ -30,19 +30,13 @@ class Learner(Agent):
         strategies Strategy list: list of learning strategies available to the agent
         env Environment: environment of the experiment
         """
-        super().__init__(environment, performer=performer, options=options)
-        self.dataset = dataset
+        super().__init__(environment, dataset=dataset, performer=performer,
+                         planner=planner, options=options)
         # if self.dataset:
         #     self.addChildModule(self.dataset)
 
         self.trainStrategies = StrategySet(agent=self)
         # self.reachStrategies.append(reachStrategies if reachStrategies else None)#AutonomousExploration(self))
-
-        self.planner = planner if planner else Planner(self.dataset,
-                                                       env=environment,
-                                                       chaining=options.get(
-                                                           "chaining", False),
-                                                       hierarchical=options.get("hierarchical", True))
 
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
@@ -67,6 +61,10 @@ class Learner(Agent):
         return True
 
     def train(self, iterations=None, untilIteration=None, episodes=None, untilEpisode=None):
+        self.schedule(self._trainSchedule, iterations=iterations,
+                      untilIteration=untilIteration, episodes=episodes, untilEpisode=untilEpisode)
+    
+    def _trainSchedule(self, iterations=None, untilIteration=None, episodes=None, untilEpisode=None):
         """Runs the learner until max number of iterations."""
         goalIteration = untilIteration if untilIteration else (
             self.iteration + iterations if iterations else None)

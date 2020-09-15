@@ -4,13 +4,15 @@ import numpy as np
 
 from exlab.modular.module import Module
 
+from dino.utils.io import parameter
+from dino.utils.move import MoveConfig
+
 # from ...data.dataset import Action
 # from dino.data.data import *
 from dino.data.space import SpaceKind
 from dino.data.event import InteractionEvent
 from dino.data.path import ActionNotFoundException
 
-from dino.utils.move import MoveConfig
 
 
 class Strategy(Module):
@@ -35,8 +37,8 @@ class Strategy(Module):
         # self.complex_actions = complex_actions
         # self.resetEnv = True
 
-        self.performer = performer if performer else self.agent.performer
-        self.planner = planner if planner else self.agent.planner
+        self.performer = parameter(performer, self.agent.performer)
+        self.planner = parameter(planner, self.agent.planner)
         # self.addChildModule(self.performer)
 
     def __repr__(self):
@@ -112,39 +114,17 @@ class Strategy(Module):
         except ActionNotFoundException:
             return
 
-    # def testGoal(self, goal, paths=None, config=MoveConfig()):
-    #     results = self.performer.performGoal(goal, paths, config)
-    #     # print('Tested', results)
-    #     self.n += InteractionEvent.incrementList(results, self.n)
-    #     self.memory += results
+    def testGoal(self, goal, paths=None, config=MoveConfig()):
+        results = self.performer.performGoal(goal, paths, config)
+        # print('Tested', results)
+        self.n += InteractionEvent.incrementList(results, self.n)
+        self.memory += results
 
-    # def testPaths(self, paths, config=MoveConfig()):
-    #     """Test a specific complex action and store consequences in memory."""
-
-    #     # print("A ", a_type)
-
-    #     # Resetting the environment
-    #     #if self.resetEnv and not config.exploitation:
-    #     #    self.env.reset()
-    #     #print("Reset env")
-    #     # if not config.exploitation:
-    #     #    self.env.save()
-
-    #     # self.agent.environment.setupIteration()
-
-    #     #spaces = list(self.agent.dataset.outcomeSpaces)  # [self.env.outcomeSpaces.index(m.outcomes_space) for m in self.env.models if self.env.actionSpaces.index(m.actionSpace) == a_type[0]]
-    #     # if self.learn_models:
-    #     #     spaces = [i for i, s in enumerate(self.env.outcomeSpaces)]
-    #     #for s in spaces:
-    #     #    self.agent.environment.scene.property(s.property).save()
-
-    #     results = self.performer.perform(paths)
-    #     self.n += InteractionEvent.incrementList(results, self.n)
-    #     self.memory += results
-
-    #     # if not config.exploitation:
-    #     #self.n += 1
-    #     #self.agent.increment_iteration()
+    def testPaths(self, paths, config=MoveConfig()):
+        """Test a specific complex action and store consequences in memory."""
+        results = self.performer.perform(paths)
+        self.n += InteractionEvent.incrementList(results, self.n)
+        self.memory += results
 
     def __deepcopy__(self, a):
         newone = type(self).__new__(type(self))

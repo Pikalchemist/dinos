@@ -16,7 +16,7 @@ class StrategySet(set):
             return
         if self.agent:
             assert strategy.agent == self.agent
-            self.agent.addChildModule(strategy)
+            # self.agent.addChildModule(strategy)
         set.add(self, strategy)
 
     def sample(self):

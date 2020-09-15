@@ -3,11 +3,14 @@ import random
 import copy
 import math
 import time
+import threading
 
 from exlab.modular.module import Module
 
+from dino.utils.io import parameter
 from dino.utils.move import MoveConfig
 
+from dino.agents.tools.planners.planner import Planner
 from dino.agents.tools.performers.performer import Performer
 from dino.agents.tools.strategies.strategy_set import StrategySet
 
@@ -40,14 +43,21 @@ class Agent(Module):
     DISCRETE_STATES = False
     DISCRETE_ACTIONS = False
 
-    def __init__(self, host, performer=None, options={}):
+    PLANNER_CLASS = Planner
+    PERFORMER_CLASS = Performer
+
+    def __init__(self, host, dataset=None, performer=None, planner=None, options={}):
         super().__init__('Agent')
         self.host = host
+        self.host.hosting = self
+
         self.environment = host.world.spaceManager
         self.assertDiscrete(self.environment)
 
+        self.dataset = dataset
         self.options = options
-        self.dataset = None
+        self.scheduled = None
+        self.iterationEvent = threading.Event()
 
         self.iteration = 0
         self.episode = 0
@@ -57,7 +67,8 @@ class Agent(Module):
 
         self.testStrategies = StrategySet(agent=self)
 
-        self.performer = performer if performer else Performer(self, options=options)
+        self.performer = parameter(performer, self.PERFORMER_CLASS(self, options=options))
+        self.planner = parameter(planner, self.PLANNER_CLASS(self, options=options))
 
         # debug metrics
         self.lastIterationTime = -1
@@ -130,28 +141,40 @@ class Agent(Module):
             if self.discreteActions and not environment.discreteActions:
                 environment.discretizeActions = True
     
-    def actions(self, onlyPrimitive=True):
+    def actions(self, onlyPrimitives=True):
         return self.host.actions()
     
     def observe(self, formatParameters=None):
         return self.host.observeFrom(formatParameters=formatParameters)
+    
+    def schedule(self, method, *args, **kwargs):
+        def func():
+            method(*args, **kwargs)
+            self.scheduled = None
 
-    def test(self, config=MoveConfig()):
-        if config.goal and self.dataset:
-            config.goal = self.dataset.convertData(config.goal)
-        config.exploitation = True
-        self._test(config)
+        self.scheduled = func
 
     def reach(self, configOrGoal=MoveConfig()):
         if not isinstance(configOrGoal, MoveConfig):
             configOrGoal = MoveConfig(goal=configOrGoal)
         self.test(configOrGoal)
 
+    def test(self, config=MoveConfig()):
+        if config.goal and self.dataset:
+            config.goal = self.dataset.convertData(config.goal)
+        config.exploitation = True
+        # Wait for env.run()
+        self.schedule(self._test, config)
+
     def _test(self, config):
         self.testStrategies.sample().run(config)
 
     def perform(self, action):
         self.performer.performActions(action)
+
+    def _performAction(self, action, config=MoveConfig()):
+        self.host.scheduledAction = True
+        self.environment.execute(action, config=config, agent=self, sync=True)
 
     def step(self, action, countIteration=True):
         result = self.environment.step(action)

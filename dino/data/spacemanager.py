@@ -10,7 +10,9 @@ import random
 from scipy.spatial import cKDTree
 from scipy.spatial.distance import euclidean
 
+from exlab.modular.module import Module
 from exlab.interface.serializer import Serializable
+
 from dino.representation.entity import Entity
 
 from .data import *
@@ -21,8 +23,9 @@ from .multispace import MultiColSpace, MultiColDataSpace, MultiRowDataSpace
 # import graphviz
 
 
-class SpaceManager(Serializable):
+class SpaceManager(Module, Serializable):
     def __init__(self, storesData=False, options={}, entityCls=Entity):
+        super().__init__()
         self.spaces = []
         self.storesData = storesData
         self.options = options

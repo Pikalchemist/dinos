@@ -194,6 +194,8 @@ class Engine(object):
     def run(self, duration=None):
         elapsedTime = 0
         self.running = True
+        if not duration:
+            duration = self.environment.timestep
         while self.running:
             self.checkJumpFrame()
             self.customStep(duration)

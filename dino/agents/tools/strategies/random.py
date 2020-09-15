@@ -40,7 +40,7 @@ class RandomStrategy(Strategy):
     def testRandomAction(self, config=MoveConfig(), actionSpaces=None):
         """Build and test a random action."""
         if not actionSpaces:
-            actionSpaces = self.agent.actions(onlyPrimitives=not self.exploreNonPrimitive)
+            actionSpaces = [a.space for a in self.agent.actions(onlyPrimitives=not self.exploreNonPrimitive)]
         if self.agent.dataset:
             actionSpaces = self.agent.dataset.controllableSpaces(actionSpaces)
         space = random.choice(actionSpaces)
@@ -73,4 +73,4 @@ class RandomStrategy(Strategy):
         actions.append(action)
 
         actions = ActionList(*actions)
-        self.performActions(actions, config)
+        self.testActions(actions, config)

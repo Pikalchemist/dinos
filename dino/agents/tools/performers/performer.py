@@ -107,7 +107,7 @@ class Performer(Module):
                     actionListExecuted.append(actionExecuted)
 
                     # print(actions[i])
-                    self.environment.execute(action, config=config)
+                    self.agent._performAction(action, config=config)
                     # print(action)
                     # print("Tasks : " + str(spaces))
                     # print(y_list)

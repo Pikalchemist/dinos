@@ -23,10 +23,10 @@ class EmptyRoomScene(SceneSetup):
     #     self.addTest(UniformGridTest(self.world.cascadingProperty(
     #         'Agent.position').space, boundaries, numberByAxis=2))
 
-    def setupIteration(self):
+    def setupIteration(self, config):
         pass
 
-    def setupPreTest(self, test=None):
+    def setupPreTest(self, test):
         self.reset()
 
     def _reset(self):

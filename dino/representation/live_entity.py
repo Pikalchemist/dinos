@@ -51,6 +51,9 @@ class LiveEntity(Entity):
     def __init__(self, kind, absoluteName='', disconnected=False, spaceManager=None):
         super().__init__(kind, absoluteName, disconnected, spaceManager=spaceManager)
         self.host = False
+        self.hosting = None
+        self.scheduledAction = False
+
         self.physicals = []
         self.actionQueue = []
 

@@ -9,6 +9,7 @@
 from dino.data.data import Data, Goal, SingleAction, Action, ActionList
 from dino.data.path import ActionNotFoundException, Path, Paths, PathNode
 # from dino.models.model import Model
+from dino.utils.io import parameter
 
 import numpy as np
 from scipy.spatial.distance import euclidean
@@ -59,11 +60,15 @@ class Planner(object):
     - same model skill chaining: to reach out of range goals in a given model
     """
 
-    def __init__(self, dataset, env=None, hierarchical=True, chaining=True):
-        self.env = env
-        self.dataset = dataset
-        self.hierarchical = hierarchical
-        self.chaining = chaining
+    def __init__(self, agent, hierarchical=None, chaining=None, options={}):
+        self.agent = agent
+        self.environment = self.agent.environment
+        self.dataset = self.agent.dataset
+
+        self.options = options
+        self.chaining = parameter(chaining, options.get('chaining', True))
+        self.hierarchical = parameter(hierarchical, options.get('hierarchical', True))
+
         self.trees = {}
         self.semmap = None
 
@@ -131,8 +136,8 @@ class Planner(object):
 
         hierarchical = hierarchical if hierarchical is not None else self.hierarchical
         space = model.outcomeSpace
-        if self.env:
-            state = state if state else self.env.state(self.dataset)
+        if self.environment:
+            state = state if state else self.environment.state(self.dataset)
             goal = goal.relativeData(state)
         goal = goal.projection(space)
 

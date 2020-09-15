@@ -5,9 +5,14 @@
 '''
 
 import sys
+import time
 import copy
 import random
 import numpy as np
+import threading
+
+from exlab.lab.counter import IterationCounter
+from exlab.modular.module import manage
 
 from dino.utils.move import MoveConfig
 from dino.data.space import Space
@@ -55,6 +60,10 @@ class Environment(SpaceManager):
         assert(self.__class__.ENGINE is not None)
         self.engine = self.__class__.ENGINE(self, options.get('engine', {}))
 
+        manage(self).attach_counter(IterationCounter())
+        self.scheduledActionCounter = 0
+        self.lock = threading.Lock()
+
         # Configuration
         self.options = options
         # self.discrete = options.get('discrete', False)
@@ -63,7 +72,6 @@ class Environment(SpaceManager):
         # self.unitWindow = options.get("window", 5)  # number of unit
 
         # Entities
-        self.agents = []
         self.physicalObjects = []
 
         # Scenes
@@ -79,6 +87,10 @@ class Environment(SpaceManager):
 
         if self.defaultScene:
             self.setupScene(self.defaultScene)
+    
+    @property
+    def counter(self):
+        return manage(self).counter
 
     def describe(self):
         spacesDescription = ["{}: {} dimension(s)".format(
@@ -151,6 +163,17 @@ class Environment(SpaceManager):
         return State(self, self.world.observe().flat(), dataset=dataset)
 
     # Entities
+    def agents(self):
+        return [host.hosting for host in self.world.hosts() if host.hosting]
+    
+    def scheduledActions(self, notNone=True):
+        if notNone:
+            return {agent: agent.scheduled for agent in self.agents() if agent.scheduled}
+        return {agent: agent.scheduled for agent in self.agents()}
+    
+    def countScheduledActions(self):
+        return len(self.scheduledActions())
+
     def clear(self):
         self.world.clearChildren()
 
@@ -167,11 +190,6 @@ class Environment(SpaceManager):
         if self.scene:
             self.scene.setup()
 
-    def addAgent(self, agent):
-        self.world.add(agent)
-        self.agents.append(agent)
-        agent.env = self
-
     # def removeObject(self, obj):
     #     if obj in self.objs:
     #         self.removeEntity(obj)
@@ -181,25 +199,44 @@ class Environment(SpaceManager):
 
     def save(self):
         # print("Saved")
-        self.agents[0].save()
+        pass
 
-    def execute(self, action, actionParameters=[], config=None):
+    def execute(self, action, actionParameters=[], config=None, agent=None, sync=False):
         if isinstance(action, Space):
             action = action.point(actionParameters)
         elif isinstance(action, Property):
             action = action.space.point(actionParameters)
 
-        self._preIteration()
+        with self.lock:
+            for p in action.flat():
+                effector = p.space.boundProperty
+                if effector is None or not effector.controllable():
+                    raise Exception(
+                        '{} is not bound to an effector!'.format(p.space))
+                effector.perform(p)
+        
+            self.scheduledActionCounter += 1
+        if sync:
+            self.waitNextIteration(agent)
 
-        for p in action.flat():
-            effector = p.space.boundProperty
-            if effector is None or not effector.controllable():
-                raise Exception(
-                    '{} is not bound to an effector!'.format(p.space))
-            effector.perform(p)
-
-        self.run(self.timestep)
         return self.reward(action)
+    
+    def waitNextIteration(self, agent):
+        iteration = self.counter.t
+        while self.counter.t == iteration:
+            agent.iterationEvent.wait()
+        agent.iterationEvent.clear()
+
+    def waitAllScheduledActionsExecuted(self):
+        with self.lock:
+            awaitedActions = self.countScheduledActions()
+        # print(awaitedActions, self.scheduledActionCounter)
+        while self.scheduledActionCounter < awaitedActions:
+            time.sleep(0.02)
+            with self.lock:
+                awaitedActions = self.countScheduledActions()
+            # print(awaitedActions, self.scheduledActionCounter)
+        return awaitedActions > 0
 
     def step(self, action, actionParameters=[], config=None):
         reward = self.execute(
@@ -215,9 +252,27 @@ class Environment(SpaceManager):
     def done(self):
         return False
     
-    def run(self, duration=None):
-        self.engine.run(duration)
-    
+    def run(self):
+        # Will run as long as actions are scheduled
+        threads = [threading.Thread(target=m) for m in self.scheduledActions().values()]
+        for t in threads:
+            t.start()
+
+        # Will count as 1 iteration, even if the duration is different from the timestep setting
+        while True:
+            if not self.waitAllScheduledActionsExecuted():
+                return
+            with self.lock:
+                self._preIteration()
+                self.engine.run()
+                for host in self.world.hosts():
+                    host.scheduledAction = False
+
+                self.scheduledActionCounter = 0
+                manage(self).counter.next_iteration()
+                for agent in self.agents():
+                    agent.iterationEvent.set()
+
     # Wrappers
     def image(self):
         return self.engine.image()
