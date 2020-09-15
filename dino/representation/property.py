@@ -120,7 +120,7 @@ class Property(Serializable):
 
     def __repr__(self):
         absName = '#{}'.format(self.absoluteName) if self.absoluteName else ''
-        return "{}{}'{}.{}'".format(self.icon(), absName, self.entity.reference(), self.name)
+        return "{}{}'{}.{}'".format(self.icon(), absName, self.entity.reference(short=True), self.name)
 
 
 class Effector(Property):

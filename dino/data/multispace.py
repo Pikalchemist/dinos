@@ -35,13 +35,13 @@ class MultiColSpace(Space):
         return spaceManager[0].multiColSpace(spaces)
 
     def icon(self):
-        return super().icon() + '⏸'
+        return super().icon() + '∥'
 
     def boundedProperty(self):
         return '⇉' + '👁' if self.observable() else '' + '🕹' if self.primitive() else ''
 
     def colStr(self):
-        return '{}[{}]'.format(self.boundedProperty(), '+'.join([space.toStr(2) for space in self.spaces]))
+        return '{}[{}]'.format(self.boundedProperty(), ' '.join([space.toStr(2) for space in self.spaces]))
 
     def observable(self):
         # All sub spaces must be observable

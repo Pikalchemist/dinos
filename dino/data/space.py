@@ -148,8 +148,8 @@ class Space(Serializable):
         if short == 2:
             return "{}".format(self.boundedProperty())
         if short:
-            return "#{}{}{}{}(↕{}){}".format(self.id, absName, self.colStr(), suffix, self.dim, self.icon())
-        return "{}#{}{}{}{}(↕{})".format(self.icon(), self.id, absName, self.colStr(), suffix, self.dim)
+            return "#{}{}{}{}↕{} {}".format(self.id, absName, self.colStr(), suffix, self.dim, self.icon())
+        return "{}#{}{}{}{}↕{}".format(self.icon(), self.id, absName, self.colStr(), suffix, self.dim)
 
     def __repr__(self):
         return self.toStr()
