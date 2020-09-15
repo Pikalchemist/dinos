@@ -59,7 +59,7 @@ class Agent(Module):
         self.scheduled = None
         self.iterationEvent = threading.Event()
 
-        self.iteration = 0
+        # self.iteration = 0
         self.episode = 0
         self.iterationByEpisode = []
 

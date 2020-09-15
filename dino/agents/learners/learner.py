@@ -62,7 +62,7 @@ class Learner(Agent):
     #                                 .deserialize(strategy, obj, options=options))
     #     return obj
     
-    def addEvent(self, event, cost=1.):
+    def addEvent(self, event, config, cost=1.):
         if self.dataset:
             event.convertTo(spaceManager=self.dataset, toData=True)
             self.dataset.addEvent(event, cost=cost)
@@ -105,7 +105,7 @@ class Learner(Agent):
         # Performs the episode
         memory = self._performEpisode(config)
 
-        self._postEpisode(memory)
+        self._postEpisode(memory, config)
 
     def _performEpisode(self, config):
         # Run an episode of the given strategy
@@ -123,12 +123,12 @@ class Learner(Agent):
             self.iteration, config.strategy), 'STRAT')
         return config
 
-    def _postEpisode(self, memory):
-        self.logger.info('Adding episode of length {} to the dataset'
-                         .format(len(memory)), 'DATA')
+    def _postEpisode(self, memory, config):
+        # self.logger.info('Adding episode of length {} to the dataset'
+        #                  .format(len(memory)), 'DATA')
 
         for event in memory:
-            self.addEvent(event)
+            self.addEvent(event, config)
 
     # Api
     # def apiget_time(self, range_=(-1, -1)):

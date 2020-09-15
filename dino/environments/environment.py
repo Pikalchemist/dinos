@@ -251,8 +251,7 @@ class Environment(SpaceManager):
         return self.world.observe(), reward, self.done()
 
     def _preIteration(self):
-        with self.lock:
-            self.scene._preIteration()
+        self.scene._preIteration()
 
     def reward(self, action):
         self.scene.reward(action)

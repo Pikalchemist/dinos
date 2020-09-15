@@ -48,6 +48,7 @@ class Data(Serializable):
     #                               dict_.get('results'), dict_.get('models'))
     #     return obj
 
+    # Operators
     def __iter__(self):
         return self._parts.__iter__()
 
@@ -78,13 +79,45 @@ class Data(Serializable):
                 return self.space == other.space
             return (self.space == other.space or self.space.native == other.space.native) and self.valueOrdered == other.valueOrdered
         return False
+    
+    def distanceTo(self, other):
+        if not isinstance(other, Data) or not self.space.matches(other.space, kindSensitive=False):
+            raise ValueError('Spaces should be the same for both data')
 
-    def extends(self, other):
-        if other is None:
-            return self
-        assert isinstance(other, Data)
-        return self.__class__(*(self._parts + other._parts))
+        return euclidean(self.valueOrdered, other.valueOrdered)
 
+    def difference(self, previous):
+        result = []
+        for point in self.flat():
+            if point.space.relative:
+                result.append(
+                    point - previous.singleSpaceComposante(point.space))
+            else:
+                result.append(point)
+        return Observation(*result)
+
+    def norm(self):
+        return np.linalg.norm(self.value)
+
+    def length(self):
+        return np.linalg.norm(self.value)
+
+    def setRelative(self, relative=None):
+        if relative is not None:
+            for part in self._parts:
+                part.setRelative(relative)
+        return self
+
+    def absoluteData(self, state):
+        return self.__class__(*[part.absoluteData(state) for part in self._parts])
+
+    def relativeData(self, state):
+        return self.__class__(*[part.relativeData(state) for part in self._parts])
+    
+    def clone(self):
+        return self.__class__(*[part.clone() for part in self._parts])
+
+    # Flatting
     def flat(self):
         return [x for p in self._parts for x in p.flat()]
 
@@ -123,6 +156,7 @@ class Data(Serializable):
     def npPlain(self, spaceOrder=None, assertSize=True, fill=False):
         return np.array(self.plain())
 
+    # Projections
     def singleSpaceComposante(self, singleSpace):
         flatten = self.flat()
         pm = ([d for d in flatten if d.space == singleSpace] + [Data()])[0]
@@ -161,6 +195,7 @@ class Data(Serializable):
         #                     break
         return self.__class__._vectorClass_(*[p for p in parts if p != Data()])
 
+    # Entity
     def _findSpaceEntity(self, space, entity):
         if not space.rowAggregation:
             return self.singleSpaceComposante(space)
@@ -178,6 +213,13 @@ class Data(Serializable):
                  for s in self.space.flatColsWithMultiRows]
         return self.__class__._vectorClass_(*parts)
 
+    # Changing data
+    def extends(self, other):
+        if other is None:
+            return self
+        assert isinstance(other, Data)
+        return self.__class__(*(self._parts + other._parts))
+
     def update(self, data, kindSensitive=True):
         if len(self) == 0:
             return self
@@ -193,47 +235,14 @@ class Data(Serializable):
                     break
 
         return self.__class__._vectorClass_(*[p for p in flatten])
-
-    def asTemplate(self, values):
-        return self.__class__(self.space, values)
-
-    def distanceTo(self, other):
-        if not isinstance(other, Data) or not self.space.matches(other.space, kindSensitive=False):
-            raise ValueError('Spaces should be the same for both data')
-
-        return euclidean(self.valueOrdered, other.valueOrdered)
-
-    def difference(self, previous):
-        result = []
-        for point in self.flat():
-            if point.space.relative:
-                result.append(
-                    point - previous.singleSpaceComposante(point.space))
-            else:
-                result.append(point)
-        return Observation(*result)
-
-    def norm(self):
-        return np.linalg.norm(self.value)
-
-    def length(self):
-        return np.linalg.norm(self.value)
-
+    
     def convertTo(self, spaceManager=None, kind=None, toData=None):
         return self.__class__(*[part.convertTo(spaceManager=spaceManager, kind=kind, toData=toData)
                                 for part in self._parts])
 
-    def setRelative(self, relative=None):
-        if relative is not None:
-            for part in self._parts:
-                part.setRelative(relative)
-        return self
 
-    def absoluteData(self, state):
-        return self.__class__(*[part.absoluteData(state) for part in self._parts])
-
-    def relativeData(self, state):
-        return self.__class__(*[part.relativeData(state) for part in self._parts])
+    def asTemplate(self, values):
+        return self.__class__(self.space, values)
 
     @staticmethod
     def plainData(obj, spaceOrder=None, assertSize=True, fill=False):
@@ -299,11 +308,7 @@ class SingleData(Data):
     def isVector(self):
         return False
 
-    def setRelative(self, relative=None):
-        if relative is not None:
-            self.relative = relative
-        return self
-
+    # Operators
     def __neg__(self):
         return self.__class__(self.space, [-v for v in self.value]).setRelative(self.relative)
 
@@ -328,21 +333,12 @@ class SingleData(Data):
             raise ValueError('Spaces (or native spaces) should be the same for both data (first is in {} and second is in {})'
                              .format(self.space.name, other.space.name))
         return self.__class__(self.space, [v1 - v2 for v1, v2 in zip(self.value, other.value)]).setRelative(True)
-
-    def flat(self):
+    
+    def setRelative(self, relative=None):
+        if relative is not None:
+            self.relative = relative
         return self
-
-    def plain(self):
-        return self.value
-
-    def plainOrdered(self):
-        return self.value
-
-    def convertTo(self, spaceManager=None, kind=None, toData=None):
-        spaceManager = spaceManager if spaceManager else self.space.spaceManager
-        return self.__class__(spaceManager.convertSpace(self.space, kind=kind, toData=toData),
-                              self.value).setRelative(self.relative)
-
+    
     def absoluteData(self, state):
         value = self.value
         if self.relative:
@@ -360,6 +356,25 @@ class SingleData(Data):
                     value = [v1 - v2 for v1, v2 in zip(self.value, s.value)]
                     break
         return self.__class__(self.space, value).setRelative(True)
+    
+    def clone(self):
+        return self.__class__(self.space, self.value).setRelative(self.relative)
+
+    # Flatting
+    def flat(self):
+        return self
+
+    def plain(self):
+        return self.value
+
+    def plainOrdered(self):
+        return self.value
+
+    # Changing data
+    def convertTo(self, spaceManager=None, kind=None, toData=None):
+        spaceManager = spaceManager if spaceManager else self.space.spaceManager
+        return self.__class__(spaceManager.convertSpace(self.space, kind=kind, toData=toData),
+                              self.value).setRelative(self.relative)
 
     def toStr(self, short=False):
         return "{}{}{}".format(self.space.toStr(True), '±' if self.relative else '',
@@ -383,6 +398,7 @@ class DataSequence(Serializable):
         dict_ = serializer.serialize(self, ['_parts'], exportPathType=True)
         return dict_
 
+    # Operators
     def append(self, part):
         self._parts.append(part)
 
@@ -394,6 +410,9 @@ class DataSequence(Serializable):
 
     def __len__(self):
         return len(self._parts)
+    
+    def clone(self):
+        return self.__class__(*[part.clone() for part in self._parts])
 
     def __repr__(self):
         return "{}{}".format(self.__class__.__name__, self._parts)

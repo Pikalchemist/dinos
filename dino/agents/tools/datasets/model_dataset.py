@@ -180,9 +180,6 @@ class ModelDataset(Dataset):
         return context
 
     # Data
-    def getData(self, space_id, data_id):
-        return self.space(space_id).data[data_id]
-
     def setData(self, spaces, models, addHistory=True):
         if len(self.spaces) + len(self.models) > 0:
             return

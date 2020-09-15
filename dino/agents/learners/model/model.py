@@ -31,41 +31,14 @@ class ModelLearner(Learner):
         dataset = parameter(dataset, self.DATASET_CLASS(modelClass=self.MODEL_CLASS))
         super().__init__(environment, dataset, performer, planner, options)
 
-    def addEventToDataset(self, event, config):
-        self.dataset.addEvent(event)
+    # def _preEpisode(self):
+    #     # Choose learning strategy randomly
+    #     strategy = self.trainStrategies.sample()
+    #     config = MoveConfig(strategy=strategy)
 
-    def _trainEpisode(self):
-        # memory = []
-        # for i in range(self.MULTI_EPISODE):
-        #     config = self._preEpisode()
-        #
-        #     # Performs the episode
-        #     memoryStrategy = self._performEpisode(config)
-        #     InteractionEvent.incrementList(memoryStrategy, len(memory))
-        #     memory += memoryStrategy
+    #     self.logger.debug('Strategy used at iteration {}: {}'.format(
+    #         self.iteration, config.strategy), 'STRAT')
+    #     return config
 
-        config = self._preEpisode()
-
-        # Performs the episode
-        memory = self._performEpisode(config)
-
-        self._postEpisode(memory)
-
-    def _performEpisode(self, config):
-        # Run an episode of the given strategy
-        if config.strategy not in self.trainStrategies:
-            raise Exception("{} is not avaiable within {}".format(
-                config.strategy, self))
-        return config.strategy.run(config)
-
-    def _preEpisode(self):
-        # Choose learning strategy randomly
-        strategy = self.trainStrategies.sample()
-        config = MoveConfig(strategy=strategy)
-
-        self.logger.debug('Strategy used at iteration {}: {}'.format(
-            self.iteration, config.strategy), 'STRAT')
-        return config
-
-    def _postEpisode(self, memory):
-        super()._postEpisode(memory)
+    # def _postEpisode(self, memory):
+    #     super()._postEpisode(memory)

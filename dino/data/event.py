@@ -1,6 +1,6 @@
 from exlab.interface.serializer import Serializable
 
-from dino.data.data import Action, Observation
+from dino.data.data import Data, Action, Observation
 
 
 # Episode -> list of InteractionEvents
@@ -11,7 +11,7 @@ class InteractionEvent(Serializable):
     :param outcomes: an Observation object
     """
 
-    def __init__(self, iteration, actions=None, primitiveActions=None, outcomes=None, context=None):
+    def __init__(self, iteration, actions=Data(), primitiveActions=Data(), outcomes=Data(), context=Data()):
         self.iteration = iteration
 
         self.actions = actions
@@ -56,6 +56,13 @@ class InteractionEvent(Serializable):
     #     obj = cls(dataset, a, y, c)
     #     return obj
 
+    def clone(self):
+        return self.__class__(self.iteration,
+                              self.actions.clone(),
+                              self.primitiveActions.clone(),
+                              self.outcomes.clone(),
+                              self.context.clone())
+
     '''def flatten(self):
         return (self.action.flatten(), self.outcomes.flatten())
 
@@ -75,6 +82,24 @@ class InteractionEvent(Serializable):
             spaceManager=spaceManager, kind=kind, toData=toData)
         self.context = self.context.convertTo(
             spaceManager=spaceManager, kind=kind, toData=toData)
+
+    def addToSpaces(self, cost=1.0):
+        for point in self.actions.flat():
+            idAction = point.space.addPoint(point, self.iteration, action=True)
+            self.actionsRegister.append((point.space.id, idAction))
+
+        for point in self.primitiveActions.flat():
+            idAction = point.space.addPoint(point, self.iteration, action=True)
+            self.primitiveActionsRegister.append((point.space.id, idAction))
+
+        for point in self.outcomes.flat():
+            idOutcome = point.space.addPoint(point, self.iteration, cost)
+            self.outcomesRegister.append((point.space.id, idOutcome))
+
+        if self.context:
+            for point in self.context.flat():
+                idContext = point.space.addPoint(point, self.iteration, cost)
+                self.contextRegister.append((point.space.id, idContext))
 
     @staticmethod
     def incrementList(list_, currentIteration):

@@ -17,6 +17,7 @@ from dino.representation.entity import Entity
 
 from .data import *
 from .space import Space, SpaceKind
+from .event import InteractionEvent
 from .multispace import MultiColSpace, MultiColDataSpace, MultiRowDataSpace
 
 
@@ -36,7 +37,7 @@ class SpaceManager(Module, Serializable):
         self.multiColSpaces = []
         self.multiRowSpaces = []
 
-        self.events = []
+        self.events = {}
 
         self.computeSpaces()
 
@@ -180,8 +181,9 @@ class SpaceManager(Module, Serializable):
     # Data
     def addEvent(self, event, cost=1.):
         """Add data to the dataset"""
+        event = event.clone()
         event.addToSpaces(cost=cost)
-        self.events.append(event)
+        self.events[event.iteration] = event
         # eventId = self.nextEventId()  # used to identify the execution order
         # self.iterationIds.append([self.iteration, eventId])
         # event.iteration = self.iteration
@@ -215,12 +217,15 @@ class SpaceManager(Module, Serializable):
 
     def eventFromId(self, iteration):
         register = self.events[iteration]
-        event = InteractionEvent()
+        event = InteractionEvent(iteration)
         event.actions = ActionList(Action(
             *(SingleAction(t, self.getData(t, v).tolist()) for t, v in register.actions)))
         event.outcomes = Observation(
             *(SingleObservation(t, self.getData(t, v).tolist()) for t, v in register.outcomes))
         return event
+
+    def getData(self, space_id, data_id):
+        return self.space(space_id).data[data_id]
     
     # Entities
     def convertEntity(self, entity, proxy=True):
