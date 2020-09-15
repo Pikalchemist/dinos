@@ -6,7 +6,7 @@
 
 import numpy as np
 
-from .spacemanager import SpaceManager
+from dino.data.spacemanager import SpaceManager
 
 
 class Dataset(SpaceManager):

@@ -9,7 +9,7 @@ import numpy as np
 from dino.data.space import SpaceKind
 from dino.agents.tools.models.model import Model
 
-from dino.data.dataset import Dataset
+from .dataset import Dataset
 
 
 class ModelDataset(Dataset):
