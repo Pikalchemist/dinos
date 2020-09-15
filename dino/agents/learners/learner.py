@@ -10,6 +10,7 @@ import time
 
 from ..agent import Agent
 
+from dino.utils.io import parameter
 from dino.utils.move import MoveConfig
 # from ...utils.maths import uniformSampling, iterrange
 
@@ -18,11 +19,14 @@ from dino.utils.move import MoveConfig
 # from ...models.regression import RegressionModel
 # from ...planners.planner import Planner
 
+from dino.agents.tools.datasets.dataset import Dataset
 from dino.agents.tools.strategies.strategy_set import StrategySet
 
 
 class Learner(Agent):
     """Default Learner, learns by episode but without any choice of task and goal, choose strategy randomly."""
+
+    DATASET_CLASS = Dataset
 
     def __init__(self, environment, dataset=None, performer=None, planner=None, options={}):
         """
@@ -30,6 +34,7 @@ class Learner(Agent):
         strategies Strategy list: list of learning strategies available to the agent
         env Environment: environment of the experiment
         """
+        dataset = parameter(dataset, self.DATASET_CLASS())
         super().__init__(environment, dataset=dataset, performer=performer,
                          planner=planner, options=options)
         # if self.dataset:
@@ -56,6 +61,11 @@ class Learner(Agent):
     #         obj.trainStrategies.add(DataManager.loadType(strategy['path'], strategy['type'])
     #                                 .deserialize(strategy, obj, options=options))
     #     return obj
+    
+    def addEvent(self, event, cost=1.):
+        if self.dataset:
+            event.convertTo(spaceManager=self.dataset, toData=True)
+            self.dataset.addEvent(event, cost=cost)
 
     def trainable(self):
         return True
@@ -114,7 +124,11 @@ class Learner(Agent):
         return config
 
     def _postEpisode(self, memory):
-        pass
+        self.logger.info('Adding episode of length {} to the dataset'
+                         .format(len(memory)), 'DATA')
+
+        for event in memory:
+            self.addEvent(event)
 
     # Api
     # def apiget_time(self, range_=(-1, -1)):

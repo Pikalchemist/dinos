@@ -10,6 +10,7 @@ import time
 
 from ..learner import Learner
 
+from dino.utils.io import parameter
 from dino.utils.move import MoveConfig
 # from ....utils.maths import uniformSampling, iterrange
 
@@ -17,15 +18,17 @@ from dino.utils.move import MoveConfig
 # from ....data.dataset import Dataset
 # from ....models.regression import RegressionModel
 # from ....planners.planner import Planner
+from dino.agents.tools.datasets.model_dataset import ModelDataset
+from dino.agents.tools.models.regression import RegressionModel
 
 
 class ModelLearner(Learner):
     MODEL_CLASS = RegressionModel
+    DATASET_CLASS = ModelDataset
     MULTI_EPISODE = 1
 
     def __init__(self, environment, dataset=None, performer=None, planner=None, options={}):
-        dataset = dataset if dataset else Dataset.deserialize(options.get('dataset', {}),
-                                                              modelClass=self.MODEL_CLASS)
+        dataset = parameter(dataset, self.DATASET_CLASS(modelClass=self.MODEL_CLASS))
         super().__init__(environment, dataset, performer, planner, options)
 
     def addEventToDataset(self, event, config):
@@ -46,18 +49,6 @@ class ModelLearner(Learner):
         # Performs the episode
         memory = self._performEpisode(config)
 
-        # Add memory to dataset
-        self.iteration += len(memory)
-        self.set_iteration(self.iteration)
-        for event in memory:
-            event.convertTo(spaceManager=self.dataset, toData=True)
-
-        self.logger.info('Adding episode of length {} to the dataset'
-                         .format(len(memory)), 'DATA')
-
-        for event in memory:
-            self.addEventToDataset(event, config)
-
         self._postEpisode(memory)
 
     def _performEpisode(self, config):
@@ -77,4 +68,4 @@ class ModelLearner(Learner):
         return config
 
     def _postEpisode(self, memory):
-        pass
+        super()._postEpisode(memory)

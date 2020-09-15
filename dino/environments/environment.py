@@ -91,6 +91,10 @@ class Environment(SpaceManager):
     @property
     def counter(self):
         return manage(self).counter
+    
+    @property
+    def iteration(self):
+        return manage(self).counter.t
 
     def describe(self):
         spacesDescription = ["{}: {} dimension(s)".format(
@@ -151,13 +155,16 @@ class Environment(SpaceManager):
         return self.scene.tests
 
     def setupIteration(self, config=MoveConfig()):
-        self.scene.setupIteration(config)
+        with self.lock:
+            self.scene.setupIteration(config)
 
     def setupEpisode(self, config=MoveConfig()):
-        self.scene.setupEpisode(config)
+        with self.lock:
+            self.scene.setupEpisode(config)
 
     def setupPreTest(self, test=None):
-        self.scene.setupPreTest(test)
+        with self.lock:
+            self.scene.setupPreTest(test)
 
     def state(self, dataset=None):
         return State(self, self.world.observe().flat(), dataset=dataset)
@@ -244,7 +251,8 @@ class Environment(SpaceManager):
         return self.world.observe(), reward, self.done()
 
     def _preIteration(self):
-        self.scene._preIteration()
+        with self.lock:
+            self.scene._preIteration()
 
     def reward(self, action):
         self.scene.reward(action)

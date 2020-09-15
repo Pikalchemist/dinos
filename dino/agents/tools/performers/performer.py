@@ -69,7 +69,6 @@ class Performer(Module):
         formatParameters = FormatParameters()
         oStart = self.agent.observe(formatParameters=formatParameters)
         oPrevious = self.agent.observe(formatParameters=formatParameters)
-        iteration = 0
         o = None
         running = True
         # goal = None
@@ -115,12 +114,11 @@ class Performer(Module):
                     # print("---")
                     o = self.agent.observe(formatParameters=formatParameters)
                     y = o.difference(oPrevious)
-                    results.append(InteractionEvent(iteration,
+                    results.append(InteractionEvent(self.environment.counter.t,
                                                     actionExecuted,
                                                     primitiveActionExecuted,
                                                     y,
                                                     oPrevious.convertTo(kind=SpaceKind.PRE)))
-                    iteration += 1
                     oPrevious = o
 
                     # Check Distance

@@ -32,7 +32,7 @@ class Strategy(Module):
 
         # Short term memory containing all actions & outcomes reached during the last learning episode
         self.memory = []
-        self.n = 0
+        # self.n = 0
 
         # self.complex_actions = complex_actions
         # self.resetEnv = True
@@ -69,13 +69,13 @@ class Strategy(Module):
     def run(self, config):
         """Runs the strategy in train or test mode (function used when the strategy does not require a goal/task)."""
         self._preRun(config)
-        while self.n < config.iterations:
+        while len(self.memory) < config.iterations:
             self._run(config)
         return self._postRun(config)
 
     def _preRun(self, config):
         self.memory = []
-        self.n = 0
+        # self.n = 0
 
     def _run(self, config):
         self.runIteration(config)
@@ -117,13 +117,13 @@ class Strategy(Module):
     def testGoal(self, goal, paths=None, config=MoveConfig()):
         results = self.performer.performGoal(goal, paths, config)
         # print('Tested', results)
-        self.n += InteractionEvent.incrementList(results, self.n)
+        # self.n += InteractionEvent.incrementList(results, self.n)
         self.memory += results
 
     def testPaths(self, paths, config=MoveConfig()):
         """Test a specific complex action and store consequences in memory."""
         results = self.performer.perform(paths)
-        self.n += InteractionEvent.incrementList(results, self.n)
+        # self.n += InteractionEvent.incrementList(results, self.n)
         self.memory += results
 
     def __deepcopy__(self, a):

@@ -115,6 +115,10 @@ class Agent(Module):
     #                                .deserialize(strategy, obj, options=options))
     #     return obj
 
+    @property
+    def iteration(self):
+        return self.environment.iteration
+
     def trainable(self):
         return False
 
