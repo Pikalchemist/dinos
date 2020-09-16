@@ -8,6 +8,7 @@ import scipy.optimize
 import numpy as np
 import subprocess
 import warnings
+import logging
 import random
 import pickle
 import json
@@ -57,7 +58,7 @@ def popn(list_, number=1, fromEnd=False):
     pops n elements from a list
     """
     ret = []
-    for i in range(number):
+    for _ in range(number):
         if fromEnd:
             ret.append(list_.pop())
         else:
@@ -100,7 +101,7 @@ def multivariateRegression(x, y, x0):
     try:
         return operations.multivariateRegression(x, y, x0)
     except ValueError as e:
-        Logger.main().critical("Regression failed: y is {}x{}d, X is {}x{}d and goal is {}d ({})".format(
+        logging.critical("Regression failed: y is {}x{}d, X is {}x{}d and goal is {}d ({})".format(
             y.shape[0], y.shape[1], x.shape[0], x.shape[1], len(x0), e))
 
 
@@ -108,15 +109,15 @@ def multivariateRegressionError(x, y, x0, testSetX=None, testSetY=None):
     try:
         return operations.multivariateRegressionError(x, y, x0)
     except ValueError as e:
-        Logger.main().critical("Regression failed: y is {}x{}d, X is {}x{}d and goal is {}d ({})".format(
+        logging.critical("Regression failed: y is {}x{}d, X is {}x{}d and goal is {}d ({})".format(
             y.shape[0], y.shape[1], x.shape[0], x.shape[1], len(x0), e))
 
 
-def multivariateRegression_vector(X, y, x0):
-    """Compute a multivariate linear regression model y = f(x) using (X,y) and use it to compute f(x0)."""
-    Xf = np.array([x.flatten() for x in X])
-    yf = np.array([x.flatten() for x in y])
-    return y[0].asTemplate(multivariateRegression(Xf, yf, xg.npflatten()).tolist())
+# def multivariateRegressionVector(X, y, x0):
+#     """Compute a multivariate linear regression model y = f(x) using (X,y) and use it to compute f(x0)."""
+#     Xf = np.array([x.flatten() for x in X])
+#     yf = np.array([x.flatten() for x in y])
+#     return y[0].asTemplate(multivariateRegression(Xf, yf, xg.npflatten()).tolist())
 
 
 def normalEquation(X, y):

@@ -14,6 +14,7 @@ from .model import Model
 # from ..utils.io import getVisual, plotData, visualize, concat
 # from ..utils.serializer import serialize
 # from ..utils.maths import multivariateRegression, multivariateRegressionError
+from dino.utils.maths import multivariateRegression, multivariateRegressionError
 from dino.data.data import Data, Goal, Observation, Action
 # from dino.data.abstract import *
 from dino.data.space import SpaceKind

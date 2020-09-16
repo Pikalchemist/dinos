@@ -13,6 +13,7 @@ import threading
 
 from exlab.lab.counter import IterationCounter
 from exlab.modular.module import manage
+from exlab.interface.graph import Graph
 
 from dino.utils.move import MoveConfig
 from dino.data.space import Space
@@ -70,6 +71,8 @@ class Environment(SpaceManager):
 
         self.timestep = options.get('timestep', 2.0)  # 2 seconds per action
         # self.unitWindow = options.get("window", 5)  # number of unit
+
+        self.timeByIteration = []
 
         # Entities
         self.physicalObjects = []
@@ -239,7 +242,7 @@ class Environment(SpaceManager):
             awaitedActions = self.countScheduledActions()
         # print(awaitedActions, self.scheduledActionCounter)
         while self.scheduledActionCounter < awaitedActions:
-            time.sleep(0.02)
+            time.sleep(0.001)
             with self.lock:
                 awaitedActions = self.countScheduledActions()
             # print(awaitedActions, self.scheduledActionCounter)
@@ -258,7 +261,7 @@ class Environment(SpaceManager):
 
     def done(self):
         return False
-    
+
     def run(self):
         # Will run as long as actions are scheduled
         threads = [threading.Thread(target=m) for m in self.scheduledActions().values()]
@@ -266,6 +269,7 @@ class Environment(SpaceManager):
             t.start()
 
         # Will count as 1 iteration, even if the duration is different from the timestep setting
+        lastTime = time.time()
         while True:
             if not self.waitAllScheduledActionsExecuted():
                 return
@@ -279,6 +283,8 @@ class Environment(SpaceManager):
                 manage(self).counter.next_iteration()
                 for agent in self.agents():
                     agent.iterationEvent.set()
+            self.timeByIteration.append(time.time() - lastTime)
+            lastTime = time.time()
 
     # Wrappers
     def image(self):
@@ -296,6 +302,12 @@ class Environment(SpaceManager):
     
     def displayGui(self, gui=True):
         self.engine.displayGui(gui)
+    
+    # Visual
+    def visualizeTimeByIteration(self):
+        g = Graph()
+        g.plot(self.timeByIteration)
+        return g
 
     # def _serialize(self, options):
     #     dict_ = SpaceManager._serialize(self, options)

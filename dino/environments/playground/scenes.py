@@ -1,4 +1,6 @@
 from dino.environments.scene import SceneSetup
+from dino.evaluation.tests import UniformGridTest
+
 from .environment import PlaygroundEnvironment
 from .cylinder import Cylinder
 from .agent import Agent
@@ -18,10 +20,9 @@ class EmptyRoomScene(SceneSetup):
         #                    omni=True, xydiscretization=self.world.xydiscretization)
         # self.world.addEntity(self.agent)
 
-    # def _setupTests(self):
-    #     boundaries = [(100, 500), (100, 500)]
-    #     self.addTest(UniformGridTest(self.world.cascadingProperty(
-    #         'Agent.position').space, boundaries, numberByAxis=2))
+    def _setupTests(self):
+        boundaries = [(100, 500), (100, 500)]
+        self.addTest(UniformGridTest(self.world.cascadingProperty('Agent.position').space, boundaries, numberByAxis=2))
 
     def setupIteration(self, config):
         pass

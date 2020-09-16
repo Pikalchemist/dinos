@@ -40,7 +40,7 @@ class DataSpace(Space):
         self.continuous = True  # ids == lids
 
     def icon(self):
-        return '@⛁'
+        return '@☰'
 
     def canStoreData(self):
         return True
