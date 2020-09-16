@@ -8,6 +8,7 @@ import sys
 import copy
 import math
 import random
+import logging
 import numpy as np
 
 from enum import Enum
@@ -326,8 +327,8 @@ class Space(Serializable):
     def asTemplate(self, data, type_item=SingleData, type_vector=Data):
         data = list(data)
         if len(data) != self.dim:
-            Logger.main().critical("Template dimension mismatch: space {} is {}d and data is {}d".format(
-                         self.name, self.dim, len(data)))
+            logging.critical("Template dimension mismatch: space {} is {}d and data is {}d".format(
+                             self.name, self.dim, len(data)))
         parts = [type_item(s, popn(data, s.dim)) for s in self]
         return type_vector(*parts)
 

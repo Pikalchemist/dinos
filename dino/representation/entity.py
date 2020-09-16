@@ -253,7 +253,7 @@ class Entity(Serializable):
     
     # String
     def fullname(self):
-        return self.parent.fullname() + "." + self.name if self.parent else ""
+        return self.parent.fullname() + "." + self.absoluteName if self.parent else ""
 
     def reference(self, short=False):
         if short:

@@ -34,9 +34,9 @@ from .scene import SceneSetup
 # from ..utils.serializer import Serializer
 
 
-def make(id_, scene=None, params={}):
-    from ..utils.loaders import DataManager
-    return DataManager.makeEnv(id_, scene, params)
+# def make(id_, scene=None, params={}):
+#     from ..utils.loaders import DataManager
+#     return DataManager.makeEnv(id_, scene, params)
 
 
 class Environment(SpaceManager):
@@ -106,7 +106,7 @@ class Environment(SpaceManager):
     def describe(self):
         spacesDescription = ["{}: {} dimension(s)".format(
             space, space.dim) for space in self.spaces]
-        return "Environment '{}':\n{}\n\nSpaces available:\n{}".format(self.__class__.NAME,
+        return "Environment '{}':\n{}\n\nSpaces available:\n{}".format(self.__class__.__name__,
                                                                        self.__class__.DESCRIPTION,
                                                                        '\n'.join(spacesDescription))
 

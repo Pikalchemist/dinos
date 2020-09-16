@@ -252,7 +252,7 @@ class DataSpace(Space):
     def getDataSelection(self, n=0, method='first', restrictionIds=None):
         data = self.getData(restrictionIds=restrictionIds)
         if not n:
-            n = self.len(data)
+            n = len(data)
         if method == 'random':
             data[np.random.choice(data.shape[0], n)]
         elif method == 'first':
@@ -313,27 +313,27 @@ class DataSpace(Space):
         return cls.gamma ** n
 
     # Visual
-    def getPointsVisualizer(self, prefix=""):
-        """Return a dictionary used to visualize outcomes reached for the specified outcome space."""
-        return getVisual(
-            [lambda fig, ax, options: plotData(
-                self.getData(), fig, ax, options)],
-            minimum=[b[0] for b in self._bounds],
-            maximum=[b[1] for b in self._bounds],
-            title=prefix + "Points in " + str(self)
-        )
+    # def getPointsVisualizer(self, prefix=""):
+    #     """Return a dictionary used to visualize outcomes reached for the specified outcome space."""
+    #     return getVisual(
+    #         [lambda fig, ax, options: plotData(
+    #             self.getData(), fig, ax, options)],
+    #         minimum=[b[0] for b in self._bounds],
+    #         maximum=[b[1] for b in self._bounds],
+    #         title=prefix + "Points in " + str(self)
+    #     )
 
-    def plot(self):
-        visualize(self.getPointsVisualizer())
+    # def plot(self):
+    #     visualize(self.getPointsVisualizer())
 
-    # Api
-    def apiGetPoints(self, ids):
-        self._validate()
-        # if range_[1] == -1:
-        #     ids = np.nonzero(self.ids[:self._number] > range_[0])
-        # else:
-        #     ids = np.nonzero(np.logical_and(self.ids[:self._number] > range_[0], self.ids[:self._number] <= range_[1]))
-        # print(self.ids[ids].size)
-        # print(self.data[ids].size)
-        # data = np.concatenate((self.ids[ids], self.data[ids]), axis=1)
-        return list(zip(self.data[ids].tolist(), self.ids[ids].tolist()))
+    # # Api
+    # def apiGetPoints(self, ids):
+    #     self._validate()
+    #     # if range_[1] == -1:
+    #     #     ids = np.nonzero(self.ids[:self._number] > range_[0])
+    #     # else:
+    #     #     ids = np.nonzero(np.logical_and(self.ids[:self._number] > range_[0], self.ids[:self._number] <= range_[1]))
+    #     # print(self.ids[ids].size)
+    #     # print(self.data[ids].size)
+    #     # data = np.concatenate((self.ids[ids], self.data[ids]), axis=1)
+    #     return list(zip(self.data[ids].tolist(), self.ids[ids].tolist()))
