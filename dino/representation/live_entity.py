@@ -6,7 +6,7 @@
 import numpy as np
 
 from exlab.interface.serializer import Serializable, Serializer
-from exlab.utils.io import colorText, Colors
+from exlab.utils.text import colorText, Colors
 from exlab.utils.ensemble import Ensemble
 
 from dino.data.data import Observation

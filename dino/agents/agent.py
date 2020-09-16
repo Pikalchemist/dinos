@@ -100,9 +100,6 @@ class Agent(Module):
     #         environment (Environment): The environment within which the agent will live and operate
     #         options (dict): Deserializing parameters
     #         obj (Agent): When subclassing, the object created by the deserialize method of the subclass
-
-    #     Returns:
-    #         type: The deserialized option
     #     """
     #     from ..utils.loaders import DataManager
 

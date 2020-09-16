@@ -76,7 +76,7 @@ class Model(Serializable):
         self.id = previousModel.id
         previousModel.id = -1
 
-        self.interestMap = previousModel.interestMap
+        self.interestMaps = previousModel.interestMaps
         # previousModel.spacesHistory.extend(self.spacesHistory)
         self.spacesHistory = previousModel.spacesHistory
 
@@ -158,15 +158,15 @@ class Model(Serializable):
     def bestLocality(self, goal: Goal, context: Observation = None):
         raise NotImplementedError()
 
-    def goalCompetenceError(self, goal: Goal, context: Observation = None, id=None):
+    def goalCompetenceError(self, goal: Goal, context: Observation = None):
         try:
             competence, error, distance = self.inverse(goal, context)[3:6]
             return competence, error, distance
         except ActionNotFoundException:
             return -1, -1, -1
 
-    def goalCompetence(self, goal: Goal, context: Observation = None, id=None):
-        return self.goalCompetenceError(goal, context, id=id)[0]
+    def goalCompetence(self, goal: Goal, context: Observation = None):
+        return self.goalCompetenceError(goal, context)[0]
 
     def getIds(self):
         ids = self.outcomeSpace.getIds(self.restrictionIds)

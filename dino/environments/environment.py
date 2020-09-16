@@ -291,7 +291,6 @@ class Environment(SpaceManager):
         # Will count as 1 iteration, even if the duration is different from the timestep setting
         lastTime = time.time()
         while True:
-            print('Running')
             if not self.waitAllScheduledActionsExecuted():
                 return
             with self.lock:
