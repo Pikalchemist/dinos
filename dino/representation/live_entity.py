@@ -94,6 +94,8 @@ class LiveEntity(Entity):
 
     @discretizeStates.setter
     def discretizeStates(self, discretizeStates):
+        if discretizeStates == self._discretizeStates:
+            return
         assert(self.root.CAN_BE_DISCRETIZED)
         self._discretizeStates = discretizeStates
         self._discretizationChanged(False, discretizeStates)
@@ -104,6 +106,8 @@ class LiveEntity(Entity):
 
     @discretizeActions.setter
     def discretizeActions(self, discretizeActions):
+        if discretizeActions == self._discretizeActions:
+            return
         assert(self.root.CAN_BE_DISCRETIZED)
         self._discretizeActions = discretizeActions
         self._discretizationChanged(True, discretizeActions)

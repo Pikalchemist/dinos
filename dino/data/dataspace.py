@@ -150,6 +150,7 @@ class DataSpace(Space):
     def __nnFromData(self, data, n=1, ignore=0, restrictionIds=None, otherSpace=None):
         if self._number == 0:
             return np.array([], dtype=np.int32), np.array([])
+        self._validate()
         if otherSpace:
             otherSpace._validate()
         # return self.nnfd(self.lids, self.ids[:self._number], data, n, ignore, restrictionIds, otherSpace)

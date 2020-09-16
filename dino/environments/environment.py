@@ -17,11 +17,13 @@ from exlab.interface.graph import Graph
 
 from dino.utils.move import MoveConfig
 from dino.data.space import Space
-# from dino.data.state import *
 from dino.data.spacemanager import SpaceManager
+
+from dino.evaluation.evaluator import Evaluator
 
 from dino.representation.live_entity import LiveEntity
 from dino.representation.property import Property
+from dino.representation.state import State
 
 from .engines.engine import Engine
 from .scene import SceneSetup
@@ -64,6 +66,8 @@ class Environment(SpaceManager):
         manage(self).attach_counter(IterationCounter())
         self.scheduledActionCounter = 0
         self.lock = threading.Lock()
+
+        self.evaluators = []
 
         # Configuration
         self.options = options
@@ -171,6 +175,22 @@ class Environment(SpaceManager):
 
     def state(self, dataset=None):
         return State(self, self.world.observe().flat(), dataset=dataset)
+    
+    # Evaluation
+    def evaluator(self, agent, create=False):
+        evaluator = next((eva for eva in self.evaluators if eva.agent == agent), None)
+        if not evaluator and create:
+            evaluator = Evaluator(agent, self)
+            self.evaluators.append(evaluator)
+        return evaluator
+
+    def setupEvaluators(self):
+        for agent in self.agents():
+            self.evaluator(agent, create=True)
+    
+    def evaluate(self):
+        for agent in self.agents():
+            self.evaluator(agent, create=True).evaluate()
 
     # Entities
     def agents(self):
@@ -232,9 +252,9 @@ class Environment(SpaceManager):
         return self.reward(action)
     
     def waitNextIteration(self, agent):
-        iteration = self.counter.t
-        while self.counter.t == iteration:
-            agent.iterationEvent.wait()
+        # iteration = self.counter.t
+        # while self.counter.t == iteration:
+        agent.iterationEvent.wait()
         agent.iterationEvent.clear()
 
     def waitAllScheduledActionsExecuted(self):
@@ -262,7 +282,7 @@ class Environment(SpaceManager):
     def done(self):
         return False
 
-    def run(self):
+    def run(self, evaluating=False):
         # Will run as long as actions are scheduled
         threads = [threading.Thread(target=m) for m in self.scheduledActions().values()]
         for t in threads:
@@ -271,6 +291,7 @@ class Environment(SpaceManager):
         # Will count as 1 iteration, even if the duration is different from the timestep setting
         lastTime = time.time()
         while True:
+            print('Running')
             if not self.waitAllScheduledActionsExecuted():
                 return
             with self.lock:
@@ -280,11 +301,13 @@ class Environment(SpaceManager):
                     host.scheduledAction = False
 
                 self.scheduledActionCounter = 0
-                manage(self).counter.next_iteration()
+                if not evaluating:
+                    manage(self).counter.next_iteration()
                 for agent in self.agents():
                     agent.iterationEvent.set()
-            self.timeByIteration.append(time.time() - lastTime)
-            lastTime = time.time()
+            if not evaluating:
+                self.timeByIteration.append(time.time() - lastTime)
+                lastTime = time.time()
 
     # Wrappers
     def image(self):
@@ -307,6 +330,12 @@ class Environment(SpaceManager):
     def visualizeTimeByIteration(self):
         g = Graph()
         g.plot(self.timeByIteration)
+        return g
+    
+    def visualizeEvaluations(self):
+        g = Graph()
+        for eva in self.evaluators:
+            g += eva.visualizeEvaluations()
         return g
 
     # def _serialize(self, options):

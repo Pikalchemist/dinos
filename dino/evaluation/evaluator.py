@@ -10,24 +10,24 @@ from scipy.spatial import cKDTree
 from scipy.spatial.distance import euclidean
 
 from exlab.interface.serializer import Serializable
+from exlab.interface.graph import Graph
 
+from dino.data.data import Goal, SingleData
+from dino.data.path import ActionNotFoundException
 
-from ..data.data import Goal, SingleData
-from ..data.path import ActionNotFoundException
+from dino.utils.move import MoveConfig
+# from dino.utils.maths import iterrange
+# from ..utils.io import getVisual, plotData, visualize
 
-from ..utils.logging import Logger
-from ..utils.objects import MoveConfig
-from ..utils.maths import iterrange
-from ..utils.io import getVisual, plotData, visualize
-from ..environments.testbench import Test, TestResult
+from .tests import Test, TestResult
 
 
 class Evaluation(Serializable):
-    def __init__(self, iteration, meanError, meanStd, results, models):
+    def __init__(self, iteration, results, models=[]):
         self.iteration = iteration
-        self.meanError = meanError
-        self.meanStd = meanStd
         self.results = results
+        self.meanError = np.mean([result.meanError for result in self.results])
+        self.meanStd = np.mean([result.std for result in self.results])
         self.models = models
 
     def _serialize(self, serializer):
@@ -67,7 +67,7 @@ class Evaluator(Serializable):
         # Will contain all evaluation performed
         # Each evaluation structured as below:
         #    [t, [[[perf_point0, perf_point1,...], sumError_task_0, std_task_0], ...], errors, stds]
-        self.evaluations = []
+        self.evaluations = {}
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(
@@ -85,8 +85,8 @@ class Evaluator(Serializable):
 
     #     return obj
 
-    def nextEvaluationIteration(self, currentIteration):
-        return next(t for t in self.ts if t > currentIteration)
+    # def nextEvaluationIteration(self, currentIteration):
+    #     return next(t for t in self.ts if t > currentIteration)
 
     # def evaluateAllTime(self):
     #     """Evaluate the learning agent at different times."""
@@ -98,38 +98,32 @@ class Evaluator(Serializable):
 
         # Will contain all evaluation information
         results = []
-        errors = []
-        stds = []
-        t = self.agent.iteration
 
         for test in self.environment.tests:
-            result = self.evaluateTest(test, t)
-            if result is None:
-                continue
-            results.append(result)
-            errors.append(result.meanError)
-            stds.append(result.std)
-        if len(errors) == 0:
+            result = self.evaluateTest(test)
+            if result:
+                results.append(result)
+
+        if len(results) == 0:
             return None
-        meanError = np.mean(errors)
-        meanStd = np.mean(stds)
+        
+        models = []
 
-        if self.agent.dataset:
-            models = [{'competence': model.competence(), 'model': model}
-                      for model in self.agent.dataset.models]
-        else:
-            models = []
+        # if self.agent.dataset:
+        #     models = [{'competence': model.competence(), 'model': model}
+        #               for model in self.agent.dataset.models]
+        # else:
+        #     models = []
 
-        eval = Evaluation(t, meanError, meanStd, results, models)
+        evaluation = Evaluation(self.environment.iteration, results, models)
+        self.evaluations[evaluation.iteration] = evaluation
 
-        self.evaluations.append(eval)
-        return eval
+        return evaluation
 
-    def evaluateTest(self, test, t=None):
+    def evaluateTest(self, test):
         """Compute evaluation for a given task."""
         if test.id is None:
-            raise Exception(
-                'A test must be assigned to a scene to be evaluated!')
+            raise Exception('A test must be assigned to a scene to be evaluated!')
         #assert len(self.testbench[task]) > 0
 
         # space = self.agent.dataset.space(spacename)
@@ -163,18 +157,17 @@ class Evaluator(Serializable):
         #raw_input()
 
         # Will contain all evaluation information
-        errors = []
         results = []
         # Error sum on the testbench
-        sumError = 0.
         # Sum of quadratic error on testbench
-        sumQuadError = 0.
         # n_ = 0
-        for point_ in test.points:
+
+        for rawPoint in test.points:
             if self.agent.dataset:
-                point = self.agent.dataset.convertData(point_)
+                point = self.agent.dataset.convertData(rawPoint)
             else:
-                point = point_
+                point = rawPoint
+
             # print("Goal: {} {}".format(point, space))
             # -- Use distance --
             if self.method == 'distance':
@@ -195,7 +188,6 @@ class Evaluator(Serializable):
             #    print("{} -> {} {}".format(point, p, competence))
             error = result[0]
             if error >= 0.:
-                errors.append(error)
                 results.append(result)
 
         #print(eva)
@@ -204,15 +196,8 @@ class Evaluator(Serializable):
         #n = 10  # len(eva) / 10 + 1
         #if eva > n:
         #    eva = eva[0:-n]
-        errorsArray = np.array(errors)
-        meanError = np.mean(errorsArray)
-        meanQuadError = np.mean(errorsArray ** 2)
-        std = np.sqrt(meanQuadError - meanError ** 2)
 
-        Logger.main().info("Error: {} {} {} [Sum, Quad, Std]".format(
-            meanError, meanQuadError, std))
-
-        return TestResult(test, self.agent.getIteration(), meanError, meanQuadError, std, results, method=self.method)
+        return TestResult(test, self.agent.iteration, results, method=self.method)
 
     def evaluateDistance(self, point):
         _, dist = point.space.nearestDistance(point)
@@ -222,13 +207,13 @@ class Evaluator(Serializable):
 
     def evaluatePlanning(self, point):
         try:
-            paths, distance = self.agent.planner.planDistance(
+            _, distance = self.agent.planner.planDistance(
                 point)  # , hierarchical=False)
             # print(dist)
-            score = min(1., distance / point.space.maxDistance)
+            error = min(1., distance / point.space.maxDistance)
         except ActionNotFoundException as e:
             print("Failed {}".format(point))
-            score = min(1., e.minDistanceReached /
+            error = min(1., e.minDistanceReached /
                         point.space.maxDistance) if e.minDistanceReached else self.DEFAULT_ERROR
 
             #p2, dist2 = space.nearestDistance(point)
@@ -249,13 +234,13 @@ class Evaluator(Serializable):
                 competence = 0.5 - min(1., dist / space.options['max_dist']) / 2.'''
 
             #error = 0.4 + 0.5 * min(1., dist / space.options['max_dist'])
-        return score, point, None
+        return error, point, None
 
     def evaluateExecution(self, point):
         try:
             point.space._validate()
             discrete = False
-            if self.environment.discretizeActions:
+            if self.environment.world.discretizeActions:
                 print('Wesh!')
                 point = Goal(point)
                 point.setRelative(False)
@@ -264,29 +249,32 @@ class Evaluator(Serializable):
             else:
                 addDistance = point.space.maxDistance
 
-            discrete = self.environment.discretizeStates
-            self.environment.discretizeStates = False
+            discrete = self.environment.world.discretizeStates
+            self.environment.world.discretizeStates = False
             goalDistance = point.relativeData(self.environment.state()).norm()
             absoluteGoal = point.absoluteData(self.environment.state())
-            self.environment.discretizeStates = discrete
+            self.environment.world.discretizeStates = discrete
 
             print('@@@')
             print(absoluteGoal)
+            print(self.environment.state())
             self.agent.reach(MoveConfig(
                 goal=point, allowReplanning=False, evaluating=True))
+            self.environment.run(evaluating=True)
 
-            self.environment.discretizeStates = False
-            error = absoluteGoal.relativeData(self.environment.state())
+            self.environment.world.discretizeStates = False
+            difference = absoluteGoal.relativeData(self.environment.state())
             print(self.environment.state())
-            self.environment.discretizeStates = discrete
+            self.environment.world.discretizeStates = discrete
 
-            distance = error.norm()
+            reached = absoluteGoal - difference
+            distance = difference.norm()
             try:
-                score = min(1., distance / min(goalDistance, addDistance))
+                error = min(1., distance / min(goalDistance, addDistance))
             except Exception:
-                score = 1.
-            print('DISTANCE', distance, error)
-            return score, point, None
+                error = 1.
+            print('DISTANCE', reached, difference, distance, error)
+            return error, point, reached
             # paths, dist = self.agent.planner.planDistance(point)#, hierarchical=False)
             # spaces = list(env.dataset.outcomeSpaces)
             # for s in spaces:
@@ -294,6 +282,14 @@ class Evaluator(Serializable):
             # results = self.agent.performer.perform(paths, self.agent.dataset)
         except ActionNotFoundException:
             return Evaluator.DEFAULT_ERROR, point, None
+    
+    # Visual
+    def visualizeEvaluations(self):
+        g = Graph()
+        g.plot(list(self.evaluations.keys()),
+               list(map(lambda x: x.meanError, self.evaluations.values())),
+               std=list(map(lambda x: x.meanStd, self.evaluations.values())))
+        return g
 
     # Plots
     # def plot(self):

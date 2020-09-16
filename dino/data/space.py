@@ -66,6 +66,7 @@ class Space(Serializable):
             self.abstract = any(s.abstract for s in self.spaces)
 
         self._bounds = [[-1., 1.] for i in range(self.dim)]
+        self.maxDistance = 1.
 
         # Multi
         self.invalid = False

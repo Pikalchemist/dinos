@@ -332,7 +332,10 @@ class SingleData(Data):
         if not self.space.matches(other.space, kindSensitive=False):
             raise ValueError('Spaces (or native spaces) should be the same for both data (first is in {} and second is in {})'
                              .format(self.space.name, other.space.name))
-        return self.__class__(self.space, [v1 - v2 for v1, v2 in zip(self.value, other.value)]).setRelative(True)
+        d = self.__class__(
+            self.space, [v1 - v2 for v1, v2 in zip(self.value, other.value)])
+        d.setRelative(self.relative and other.relative)
+        return d
     
     def setRelative(self, relative=None):
         if relative is not None:

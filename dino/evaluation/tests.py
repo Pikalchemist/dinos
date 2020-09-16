@@ -1,4 +1,6 @@
 import numpy as np
+import logging
+
 from exlab.interface.serializer import Serializable
 
 
@@ -43,15 +45,20 @@ class Test(Serializable):
 
 
 class TestResult(Serializable):
-    def __init__(self, test, iteration, meanError, meanQuadError, std, results, method=''):
+    def __init__(self, test, iteration, results, method=''):
         self.test = test
         self.iteration = iteration
-        self.meanError = meanError
-        self.meanQuadError = meanQuadError
-        self.std = std
-        self.method = method
-        # (error, goal, reached)
+        print(results)
+        # [(error, goal, reached)]
         self.results = results
+        self.method = method
+        errorsArray = np.array([r[0] for r in results])
+        self.meanError = np.mean(errorsArray)
+        self.meanQuadError = np.mean(errorsArray ** 2)
+        self.std = np.sqrt(self.meanQuadError - self.meanError ** 2)
+
+        # logging.info("Error: {} {} {} [Sum, Quad, Std]".format(
+        #     meanError, meanQuadError, std))
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(self, ['test', 'iteration', 'meanError', 'meanQuadError', 'std', 'results',

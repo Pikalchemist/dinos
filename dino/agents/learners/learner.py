@@ -127,8 +127,9 @@ class Learner(Agent):
         # self.logger.info('Adding episode of length {} to the dataset'
         #                  .format(len(memory)), 'DATA')
 
-        for event in memory:
-            self.addEvent(event, config)
+        if not config.evaluating:
+            for event in memory:
+                self.addEvent(event, config)
 
     # Api
     # def apiget_time(self, range_=(-1, -1)):
