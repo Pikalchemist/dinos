@@ -7,6 +7,7 @@ import random
 import pickle
 
 from exlab.utils.text import strtab
+from exlab.interface.graph import Graph
 
 from .space import Space, SpaceKind
 from .dataspace import DataSpace
@@ -67,7 +68,7 @@ class SpaceRegion(object):
         self.regions = regions if regions else [self]
 
         self.splitValue = 0.
-        self.splitDim = -1
+        self.splitDim = None
 
         self.setSplittable()
 
@@ -145,7 +146,7 @@ class SpaceRegion(object):
         point = Data.plainData(point, self.space)
         assert len(point) == len(self.bounds)
 
-        print("ADDING 1 POINT", point)
+        # print("ADDING 1 POINT", point)
         # if filterNull and np.all(np.array(point)[self.colsTarget]==0):
         #     print("NULL POINT")
         #     return
@@ -164,7 +165,7 @@ class SpaceRegion(object):
             self.randomCut(self.options['maxAttempts'])
             #self.greedyCut()
             # Making sure a cut has been found
-            if self.splitDim != -1:
+            if self.splitDim is not None:
                 self.split()
         elif self.splitten:
             # Traverse tree
@@ -207,7 +208,7 @@ class SpaceRegion(object):
                                         parent=self, contextSpace=self.contextSpace, regions=self.regions)
         self.rightChild = self.__class__(self.targetSpace, self.options, bounds=rightBounds,
                                          parent=self, contextSpace=self.contextSpace, regions=self.regions)
-        root = self.root()
+        # root = self.root()
         # root.history.append(root.manager.getIteration(), DataEventKind.ADD, [(str(self.leftChild.lid), self.leftChild.serialize())])
         # root.history.append(root.manager.getIteration(), DataEventKind.ADD, [(str(self.rightChild.lid), self.rightChild.serialize())])
 
@@ -378,6 +379,46 @@ class SpaceRegion(object):
         return _cuts
 
     # Visual
+    def visualizeData(self, options={}, outcomeOnly=True, contextOnly=False, absoluteProgress=False):
+        g = Graph(title='Regions from {}'.format(self), options=options)
+        points, pointValues, regions = self.getSplitData()
+
+        points = np.array(points)
+        pointValues = np.clip(np.array(pointValues), -100, 100)
+
+        if absoluteProgress:
+            pointValues = np.abs(pointValues)
+
+        # Filter
+        if contextOnly:
+            cols = self.colsContext
+            points = points[:, cols]
+        elif outcomeOnly:
+            cols = self.colsTarget
+            points = points[:, cols]
+        else:
+            cols = np.arange(self.space.dim)
+
+        # pvMinimum = np.min(pointValues)
+        # pvMaximum = np.max(pointValues)
+        evaluation = np.array([r[0] for r in regions])
+        evalMinimum = np.min(evaluation)
+        # evalMaximum = np.max(evaluation)
+        evaluation = (evaluation - evalMinimum) / \
+            max(0.001, np.max(evaluation) - evalMinimum)
+
+        for region in regions:
+            bounds = np.array(region[1])[cols]
+            alpha = (1. + region[0]) / 2.
+            if len(bounds) == 2:
+                g.rectangle((bounds[0][0], bounds[1][0]), bounds[0][1] - bounds[0]
+                            [0], bounds[1][1] - bounds[1][0], alpha=alpha, zorder=-1)
+            else:
+                g.rectangle((bounds[0][0], -1), bounds[0][1] -
+                            bounds[0][0], 2, alpha=alpha, zorder=-1)
+        g.scatter(points, color=pointValues, colorbar=True)
+        return g
+
     # def getRegionsVisualizer(self, prefix='', outcomeOnly=True, contextOnly=False, absoluteProgress=False):
     #     """Return a dictionary used to visualize evaluation regions."""
     #     points, pointValues, regions = self.getSplitData()

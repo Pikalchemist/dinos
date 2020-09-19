@@ -20,6 +20,7 @@ class ModelDataset(Dataset):
         options dict: parameters for the dataset
         """
         super().__init__(options=options)
+        self.logger.tag = 'dataset'
 
         self.modelClass = modelClass
         self.models = []
@@ -80,11 +81,13 @@ class ModelDataset(Dataset):
 
     def registerModel(self, model):
         if model not in self.models:
+            self.logger.info(f'New model added: {model}')
             self.models.append(model)
             self.computeSpaces()
 
     def unregisterModel(self, model):
         if model in self.models:
+            self.logger.info(f'Model removed: {model}')
             self.models.remove(model)
             self.computeSpaces()
 

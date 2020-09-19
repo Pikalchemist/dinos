@@ -326,13 +326,11 @@ class Environment(SpaceManager):
         self.engine.displayGui(gui)
     
     # Visual
-    def visualizeTimeByIteration(self):
-        g = Graph()
-        g.plot(self.timeByIteration)
-        return g
+    def visualizeTimeByIteration(self, options=None):
+        return Graph(options=options).plot(self.timeByIteration)
     
-    def visualizeEvaluations(self):
-        g = Graph()
+    def visualizeEvaluations(self, options=None):
+        g = Graph(options=options)
         for eva in self.evaluators:
             g += eva.visualizeEvaluations()
         return g

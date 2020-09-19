@@ -33,8 +33,6 @@ class Model(Serializable):
         self.id = Model.number
         Model.number += 1
         self.dataset = dataset
-        if register:
-            self.dataset.registerModel(self)
 
         # self.amt = AMT()
         self.actionSpace = dataset.multiColSpace(actionSpace)
@@ -47,6 +45,9 @@ class Model(Serializable):
         self.restrictionIds = restrictionIds
 
         # self.spacesHistory = DataEventHistory()
+
+        if register:
+            self.dataset.registerModel(self)
 
     def __repr__(self):
         return "Model({} | {} => {})".format(self.actionSpace, self.contextSpace, self.outcomeSpace)
@@ -325,6 +326,8 @@ class Model(Serializable):
             data = data[ids[:number]]
 
         return np.std(data)
+    
+    # Visual
 
     '''def _draw_graph(self):
         """

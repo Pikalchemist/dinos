@@ -9,6 +9,7 @@ from scipy.spatial.distance import euclidean
 from sklearn.neighbors import NearestNeighbors
 
 from exlab.interface.serializer import Serializable
+from exlab.interface.graph import Graph
 
 from dino.data.data import SingleData, Data, Goal, Action
 from .space import Space, SpaceKind
@@ -313,6 +314,11 @@ class DataSpace(Space):
         return cls.gamma ** n
 
     # Visual
+    def visualizeData(self, options={}):
+        g = Graph(title='Points from {}'.format(self), options=options)
+        g.scatter(self.getData())
+        return g
+
     # def getPointsVisualizer(self, prefix=""):
     #     """Return a dictionary used to visualize outcomes reached for the specified outcome space."""
     #     return getVisual(
