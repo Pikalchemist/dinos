@@ -7,7 +7,7 @@ import threading
 
 from exlab.modular.module import Module
 
-from dino.utils.io import parameter
+from exlab.utils.io import parameter
 from dino.utils.move import MoveConfig
 
 from dino.agents.tools.planners.planner import Planner
@@ -48,6 +48,8 @@ class Agent(Module):
 
     def __init__(self, host, dataset=None, performer=None, planner=None, options={}):
         super().__init__('Agent')
+        self.logger.tag = 'agent'
+
         self.host = host
         self.host.hosting = self
 
@@ -164,7 +166,9 @@ class Agent(Module):
         if config.goal and self.dataset:
             config.goal = self.dataset.convertData(config.goal)
         config.exploitation = True
-        # Wait for env.run()
+
+        self.logger.debug2(f'Testing {config}')
+
         self.schedule(self._test, config)
 
     def _test(self, config):
@@ -182,6 +186,12 @@ class Agent(Module):
         if countIteration:
             self.iteration += 1
         return result
+    
+    def propertySpace(self, filter_=None):
+        space = self.environment.world.cascadingProperty(filter_).space
+        if self.dataset:
+            space = space.convertTo(spaceManager=self.dataset)
+        return space
 
     # def addReachStrategy(self, strategy):
     #     """Add a Strategy designed to perform a task in a certain way.

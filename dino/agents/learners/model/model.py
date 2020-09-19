@@ -10,7 +10,7 @@ import time
 
 from ..learner import Learner
 
-from dino.utils.io import parameter
+from exlab.utils.io import parameter
 from dino.utils.move import MoveConfig
 # from ....utils.maths import uniformSampling, iterrange
 

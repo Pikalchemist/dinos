@@ -4,7 +4,7 @@ import numpy as np
 
 from exlab.modular.module import Module
 
-from dino.utils.io import parameter
+from exlab.utils.io import parameter
 from dino.utils.move import MoveConfig
 
 # from ...data.dataset import Action
@@ -82,6 +82,9 @@ class Strategy(Module):
 
     def _postRun(self, config):
         memory = self.memory
+        if self.agent.dataset:
+            for event in memory:
+                event.convertTo(spaceManager=self.agent.dataset, toData=True)
         return memory
 
     def runIteration(self, config):

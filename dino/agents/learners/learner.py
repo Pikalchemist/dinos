@@ -10,7 +10,7 @@ import time
 
 from ..agent import Agent
 
-from dino.utils.io import parameter
+from exlab.utils.io import parameter
 from dino.utils.move import MoveConfig
 # from ...utils.maths import uniformSampling, iterrange
 
@@ -64,7 +64,6 @@ class Learner(Agent):
     
     def addEvent(self, event, config, cost=1.):
         if self.dataset:
-            event.convertTo(spaceManager=self.dataset, toData=True)
             self.dataset.addEvent(event, cost=cost)
 
     def trainable(self):

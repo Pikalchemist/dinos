@@ -9,7 +9,7 @@
 from dino.data.data import Data, Goal, SingleAction, Action, ActionList
 from dino.data.path import ActionNotFoundException, Path, Paths, PathNode
 # from dino.models.model import Model
-from dino.utils.io import parameter
+from exlab.utils.io import parameter
 
 import numpy as np
 from scipy.spatial.distance import euclidean
