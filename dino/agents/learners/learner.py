@@ -11,6 +11,8 @@ import time
 from ..agent import Agent
 
 from exlab.utils.io import parameter
+from exlab.modular.module import manage
+
 from dino.utils.move import MoveConfig
 # from ...utils.maths import uniformSampling, iterrange
 
@@ -37,6 +39,8 @@ class Learner(Agent):
         dataset = parameter(dataset, self.DATASET_CLASS())
         super().__init__(environment, dataset=dataset, performer=performer,
                          planner=planner, options=options)
+        manage(dataset).attach(self)
+
         # if self.dataset:
         #     self.addChildModule(self.dataset)
 
@@ -81,7 +85,9 @@ class Learner(Agent):
             self.episode + episodes if episodes else None)
         while ((goalIteration is None or self.iteration < goalIteration) and
                (goalEpisode is None or self.episode < goalEpisode)):
+            self.syncCounter()
             self._train()
+            self.syncCounter()
 
     def _train(self):
         self.trainEpisode()
@@ -117,7 +123,7 @@ class Learner(Agent):
         strategy = self.trainStrategies.sample()
         config = MoveConfig(strategy=strategy)
 
-        self.logger.debug(f'Strategy used at iteration {self.iteration}: {config.strategy}', 'STRAT')
+        self.logger.debug(f'Strategy used at iteration {self.iteration}: {config.strategy}', tag='strat')
         return config
 
     def _postEpisode(self, memory, config):

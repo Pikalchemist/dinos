@@ -50,7 +50,7 @@ class Model(Serializable):
             self.dataset.registerModel(self)
 
     def __repr__(self):
-        return "Model({} | {} => {})".format(self.actionSpace, self.contextSpace, self.outcomeSpace)
+        return f'Model({self.actionSpace} | {self.contextSpace} => {self.outcomeSpace})'
 
     def _serialize(self, serializer):
         dict_ = {}

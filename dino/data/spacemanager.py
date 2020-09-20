@@ -25,8 +25,9 @@ from .multispace import MultiColSpace, MultiColDataSpace, MultiRowDataSpace
 
 
 class SpaceManager(Module, Serializable):
-    def __init__(self, storesData=False, options={}, entityCls=Entity):
-        super().__init__()
+    def __init__(self, storesData=False, options={}, entityCls=Entity, parent=None):
+        Module.__init__(self, parent=parent)
+        Serializable.__init__(self)
         self.spaces = []
         self.storesData = storesData
         self.options = options
@@ -183,6 +184,7 @@ class SpaceManager(Module, Serializable):
         """Add data to the dataset"""
         event = event.clone()
         event.addToSpaces(cost=cost)
+        self.logger.debug(f'Adding point {event} to dataset {self}', tag='dataset')
         self.events[event.iteration] = event
         # eventId = self.nextEventId()  # used to identify the execution order
         # self.iterationIds.append([self.iteration, eventId])

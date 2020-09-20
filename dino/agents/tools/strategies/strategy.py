@@ -24,7 +24,7 @@ class Strategy(Module):
         """
         self.name = name if name else (self.__class__.__name__[
                                        :1].lower() + self.__class__.__name__[1:])
-        super().__init__(f'Strategy {self.name}')
+        super().__init__(f'Strategy {self.name}', agent)
 
         self.agent = agent
         self.options = options
@@ -74,6 +74,7 @@ class Strategy(Module):
         return self._postRun(config)
 
     def _preRun(self, config):
+        self.agent.syncCounter()
         self.memory = []
         # self.n = 0
 
@@ -88,6 +89,7 @@ class Strategy(Module):
         return memory
 
     def runIteration(self, config):
+        self.agent.syncCounter()
         self.agent.environment.setupIteration(config)
         self._runIteration(config)
 

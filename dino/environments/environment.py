@@ -282,6 +282,8 @@ class Environment(SpaceManager):
 
     def run(self, evaluating=False):
         # Will run as long as actions are scheduled
+        for agent, _ in self.scheduledActions().items():
+            agent.syncCounter()
         threads = [threading.Thread(target=m) for m in self.scheduledActions().values()]
         for t in threads:
             t.start()

@@ -30,8 +30,10 @@ class SpaceRegion(object):
             [targetSpace, contextSpace], weight=0.5)
         self.targetSpace = targetSpace
         self.contextSpace = contextSpace
+
         self.parent = parent
-        self.manager = manager
+        self._manager = manager
+
         self.bounds = copy.deepcopy(
             bounds) if bounds else Space.infiniteBounds(self.space.dim)
         assert(parent is not None or manager is not None)
@@ -81,7 +83,8 @@ class SpaceRegion(object):
             self.root().childrenNumber += 1
 
     def __repr__(self):
-        return "Region " + str(self.space) + "\n    Left: " + strtab(self.leftChild) + "\n    Cut " + strtab(str(self.splitValue) + " / " + str(self.splitDim) + " #" + str(len(self.points[0]))) + "\n    Right: " + strtab(self.rightChild)
+        cut = strtab(f'{self.splitDim}d {self.splitValue:.4f} #{len(self.points[0])}')
+        return f'Region {self.space}\n    Left: {strtab(self.leftChild)}\n    <Cut {cut}>\n    Right: {strtab(self.rightChild)}'
 
     def _serialize(self, options):
         # serialize(self, ['name', 'description', 'effector', 'property', 'options'])
@@ -95,6 +98,10 @@ class SpaceRegion(object):
         while root.parent is not None:
             root = root.parent
         return root
+    
+    @property
+    def manager(self):
+        return self.root()._manager
 
     def finiteBounds(self):
         points = np.array(self.root().getSplitData(withRegions=False)[0])
@@ -141,7 +148,7 @@ class SpaceRegion(object):
     def controllableContext(self, dataset):
         return dataset.controllableSpaces(self.contextSpace)
 
-    def addPoint(self, point, progress, firstAlwaysNull=True):
+    def addPoint(self, point, progress, firstAlwaysNull=True, populating=False):
         """Add a point and its progress in the attached evaluation region."""
         point = Data.plainData(point, self.space)
         assert len(point) == len(self.bounds)
@@ -179,8 +186,8 @@ class SpaceRegion(object):
             self.points = self.points[-maxPoints:]
             self.pointValues = self.pointValues[-maxPoints:]
 
-        if not addedInChildren and self.manager:
-            self.manager.logger.debug(f'Adding point {point} with progress {progress} to region {self}', self.tag)
+        if not addedInChildren and not populating and self.manager:
+            self.manager.logger.debug(f'Adding point [{", ".join(["{:.4f}".format(p) for p in point])}] with progress {progress:.3e} to region {self}', tag=self.tag)
 
     def computeEvaluation(self):
         pass
@@ -195,6 +202,9 @@ class SpaceRegion(object):
 
     def split(self):
         """Split region according to the cut decided beforehand."""
+
+        if self.manager:
+            self.manager.logger.info(f'Splitting along dim {self.splitDim}: {self.splitValue:.4f} for {self}', tag=self.tag)
 
         # Create child regions boundaries
         leftBounds = copy.deepcopy(self.bounds)
@@ -236,9 +246,9 @@ class SpaceRegion(object):
         # Add all points of the parent region in the child regions according to the cut
         for point, progress in zip(self.points, self.pointValues):
             if point[self.splitDim] < self.splitValue:
-                self.leftChild.addPoint(point, progress)
+                self.leftChild.addPoint(point, progress, populating=True)
             else:
-                self.rightChild.addPoint(point, progress)
+                self.rightChild.addPoint(point, progress, populating=True)
 
     # def greedyCut(self):
     #     """UNTESTED method to define a cut greedily."""
@@ -282,6 +292,8 @@ class SpaceRegion(object):
     # Careful !!! The tree can't handle it if it has only one value multiple times !!!
     def randomCut(self, numberAttempts):
         """Define the cut by testing a few cuts per dimension."""
+        if self.manager:
+            self.manager.logger.debug2(f'Trying to cut region {self}', tag=self.tag)
         i = list(range(len(self.points)))
         #n = int(math.ceil(len(self.points)/(numberAttempts+1)))
         n = float(len(self.points)) / float(numberAttempts + 1)
@@ -350,6 +362,8 @@ class SpaceRegion(object):
                     self.splitDim = d
                     self.splitValue = splitValue
                     maxQ = Q
+        if self.manager:
+            self.manager.logger.debug2(f'Found split along dim {self.splitDim}: {self.splitValue:.4f} for {self}', tag=self.tag)
 
     def getSplitData(self, withRegions=True):
         points = list(self.points)
@@ -403,18 +417,17 @@ class SpaceRegion(object):
         evaluation = np.array([r[0] for r in regions])
         evalMinimum = np.min(evaluation)
         # evalMaximum = np.max(evaluation)
-        evaluation = (evaluation - evalMinimum) / \
-            max(0.001, np.max(evaluation) - evalMinimum)
+        evaluation = (evaluation - evalMinimum) / max(0.001, np.max(evaluation) - evalMinimum)
 
         for region in regions:
             bounds = np.array(region[1])[cols]
-            alpha = (1. + region[0]) / 2.
+            alpha = (0.2 + region[0]) / 1.2
             if len(bounds) == 2:
                 g.rectangle((bounds[0][0], bounds[1][0]), bounds[0][1] - bounds[0]
-                            [0], bounds[1][1] - bounds[1][0], alpha=alpha, zorder=-1)
+                            [0], bounds[1][1] - bounds[1][0], alpha=alpha, zorder=-1, border=True)
             else:
                 g.rectangle((bounds[0][0], -1), bounds[0][1] -
-                            bounds[0][0], 2, alpha=alpha, zorder=-1)
+                            bounds[0][0], 2, alpha=alpha, zorder=-1, border=True)
         g.scatter(points, color=pointValues, colorbar=True)
         return g
 

@@ -5,7 +5,8 @@ import math
 import time
 import threading
 
-from exlab.modular.module import Module
+from exlab.modular.module import Module, manage
+from exlab.lab.counter import AsyncCounter
 
 from exlab.utils.io import parameter
 from dino.utils.move import MoveConfig
@@ -47,7 +48,8 @@ class Agent(Module):
     PERFORMER_CLASS = Performer
 
     def __init__(self, host, dataset=None, performer=None, planner=None, options={}):
-        super().__init__('Agent')
+        super().__init__('Agent', host.spaceManager)
+        manage(self).attach_counter(AsyncCounter(self))
         self.logger.tag = 'agent'
 
         self.host = host
@@ -77,7 +79,7 @@ class Agent(Module):
         self.iterationTimes = []
 
     def __repr__(self):
-        return 'Agent {}'.format(self.__class__.__name__)
+        return f'Agent {self.__class__.__name__}'
 
     def _serialize(self, serializer):
         """Returns a dictionary with serialized information.
@@ -116,7 +118,14 @@ class Agent(Module):
 
     @property
     def iteration(self):
-        return self.environment.iteration
+        return manage(self).counter.t
+
+    @property
+    def counter(self):
+        return manage(self).counter
+    
+    def syncCounter(self):
+        self.counter.sync()
 
     def trainable(self):
         return False

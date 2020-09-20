@@ -12,11 +12,11 @@ from dino.data.spacemanager import SpaceManager
 class Dataset(SpaceManager):
     """The dataset used to record actions, outcomes and procedures."""
 
-    def __init__(self, options={}):
+    def __init__(self, parent=None, options={}):
         """
         options dict: parameters for the dataset
         """
-        super().__init__(storesData=True)
+        super().__init__(storesData=True, parent=parent)
         self.options = options
 
     def _serialize(self, serializer):

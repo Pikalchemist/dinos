@@ -15,11 +15,11 @@ from .dataset import Dataset
 class ModelDataset(Dataset):
     """The dataset used to record actions, outcomes and procedures."""
 
-    def __init__(self, modelClass=Model, options={}):
+    def __init__(self, modelClass=Model, parent=None, options={}):
         """
         options dict: parameters for the dataset
         """
-        super().__init__(options=options)
+        super().__init__(parent=parent, options=options)
         self.logger.tag = 'dataset'
 
         self.modelClass = modelClass
@@ -81,13 +81,13 @@ class ModelDataset(Dataset):
 
     def registerModel(self, model):
         if model not in self.models:
-            self.logger.info(f'New model added: {model}')
+            self.logger.info(f'New model added: {model}', tag='model')
             self.models.append(model)
             self.computeSpaces()
 
     def unregisterModel(self, model):
         if model in self.models:
-            self.logger.info(f'Model removed: {model}')
+            self.logger.info(f'Model removed: {model}', tag='model')
             self.models.remove(model)
             self.computeSpaces()
 

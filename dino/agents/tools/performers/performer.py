@@ -18,7 +18,7 @@ class Performer(Module):
     """
 
     def __init__(self, agent, options={}):
-        super().__init__('Performer')
+        super().__init__('Performer', agent)
         self.agent = agent
         self.environment = self.agent.environment
         self.options = options
@@ -114,7 +114,7 @@ class Performer(Module):
                     # print("---")
                     o = self.agent.observe(formatParameters=formatParameters)
                     y = o.difference(oPrevious)
-                    results.append(InteractionEvent(self.environment.counter.t,
+                    results.append(InteractionEvent(self.environment.counter.last,
                                                     actionExecuted,
                                                     primitiveActionExecuted,
                                                     y,
