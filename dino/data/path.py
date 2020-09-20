@@ -90,7 +90,8 @@ class Paths(object):
         return self.__paths[key]
 
     def toStr(self, short=False):
-        return "Paths({})".format(' | '.join([path.toStr(short=True) for path in self.__paths]))
+        parts = ' | '.join([path.toStr(short=True) for path in self.__paths])
+        return f'Paths({parts})'
 
     def __repr__(self):
         return self.toStr()
@@ -132,7 +133,8 @@ class Path(object):
         return self.__nodes[key]
 
     def toStr(self, short=False):
-        return "<<\n   {}\n>>".format('\n-> '.join([node.toStr(short=True) for node in self.__nodes]))
+        parts = '\n-> '.join([node.toStr(short=True) for node in self.__nodes])
+        return f'<<\n   {parts}\n>>'
 
     def __repr__(self):
         return self.toStr()
@@ -172,12 +174,7 @@ class PathNode(Paths):
 
     def toStr(self, short=False):
         paths = super().toStr(True) if self.paths else ''
-        return "{} {}({} -to reach→ {}){}".format('' if short else 'Node',
-                                                  type(self.action), self.action.toStr(
-                                                      short=True),
-                                                  self.goal.toStr(
-                                                      short=True) if self.goal else 'NoGoal',
-                                                  paths)
+        return f"{'' if short else 'Node'} {type(self.action)}({self.action.toStr(short=True)} - to reach→ {self.goal.toStr(short=True) if self.goal else 'NoGoal'}){paths}"
         # return "Node: {} ({}, {}) {} [{}]".format(self.goal, self.action, self.model, paths, self.state)
 
     def __repr__(self):

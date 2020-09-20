@@ -14,7 +14,7 @@ class State(object):
         self.update()
 
     def __repr__(self):
-        return "State ({})".format(self.values)
+        return f"State ({self.values})"
 
     def __iter__(self):
         return self.values.__iter__()

@@ -119,9 +119,9 @@ class Space(Serializable):
 
     def boundedProperty(self):
         if self._property:
-            return "→{}".format(self._property)
+            return f"→{self._property}"
         elif self.boundProperty:
-            return "↝{}".format(self.boundProperty)
+            return f"↝{self.boundProperty}"
         else:
             return "↛"
 
@@ -145,13 +145,13 @@ class Space(Serializable):
     def toStr(self, short=False):
         if not self.spaces:
             return '@NullSpace'
-        absName = '#{}'.format(self.name) if self.name else ''
-        suffix = '' if self.kind == SpaceKind.BASIC else ':{}'.format(self.kind.value.upper())
+        absName = f'#{self.name}' if self.name else ''
+        suffix = '' if self.kind == SpaceKind.BASIC else f':{self.kind.value.upper()}'
         if short == 2:
-            return "{}".format(self.boundedProperty())
+            return f"{self.boundedProperty()}"
         if short:
-            return "#{}{}{}{}↕{} {}".format(self.id, absName, self.colStr(), suffix, self.dim, self.icon())
-        return "{}#{}{}{}{}↕{}".format(self.icon(), self.id, absName, self.colStr(), suffix, self.dim)
+            return f"#{self.id}{absName}{self.colStr()}{suffix}↕{self.dim} {self.icon()}"
+        return f"{self.icon()}#{self.id}{absName}{self.colStr()}{suffix}↕{self.dim}"
 
     def __repr__(self):
         return self.toStr()
@@ -327,8 +327,7 @@ class Space(Serializable):
     def asTemplate(self, data, type_item=SingleData, type_vector=Data):
         data = list(data)
         if len(data) != self.dim:
-            logging.critical("Template dimension mismatch: space {} is {}d and data is {}d".format(
-                             self.name, self.dim, len(data)))
+            logging.critical(f"Template dimension mismatch: space {self.name} is {self.dim}d and data is {len(data)}d")
         parts = [type_item(s, popn(data, s.dim)) for s in self]
         return type_vector(*parts)
 

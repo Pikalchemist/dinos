@@ -109,8 +109,7 @@ class Learner(Agent):
     def _performEpisode(self, config):
         # Run an episode of the given strategy
         if config.strategy not in self.trainStrategies:
-            raise Exception("{} is not avaiable within {}".format(
-                config.strategy, self))
+            raise Exception('{config.strategy} is not avaiable within {self}')
         return config.strategy.run(config)
 
     def _preEpisode(self):
@@ -118,8 +117,7 @@ class Learner(Agent):
         strategy = self.trainStrategies.sample()
         config = MoveConfig(strategy=strategy)
 
-        self.logger.debug('Strategy used at iteration {}: {}'.format(
-            self.iteration, config.strategy), 'STRAT')
+        self.logger.debug(f'Strategy used at iteration {self.iteration}: {config.strategy}', 'STRAT')
         return config
 
     def _postEpisode(self, memory, config):

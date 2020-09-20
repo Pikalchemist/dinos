@@ -101,16 +101,14 @@ def multivariateRegression(x, y, x0):
     try:
         return operations.multivariateRegression(x, y, x0)
     except ValueError as e:
-        logging.critical("Regression failed: y is {}x{}d, X is {}x{}d and goal is {}d ({})".format(
-            y.shape[0], y.shape[1], x.shape[0], x.shape[1], len(x0), e))
+        logging.critical(f"Regression failed: y is {y.shape[0]}x{y.shape[1]}d, X is {x.shape[0]}x{x.shape[1]}d and goal is {len(x0)}d ({e})")
 
 
 def multivariateRegressionError(x, y, x0, testSetX=None, testSetY=None):
     try:
         return operations.multivariateRegressionError(x, y, x0)
     except ValueError as e:
-        logging.critical("Regression failed: y is {}x{}d, X is {}x{}d and goal is {}d ({})".format(
-            y.shape[0], y.shape[1], x.shape[0], x.shape[1], len(x0), e))
+        logging.critical(f"Regression failed: y is {y.shape[0]}x{y.shape[1]}d, X is {x.shape[0]}x{x.shape[1]}d and goal is {len(x0)}d ({e})")
 
 
 # def multivariateRegressionVector(X, y, x0):

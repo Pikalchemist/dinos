@@ -268,8 +268,7 @@ class DataSpace(Space):
         x = point.plain()
 
         if self._number > 0 and self.ids[self._number - 1] == idx:
-            raise Exception('Trying to add data twice to {} at index {}:\n1: {}\n2: {}'
-                            .format(self, idx, self.data[self._number - 1], x))
+            raise Exception(f'Trying to add data twice to {self} at index {idx}:\n1: {self.data[self._number - 1]}\n2: {x}')
 
         # Extend arrays if needed
         if self._number >= self.data.shape[0]:
@@ -315,7 +314,7 @@ class DataSpace(Space):
 
     # Visual
     def visualizeData(self, options={}):
-        g = Graph(title='Points from {}'.format(self), options=options)
+        g = Graph(title=f'Points from {self}', options=options)
         g.scatter(self.getData())
         return g
 

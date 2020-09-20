@@ -8,7 +8,7 @@ class Challenge(object):
         self.scene = None
 
     def __repr__(self):
-        return 'Challenge {}'.format(self.name)
+        return f'Challenge {self.name}'
 
     def attempt(self, agent, video=False):
         self.agent = agent
@@ -27,8 +27,7 @@ class Challenge(object):
         origin = self.world.observe(spaces=goal.space.flatSpaces)
         self.agent.reachGoal(goal, config)
         final = self.world.observe(spaces=goal.space.flatSpaces)
-        print('{} result: reached {}, asked {} (from {})'.format(
-            self, final, goal, origin))
+        print(f'{self} result: reached {final}, asked {goal} (from {origin})')
 
 
 class SceneSetup(object):
@@ -58,7 +57,7 @@ class SceneSetup(object):
         return name
 
     def __repr__(self):
-        return 'SceneSetup {} for env {}'.format(self.__class__.__name__, self.world.name)
+        return f'SceneSetup {self.__class__.__name__} for env {self.world.name}'
 
     def _configure(self):
         pass

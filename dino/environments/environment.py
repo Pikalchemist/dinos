@@ -104,11 +104,9 @@ class Environment(SpaceManager):
         return manage(self).counter.t
 
     def describe(self):
-        spacesDescription = ["{}: {} dimension(s)".format(
-            space, space.dim) for space in self.spaces]
-        return "Environment '{}':\n{}\n\nSpaces available:\n{}".format(self.__class__.__name__,
-                                                                       self.__class__.DESCRIPTION,
-                                                                       '\n'.join(spacesDescription))
+        spacesDescription = [f"{space}: {space.dim} dimension(s)" for space in self.spaces]
+        spaces = '\n'.join(spacesDescription)
+        return f"Environment '{self.__class__.__name__}':\n{self.__class__.DESCRIPTION}\n\nSpaces available:\n{spaces}"
 
     # def setup(self, dataset=None):
     #     # self.bindSpaces()
@@ -154,7 +152,7 @@ class Environment(SpaceManager):
             (s for s in self.sceneClasses if s.__name__ == nameCls), None)
         if sceneCls is None:
             raise Exception(
-                'Scene named \'{}\' not found for environment {}'.format(nameCls, self))
+                f'Scene named \'{nameCls}\' not found for environment {self}')
         return sceneCls
 
     @property
@@ -242,7 +240,7 @@ class Environment(SpaceManager):
                 effector = p.space.boundProperty
                 if effector is None or not effector.controllable():
                     raise Exception(
-                        '{} is not bound to an effector!'.format(p.space))
+                        f'{p.space} is not bound to an effector!')
                 effector.perform(p)
         
             self.scheduledActionCounter += 1

@@ -57,8 +57,7 @@ class RRTPlanner(Planner):
                     m[2] = m[0].competence()  # float(len(m[1]))
 
                 if not models:
-                    raise ActionNotFoundException(
-                        'No model found planning how to reach {}'.format(goal))
+                    raise ActionNotFoundException(f'No model found planning how to reach {goal}')
                 models = np.array(models)[np.argsort(m[2])]
                 model = models[0]
                 # model = uniformRowSampling(models, [prob for _, _, prob in models])
@@ -126,7 +125,7 @@ class RRTPlanner(Planner):
             print("NOT FREE!")
             print(settings.controlledSpaces)
             raise ActionNotFoundException(
-                'Failed to create a path to reach {}. Space {} trying to be controlled twice!'.format(goal, goal.space), None)
+                f'Failed to create a path to reach {goal}. Space {goal.space} trying to be controlled twice!', None)
         settings.controlledSpaces += model.outcomeSpace
         print(settings.controlledSpaces)
 
@@ -378,8 +377,7 @@ class RRTPlanner(Planner):
                 # print(mindist)
                 # print(model)
             if not p1:
-                raise ActionNotFoundException('Failed to create a path to reach {}'.format(
-                    goal), mindist if mindist < math.inf else None)
+                raise ActionNotFoundException(f'Failed to create a path to reach {goal}', mindist if mindist < math.inf else None)
         # else:
         #     print('Yes!')
 
@@ -430,8 +428,7 @@ class RRTPlanner(Planner):
             if node.parent is not None:
                 pos = node.pos.plain()
                 parentPos = node.parent.pos.plain()
-                plt.plot([parentPos[0], pos[0]], [-parentPos[1], -pos[1]],
-                         '{},-'.format('b' if node.valid else 'r'))
+                plt.plot([parentPos[0], pos[0]], [-parentPos[1], -pos[1]], f"{'b' if node.valid else 'r'},-")
         for node in nodes:
             if node.parent is None:
                 pos = node.pos.plain()

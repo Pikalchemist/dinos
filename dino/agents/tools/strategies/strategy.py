@@ -24,7 +24,7 @@ class Strategy(Module):
         """
         self.name = name if name else (self.__class__.__name__[
                                        :1].lower() + self.__class__.__name__[1:])
-        super().__init__("Strategy {}".format(self.name))
+        super().__init__(f'Strategy {self.name}')
 
         self.agent = agent
         self.options = options
@@ -42,7 +42,7 @@ class Strategy(Module):
         # self.addChildModule(self.performer)
 
     def __repr__(self):
-        return "Strategy {}".format(self.name)
+        return f'Strategy {self.name}'
 
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)

@@ -182,13 +182,11 @@ class Engine(object):
     def simu(self):
         graphical = (
             'displayed' if self.gui else 'hidden') if self.graphical else 'graphical disabled'
-        speed = 'x{}'.format(
-            self.speedupFrames) if self.speedupFrames is not None else 'max'
+        speed = f'x{self.speedupFrames}' if self.speedupFrames is not None else 'max'
         jump = 'displays all frames'
         if self.skippedFrames > 0:
-            jump = 'displays 1 frame every {} frames'.format(
-                self.skippedFrames)
-        return 'Environment {}\nGUI: {} - fps {} - {}\n'.format(self.__class__.__name__, graphical, speed, jump)
+            jump = f'displays 1 frame every {self.skippedFrames} frames'
+        return f'Environment {self.__class__.__name__}\nGUI: {graphical} - fps {speed} - {jump}\n'
 
     # Main loop
     def run(self, duration=None):

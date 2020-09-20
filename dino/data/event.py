@@ -111,5 +111,4 @@ class InteractionEvent(Serializable):
         return n
 
     def __repr__(self):
-        return '{}#{}({}, {}, {})'.format(self.__class__.__name__, self.iteration, self.actions, self.outcomes,
-                                          self.context)
+        return f'{self.__class__.__name__}#{self.iteration}({self.actions}, {self.outcomes}, {self.context})'

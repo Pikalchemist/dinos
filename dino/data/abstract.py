@@ -74,7 +74,7 @@ class AMTBase(object):
         return self.toStr()
 
     def toStr(self):
-        return '{}'.format(', '.join([item.toStr() for item in self.children]))
+        return f"{', '.join([item.toStr() for item in self.children])}"
 
     def name(self):
         if self.element:
@@ -187,7 +187,7 @@ class AMTMultiCol(AMTBase):
         return space
 
     def toStr(self):
-        return '[{}]'.format('+'.join([item.toStr() for item in self.children]))
+        return f"[{'+'.join([item.toStr() for item in self.children])}]"
 
 
 class AMTElementLinked(AMTBase):
@@ -224,7 +224,7 @@ class AMTEntity(AMTElementLinked):
 
     @staticmethod
     def _namePattern(obj, index):
-        return '({})'.format(chr(ord('A') + index))
+        return f"({chr(ord('A') + index)})"
 
     def _fullnamePattern(self, name):
         return name
@@ -248,7 +248,7 @@ class AMTProperty(AMTElementLinked):
     def get(self, spaceManager):
         if len(self.element.assignables) == 0:
             raise Exception(
-                '{} has no possible assignable values!'.format(self.element))
+                f'{self.element} has no possible assignable values!)
 
         if self.context.sameRowsSpaces:
             allAssignables = self.context.assignableElements()
@@ -262,7 +262,7 @@ class AMTProperty(AMTElementLinked):
                 prop = entity.property(propertyName)
                 if prop is None:
                     raise Exception(
-                        '{} has no property {}!'.format(entity, propertyName))
+                        f'{entity} has no property {propertyName}!')
                 properties.append(prop)
         spaces = [spaceManager.spaceSearch(
             property=property, kind=self.kind) for property in properties]
@@ -274,10 +274,10 @@ class AMTProperty(AMTElementLinked):
 
     @staticmethod
     def _namePattern(obj, index):
-        return '({})'.format(chr(ord('a') + index))
+        return f'({chr(ord('a') + index)})'
 
     def _fullnamePattern(self, name):
-        return '{}.{}'.format(self.entity.name(), name)
+        return f'{self.entity.name()}.{name}'
 
 
 class AMTElement(object):
@@ -330,4 +330,4 @@ class AMTElement(object):
             self.assignables.remove(obj)
 
     def __repr__(self):
-        return '{} {}'.format(self.cls.NAME, self.name())
+        return f'{self.cls.NAME} {self.name()}'

@@ -41,7 +41,8 @@ class MultiColSpace(Space):
         return '⇉' + '👁' if self.observable() else '' + '🕹' if self.primitive() else ''
 
     def colStr(self):
-        return '{}[{}]'.format(self.boundedProperty(), ' '.join([space.toStr(2) for space in self.spaces]))
+        cols = ' '.join([space.toStr(2) for space in self.spaces])
+        return f'{self.boundedProperty()}[{cols}]'
 
     def observable(self):
         # All sub spaces must be observable
@@ -197,9 +198,10 @@ class MultiRowDataSpace(DataSpace):
         return spaceManager[0].multiRowSpace(spaces, data=dataSpaces[0])
 
     def toStr(self, short=False):
+        spaces = '>'.join([space.toStr(2) for space in self.spaces])
         if short:
-            return "({})({})@⛁".format('>'.join([space.toStr(2) for space in self.spaces]), self.dim)
-        return "@⛁({})({})".format('>'.join([space.toStr(2) for space in self.spaces]), self.dim)
+            return f"({spaces})({self.dim})@⛁"
+        return f"@⛁({spaces})({self.dim})"
 
     # @property
     # def colSpaces(self):

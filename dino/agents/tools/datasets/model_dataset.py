@@ -191,11 +191,11 @@ class ModelDataset(Dataset):
         self.computeSpaces()
 
         # Add default spaces and models to history
-        if addHistory:
-            self.spacesHistory.append(self.getIteration(), DataEventKind.ADD,
-                                      [("{}".format(s.id), s.serialize()) for s in self.spaces])
-            self.modelsHistory.append(self.getIteration(), DataEventKind.ADD,
-                                      [("{}".format(m.id), m.serialize()) for m in self.models])
+        # if addHistory:
+        #     self.spacesHistory.append(self.getIteration(), DataEventKind.ADD,
+        #                               [("{}".format(s.id), s.serialize()) for s in self.spaces])
+        #     self.modelsHistory.append(self.getIteration(), DataEventKind.ADD,
+        #                               [("{}".format(m.id), m.serialize()) for m in self.models])
 
     def setOptions(self):
         if 'min_y_best_locality' not in self.options.keys():

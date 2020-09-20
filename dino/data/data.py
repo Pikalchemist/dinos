@@ -149,8 +149,7 @@ class Data(Serializable):
             parts = [x for part in parts for x in part.plainOrdered()]
 
         if assertSize and len(parts) != spaceOrder.dim:
-            raise Exception("Size mismatch while plaining out data {} into {}: {} != {}".format(self, spaceOrder,
-                                                                                                len(parts), spaceOrder.dim))
+            raise Exception(f"Size mismatch while plaining out data {self} into {spaceOrder}: {len(parts)} != {spaceOrder.dim}")
         return parts
 
     def npPlain(self, spaceOrder=None, assertSize=True, fill=False):
@@ -265,7 +264,7 @@ class Data(Serializable):
     def toStr(self, short=False):
         if short:
             return '\n    '.join([p.toStr() for p in self._parts])
-        return "{}[{}]".format(self.__class__.__name__, self.toStr(short=True))
+        return f"{self.__class__.__name__}[{self.toStr(short=True)}]"
 
     def __repr__(self):
         return self.toStr()
@@ -284,8 +283,7 @@ class SingleData(Data):
         self.valueOrdered = self.value
         self._parts = [self]
         if len(self.value) != self.space.dim:
-            raise Exception("Size mismatch: space {} is {}d and the data value {} is {}d"
-                            .format(self.space, self.space.dim, self.value, len(self.value)))
+            raise Exception(f"Size mismatch: space {self.space} is {self.space.dim}d and the data value {self.value} is {len(self.value)}d")
         self.relative = self.space.relative
         self.abstract = self.space.abstract
 
@@ -319,8 +317,7 @@ class SingleData(Data):
         if other.space is None:
             raise ValueError('Spaces should be the same for both data')
         if not self.space.matches(other.space, kindSensitive=False):
-            raise ValueError('Spaces (or native spaces) should be the same for both data (first is in {} and second is in {})'
-                             .format(self.space.name, other.space.name))
+            raise ValueError(f'Spaces (or native spaces) should be the same for both data (first is in {self.space.name} and second is in {other.space.name})')
         d = self.__class__(
             self.space, [v1 + v2 for v1, v2 in zip(self.value, other.value)])
         d.setRelative(self.relative and other.relative)
@@ -330,8 +327,7 @@ class SingleData(Data):
         if other.space is None:
             raise ValueError('Spaces should be the same for both data')
         if not self.space.matches(other.space, kindSensitive=False):
-            raise ValueError('Spaces (or native spaces) should be the same for both data (first is in {} and second is in {})'
-                             .format(self.space.name, other.space.name))
+            raise ValueError(f'Spaces (or native spaces) should be the same for both data (first is in {self.space.name} and second is in {other.space.name})')
         d = self.__class__(
             self.space, [v1 - v2 for v1, v2 in zip(self.value, other.value)])
         d.setRelative(self.relative and other.relative)
@@ -380,12 +376,12 @@ class SingleData(Data):
                               self.value).setRelative(self.relative)
 
     def toStr(self, short=False):
-        return "{}{}{}".format(self.space.toStr(True), '±' if self.relative else '',
-                               ', '.join(["{:.3f}".format(v) for v in self.value]))
+        ls = ', '.join(["{: .3f}".format(v) for v in self.value])
+        return f"{self.space.toStr(True)}{'±' if self.relative else ''}{ls}"
 
     def __repr__(self):
-        return "{}({}{})".format(self.__class__.__name__, self.space.toStr(True),
-                                 ["{:.3f}".format(v) for v in self.value])
+        ls = ["{: .3f}".format(v) for v in self.value]
+        return f"{self.__class__.__name__}({self.space.toStr(True)}{ls})"
 
 
 class DataSequence(Serializable):
@@ -418,7 +414,7 @@ class DataSequence(Serializable):
         return self.__class__(*[part.clone() for part in self._parts])
 
     def __repr__(self):
-        return "{}{}".format(self.__class__.__name__, self._parts)
+        return f'{self.__class__.__name__}{self._parts}'
 
     def convertTo(self, spaceManager=None, kind=None, toData=None):
         return self.__class__(*[part.convertTo(spaceManager, kind, toData) for part in self._parts])

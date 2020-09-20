@@ -89,8 +89,8 @@ class Entity(Serializable):
     def addChild(self, entity):
         if entity not in self._children:
             if entity.absoluteName and self.findAbsoluteName(entity.absoluteName):
-                raise Exception('An entity/property named {} already exists within {}! \
-                                 Names should be uniques.'.format(entity.absoluteName, self.root.reference()))
+                raise Exception(f'An entity/property named {entity.absoluteName} already exists within {self.root.reference()}! \
+                                 Names should be uniques.')
             entity.parent = self
             self._children.append(entity)
             # if entity.PHYSICAL:
@@ -258,23 +258,23 @@ class Entity(Serializable):
     def reference(self, short=False):
         if short:
             if self.absoluteName:
-                s = '#{}'.format(self.absoluteName)
+                s = f'#{self.absoluteName}'
             else:
-                s = '{}:{}'.format(self.kind, self.indexKind)
+                s = f'{self.kind}:{self.indexKind}'
         else:
-            s = '{}:{}'.format(self.kind, self.indexKind)
+            s = f'{self.kind}:{self.indexKind}'
             if self.absoluteName:
-                s += '#{}'.format(self.absoluteName)
+                s += f'#{self.absoluteName}'
         return s
 
     def __repr__(self):
-        s = '{}:{}'.format(self.kind, self.indexKind)
+        s = f'{self.kind}:{self.indexKind}'
         if self.disconnected:
             s = colorText('❌', Colors.RED) + s
         if self.absoluteName:
-            s += "#{}".format(self.absoluteName)
+            s += f'#{self.absoluteName}'
         if self.parent:
-            s += " bound to {}".format(self.parent.reference())
+            s += f' bound to {self.parent.reference()}'
         return s
     
 

@@ -47,8 +47,7 @@ class Evaluation(Serializable):
     #     return obj
 
     def __repr__(self):
-        return 'Evaluation @t={} µ={} σ={} ({} test(s))'.format(self.iteration, self.meanError, self.meanStd,
-                                                                len(self.results))
+        return f'Evaluation @t={self.iteration} µ={self.meanError} σ={self.meanStd} ({len(self.results)} test(s))'
 
 
 class Evaluator(Serializable):
@@ -212,7 +211,7 @@ class Evaluator(Serializable):
             # print(dist)
             error = min(1., distance / point.space.maxDistance)
         except ActionNotFoundException as e:
-            print("Failed {}".format(point))
+            print(f"Failed {point}")
             error = min(1., e.minDistanceReached /
                         point.space.maxDistance) if e.minDistanceReached else self.DEFAULT_ERROR
 

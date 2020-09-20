@@ -130,7 +130,7 @@ class Planner(object):
             print("NOT FREE!")
             print(settings.controlledSpaces)
             raise ActionNotFoundException(
-                'Failed to create a path to reach {}. Space {} trying to be controlled twice!'.format(goal, goal.space), None)
+                f'Failed to create a path to reach {goal}. Space {goal.space} trying to be controlled twice!', None)
         settings.controlledSpaces += model.outcomeSpace
         print(settings.controlledSpaces)
 
@@ -382,8 +382,7 @@ class Planner(object):
                 # print(mindist)
                 # print(model)
             if not p1:
-                raise ActionNotFoundException('Failed to create a path to reach {}'.format(
-                    goal), mindist if mindist < math.inf else None)
+                raise ActionNotFoundException(f'Failed to create a path to reach {goal}', mindist if mindist < math.inf else None)
         # else:
         #     print('Yes!')
 

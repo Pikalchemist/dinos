@@ -180,8 +180,7 @@ class SpaceRegion(object):
             self.pointValues = self.pointValues[-maxPoints:]
 
         if not addedInChildren and self.manager:
-            self.manager.logger.debug('Adding point {} with progress {} to region {}'.format(
-                point, progress, self), self.tag)
+            self.manager.logger.debug(f'Adding point {point} with progress {progress} to region {self}', self.tag)
 
     def computeEvaluation(self):
         pass
@@ -380,7 +379,7 @@ class SpaceRegion(object):
 
     # Visual
     def visualizeData(self, options={}, outcomeOnly=True, contextOnly=False, absoluteProgress=False):
-        g = Graph(title='Regions from {}'.format(self), options=options)
+        g = Graph(title=f'Regions from {self}', options=options)
         points, pointValues, regions = self.getSplitData()
 
         points = np.array(points)

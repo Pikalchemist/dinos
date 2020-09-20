@@ -66,4 +66,5 @@ class MoveConfig(object):
         else:
             prefix = "Action exploration"
             attrs = ['strategy', 'depth']
-        return "Config ({}) [{}]".format(prefix, ", ".join([k + ": " + str(getattr(self, k)) for k in attrs]))
+        params = ', '.join([k + ': ' + str(getattr(self, k)) for k in attrs])
+        return f'Config ({prefix}) [{params}]'

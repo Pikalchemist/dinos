@@ -271,7 +271,7 @@ class RegressionModel(Model):
             # Fallback if no point found
             # print(distContext)
             if len(restrictionIds) == 0:
-                print("Fallback for {} without context {}".format(goal, context))
+                print(f'Fallback for {goal} without context {context}')
                 restrictionIds = self.restrictionIds
 
             # print("Context! {}".format(contextPlain))

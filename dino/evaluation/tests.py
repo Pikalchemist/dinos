@@ -33,7 +33,7 @@ class Test(Serializable):
         index = 0
 
         def name(index):
-            return '{}-{}'.format(self.space.boundProperty.reference(), index)
+            return f'{self.space.boundProperty.reference()}-{index}'
 
         while name(index) in self.scene.testIds:
             index += 1
@@ -41,7 +41,7 @@ class Test(Serializable):
         self.scene.testIds[self.id] = self
 
     def __repr__(self):
-        return 'Test on {} ({} point(s))'.format(self.space, len(self.points))
+        return f'Test on {self.space} ({len(self.points)} point(s))'
 
 
 class TestResult(Serializable):
@@ -79,13 +79,13 @@ class TestResult(Serializable):
     #     return obj
 
     def __repr__(self):
-        return 'Result Test {} @t={} µ={} σ={} ({} point(s))'.format(self.test.id, self.iteration, self.meanError,
-                                                                     self.std, len(self.results))
+        return f'Result Test {self.test.id} @t={self.iteration} µ={self.meanError} σ={self.std} ({len(self.results)} point(s))'
 
     def details(self):
-        results = ['-{}: aimed for {} and reached {}, error: {}'.format(i, goal, reached, error)
+        results = [f'-{i}: aimed for {goal} and reached {reached}, error: {error}'
                    for i, (error, goal, reached) in enumerate(self.results)]
-        return '{}:\n{}'.format(self, '\n'.join(results))
+        results = '\n'.join(results)
+        return f'{self}:\n{results}'
 
 
 class PointTest(Test):

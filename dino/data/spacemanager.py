@@ -135,7 +135,7 @@ class SpaceManager(Module, Serializable):
                                        for space in spaces]))
                 if len(dataSpaces) > 1:
                     raise Exception(
-                        "All spaces should be a DataSpace or none: {}".format(spaces))
+                        f"All spaces should be a DataSpace or none: {spaces}")
                 canStoreData = dataSpaces[0]
             else:
                 canStoreData = False

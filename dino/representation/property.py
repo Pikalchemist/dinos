@@ -27,8 +27,8 @@ class Property(Serializable):
         self.name = name
         self.absoluteName = absoluteName
         if self.absoluteName and entity.findAbsoluteName(self.absoluteName):
-            raise Exception('An entity/property named {} already exists within {}! \
-                             Names should be uniques.'.format(self.absoluteName, entity.root.reference()))
+            raise Exception(f'An entity/property named {self.absoluteName} already exists within {entity.root.reference()}! \
+                             Names should be uniques.')
         self.entity = entity
         self.entity.addProperty(self)
 
@@ -49,7 +49,7 @@ class Property(Serializable):
             self._dim = len(self.observePlain())
         if self._dim is None:
             raise Exception(
-                'You should specify the dimension of the effector parameter space for {}'.format(self))
+                f'You should specify the dimension of the effector parameter space for {self}')
         self.space = Space(self.entity.spaceManager, self._dim)
         self.space._property = self
 
@@ -112,15 +112,15 @@ class Property(Serializable):
 
     def reference(self):
         if self.absoluteName:
-            return '#{}'.format(self.absoluteName)
-        return '{}.{}'.format(self.entity.reference(short=True), self.name)
+            return f'#{self.absoluteName}'
+        return f'{self.entity.reference(short=True)}.{self.name}'
 
     def icon(self):
         return '👁' if self.observable() else '' + '🕹' if self.controllable() else ''
 
     def __repr__(self):
-        absName = '#{}'.format(self.absoluteName) if self.absoluteName else ''
-        return "{}{}'{}.{}'".format(self.icon(), absName, self.entity.reference(short=True), self.name)
+        absName = f'#{self.absoluteName}' if self.absoluteName else ''
+        return f"{self.icon()}{absName}'{self.entity.reference(short=True)}.{self.name}'"
 
 
 class Effector(Property):
@@ -141,9 +141,8 @@ class Effector(Property):
         if not isinstance(parameters, list):
             parameters = [parameters]
         if len(parameters) != self._dim:
-            raise Exception(('Parameters size for {} mismatch: expecting {} and received {} ' +
-                             '(did you forget to specify the dim in the constructor?)').format(self, self._dim,
-                                                                                               len(parameters)))
+            raise Exception((f'Parameters size for {self} mismatch: expecting {self._dim} and received {len(parameters)} ' +
+                             '(did you forget to specify the dim in the constructor?)'))
         self._performPlain(parameters)
 
     def _performPlain(self, parameters):
@@ -155,7 +154,7 @@ class Effector(Property):
     def perform(self, action):
         if self.space is None:
             raise UnboundedProperty(
-                "{} of {} is not bounded to any space".format(self.name, self.entity.name))
+                f"{self.name} of {self.entity.name} is not bounded to any space")
         parameters = action.projection(self.space)
         self.performPlain(parameters.valueOrdered)
 
@@ -196,7 +195,7 @@ class Observable(Property):
     def observe(self, formatParameters=None):
         if self.space is None:
             raise UnboundedProperty(
-                "{} of {} is not bounded to any space".format(self.name, self.entity.name))
+                f"{self.name} of {self.entity.name} is not bounded to any space")
         return Observation(self.space, self.space.formatData(self.observePlain(),
                                                              formatParameters=formatParameters))
 
