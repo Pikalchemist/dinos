@@ -10,7 +10,8 @@ def getLid(lids, ids):
 def _nearestFromData(points, x, n=1, ignore=0):
     data = _computeDistances(points, x)
     i = data.argpartition(np.arange(ignore, min(n + ignore, data.shape[0])))
-    i = i[ignore:n + ignore]
+    if n > 0:
+        i = i[ignore:n + ignore]
     return i, data[i]
 
 

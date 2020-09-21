@@ -135,18 +135,19 @@ class DataSpace(Space):
         return [a.tolist() for a in list_]
 
     # Operations
-    def computeDistances(self, x):
+    def computeDistances(self, x, columns=None):
         """Compute array of normalized distances between data and the point given."""
         self._validate()
         x = Data.plainData(x, self)
         if self._number == 0:
             return np.array([])
         #return np.sqrt(np.sum(((self.data[:self._number] - x) / self._nnWeights)**2, axis=1)) / self.maxDistance
-        return operations._computeDistances(self.data[:self._number], x, self._nnWeights, self.maxDistance)
+        data = self.data[:self._number, columns] if columns is not None else self.data[:self._number]
+        return operations._computeDistances(data, x, self._nnWeights, self.maxDistance)
 
-    def computePerformances(self, x):
+    def computePerformances(self, x, columns=None):
         """Compute performances for reaching the given point."""
-        return self.computeDistances(x) * self.costs[:self._number]
+        return self.computeDistances(x, columns=columns) * self.costs[:self._number]
 
     def __nnFromData(self, data, n=1, ignore=0, restrictionIds=None, otherSpace=None):
         if self._number == 0:
@@ -184,28 +185,28 @@ class DataSpace(Space):
     #     i = i[ignore:min(i.size, n)]
     #     return ids[i], data[i]
 
-    def nearest(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None):
+    def nearest(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, columns=None):
         """Computes Nearest Neighbours based on performances."""
         """For ActionSpaces, nearest and nearestDistance are equivalent, i.e. cost=1"""
         '''return self.__nnFromData(self.computePerformances(x), n=n, ignore=ignore, restrictionIds=restrictionIds,
                                  otherSpace=otherSpace)'''
-        return self.__nnFromData(self.computePerformances(x), n=n, ignore=ignore, restrictionIds=restrictionIds,
+        return self.__nnFromData(self.computePerformances(x, columns=columns), n=n, ignore=ignore, restrictionIds=restrictionIds,
                                  otherSpace=otherSpace)
 
-    def nearestDistance(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None):
+    def nearestDistance(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, columns=None):
         """Compute Nearest Neighbours based on distance."""
-        return self.__nnFromData(self.computeDistances(x), n=n, ignore=ignore, restrictionIds=restrictionIds,
+        return self.__nnFromData(self.computeDistances(x, columns=columns), n=n, ignore=ignore, restrictionIds=restrictionIds,
                                  otherSpace=otherSpace)
 
     @staticmethod
     def nearestFromData(points, x, n=1, ignore=0):
         return operations._nearestFromData(points, x, n, ignore)
 
-    def nearestDistanceArray(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None):
+    def nearestDistanceArray(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, columns=None):
         self._validate()
         if otherSpace:
             otherSpace._validate()
-        data = self.data[:self._number]
+        data = self.data[:self._number, columns] if columns is not None else self.data[:self._number]
         ids = self.ids[:self._number]
 
         if otherSpace:
@@ -224,10 +225,12 @@ class DataSpace(Space):
 
         if len(ids) == 0:
             return np.array([], dtype=np.int32), np.array([])
+        
+        x = np.array(x)[:, columns] if columns else np.array(x)
 
         nbrs = NearestNeighbors(n_neighbors=min(
             n + ignore, data.shape[0]), algorithm='ball_tree').fit(data)
-        distances, indices = nbrs.kneighbors(np.array(x))
+        distances, indices = nbrs.kneighbors(x)
         return ids[indices[:, ignore:]], distances[:, ignore:]
 
     def variance(self, ids):

@@ -142,32 +142,32 @@ class Model(Serializable):
     def nonControllableContext(self):
         return self.dataset.nonControllableSpaces(self.contextSpace, merge=True)
 
-    def forward(self, action: Action, context: Observation = None):
-        value, error = self.npForward(action, context)
+    def forward(self, action: Action, context: Observation = None, contextColumns=None):
+        value, error = self.npForward(action, context, contextColumns=contextColumns)
         return Data(self.outcomeSpace, value.tolist()), error
 
     def computeCompetence(self, error, distanceGoal=0):
         distanceGoal = min(distanceGoal, 1.)
         return max(0, min(1., (1. - distanceGoal - error ** 2) / np.exp((error * 4.15) ** 3)))
 
-    def npForward(self, action: Action, context: Observation = None):
+    def npForward(self, action: Action, context: Observation = None, contextColumns=None):
         raise NotImplementedError()
 
-    def inverse(self, goal: Goal, context: Observation = None):
+    def inverse(self, goal: Goal, context: Observation = None, contextColumns=None):
         raise NotImplementedError()
 
-    def bestLocality(self, goal: Goal, context: Observation = None):
+    def bestLocality(self, goal: Goal, context: Observation = None, contextColumns=None):
         raise NotImplementedError()
 
-    def goalCompetenceError(self, goal: Goal, context: Observation = None):
+    def goalCompetenceError(self, goal: Goal, context: Observation = None, contextColumns=None):
         try:
-            competence, error, distance = self.inverse(goal, context)[3:6]
+            competence, error, distance = self.inverse(goal, context, contextColumns=contextColumns)[3:6]
             return competence, error, distance
         except ActionNotFound:
             return -1, -1, -1
 
-    def goalCompetence(self, goal: Goal, context: Observation = None):
-        return self.goalCompetenceError(goal, context)[0]
+    def goalCompetence(self, goal: Goal, context: Observation = None, contextColumns=None):
+        return self.goalCompetenceError(goal, context, contextColumns=contextColumns)[0]
 
     def getIds(self):
         ids = self.outcomeSpace.getIds(self.restrictionIds)
@@ -177,18 +177,18 @@ class Model(Serializable):
                 ids, self.contextSpace.getIds(self.restrictionIds))
         return ids
 
-    def competence(self, precise=False):
-        return self.computeCompetence(self.std(precise=precise))
+    def competence(self, precise=False, contextColumns=None):
+        return self.computeCompetence(self.std(precise=precise, contextColumns=contextColumns))
 
-    def eventError(self, eventId):
+    def eventError(self, eventId, contextColumns=None):
         action = self.actionSpace.getPoint(eventId)[0]
         outcome = self.outcomeSpace.getPoint(eventId)[0]
         context = self.contextSpace.getPoint(
             eventId)[0] if self.contextSpace else None
 
-        actionEstimated = self.inverse(outcome, context)[0]
-        actionOutcomeEstimated = self.forward(actionEstimated, context)[0]
-        outcomeEstimated = self.forward(action, context)[0]
+        actionEstimated = self.inverse(outcome, context, contextColumns=contextColumns)[0]
+        actionOutcomeEstimated = self.forward(actionEstimated, context, contextColumns=contextColumns)[0]
+        outcomeEstimated = self.forward(action, context, contextColumns=contextColumns)[0]
 
         errorAction = actionEstimated.distanceTo(
             action) / action.space.maxDistance
@@ -207,13 +207,13 @@ class Model(Serializable):
         # print(outcome.space.maxDistance)
         return errorOutcome, errorAction
 
-    def eventForwardError(self, eventId):
+    def eventForwardError(self, eventId, contextColumns=None):
         action = self.actionSpace.getPoint(eventId)[0]
         outcome = self.outcomeSpace.getPoint(eventId)[0]
         context = self.contextSpace.getPoint(
             eventId)[0] if self.contextSpace else None
 
-        outcomeEstimated = self.forward(action, context)[0]
+        outcomeEstimated = self.forward(action, context, contextColumns=contextColumns)[0]
         zeroError = (outcome.length() < 0.00001) != (
             outcomeEstimated.length() < 0.00001)
         errorOutcome = outcomeEstimated.distanceTo(
@@ -229,13 +229,14 @@ class Model(Serializable):
         #     print('---       ---')
         return errorOutcome
 
-    def std(self, data=None, context: Observation = None, precise=False):
+    def std(self, data=None, context: Observation = None, precise=False, contextColumns=None):
         # print("Variance")
         if data is None and context is None:
-            errors = self._errorEvents(precise=precise)
+            errors = self._errorEvents(
+                precise=precise, contextColumns=contextColumns)
         else:
             errors = self._errorEstimations(
-                data=data, context=context, precise=precise)
+                data=data, context=context, precise=precise, contextColumns=contextColumns)
         # (('Forward', errors[:, 0]), ('Inverse', errors[:, 1]))
         errorsList = (('Forward', errors),)
         # for name, errors in errorsList:
@@ -259,8 +260,16 @@ class Model(Serializable):
         # print(np.mean(errors))
         # print(np.sort(errors)[-10:])
         return np.mean(errors) + 0.08 * np.std(errors)
+    
+    def multiContextColumns(self, contextColumns, space):
+        if contextColumns is None:
+            return None
+        indices = space.columnsFor(self.contextSpace)
+        cols = np.ones(space.dim)
+        cols[indices] = contextColumns
+        return cols
 
-    def _errorEvents(self, precise=False, exceptAlmostZero=True):
+    def _errorEvents(self, precise=False, exceptAlmostZero=True, contextColumns=None):
         ids = self.getIds()
         if exceptAlmostZero:
             data = self.outcomeSpace.getData(ids)
@@ -273,7 +282,7 @@ class Model(Serializable):
             ids_ = np.arange(len(ids))
             np.random.shuffle(ids_)
             ids = ids[ids_[:number]]
-        errors = np.array([self.eventForwardError(id_) for id_ in ids])
+        errors = np.array([self.eventForwardError(id_, contextColumns=contextColumns) for id_ in ids])
         # print(errors)
         # if not precise:
         #     print(self.outcomeSpace.getIds(self.restrictionIds)[ids_[np.argsort(errors)[-50:]]])
@@ -283,7 +292,7 @@ class Model(Serializable):
         return errors
         # return np.mean(errors, axis=1)
 
-    def _errorEstimations(self, data=None, context: Observation = None, precise=False, exceptAlmostZero=True):
+    def _errorEstimations(self, data=None, context: Observation = None, precise=False, exceptAlmostZero=True, contextColumns=None):
         data = data if data else self.outcomeSpace.getData(self.restrictionIds)
         if self.contextSpace:
             context = context if context else self.contextSpace.getData(
@@ -307,15 +316,15 @@ class Model(Serializable):
 
         if context is not None:
             errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist(
-            )), self.contextSpace.point(c.tolist()))[1] for d, c in zip(data, context)]
+            )), self.contextSpace.point(c.tolist()), contextColumns=contextColumns)[1] for d, c in zip(data, context)]
         else:
-            errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist()))[
+            errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist()), contextColumns=contextColumns)[
                 1] for d in data]
 
         return errors
 
-    def variance(self, data=None, context: Observation = None, precise=False):
-        return self.std(data=data, context=context, precise=precise) ** 2
+    def variance(self, data=None, context: Observation = None, precise=False, contextColumns=None):
+        return self.std(data=data, context=context, precise=precise, contextColumns=contextColumns) ** 2
 
     def domainVariance(self, data=None, precise=False):
         data = data if data else self.outcomeSpace.getData(self.restrictionIds)
