@@ -103,7 +103,7 @@ class PymunkEngine(InternalEngine):
             pygame.event.get()
             if delay:
                 self.clock.tick(
-                    50*(self.speedup_frames if self.speedup_frames is not None else 1000000))
+                    50*(self.speedupFrames if self.speedupFrames is not None else 1000000))
                 pygame.display.set_caption(
                     f"GUI fps: {self.clock.get_fps():.0f}")
 
