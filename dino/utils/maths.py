@@ -72,7 +72,7 @@ def sigmoid(x):
     return y
 
 
-def thresfunc(value, ratio):
+def threshold(value, ratio):
     return (ratio >= 0.5) * (1 - (1 - value) * (0.5 - ratio) * 2) + (ratio < 0.5) * (1 - value * (0.5 - ratio) * 2)
 
 

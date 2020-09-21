@@ -13,7 +13,7 @@ from exlab.interface.serializer import Serializable
 from exlab.interface.graph import Graph
 
 from dino.data.data import Goal, SingleData
-from dino.data.path import ActionNotFoundException
+from dino.data.path import ActionNotFound
 
 from dino.utils.move import MoveConfig
 # from dino.utils.maths import iterrange
@@ -210,7 +210,7 @@ class Evaluator(Serializable):
                 point)  # , hierarchical=False)
             # print(dist)
             error = min(1., distance / point.space.maxDistance)
-        except ActionNotFoundException as e:
+        except ActionNotFound as e:
             print(f"Failed {point}")
             error = min(1., e.minDistanceReached /
                         point.space.maxDistance) if e.minDistanceReached else self.DEFAULT_ERROR
@@ -279,7 +279,7 @@ class Evaluator(Serializable):
             # for s in spaces:
             #     env.scene.property(s.property).save()
             # results = self.agent.performer.perform(paths, self.agent.dataset)
-        except ActionNotFoundException:
+        except ActionNotFound:
             return Evaluator.DEFAULT_ERROR, point, None
     
     # Visual

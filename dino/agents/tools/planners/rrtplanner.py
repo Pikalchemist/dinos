@@ -7,7 +7,7 @@
 # from ..utils.debug import timethis
 # from ..utils.maths import uniformRowSampling
 from dino.data.data import Data, Goal, SingleAction, Action, ActionList
-from dino.data.path import ActionNotFoundException, Path, Paths, PathNode
+from dino.data.path import ActionNotFound, Path, Paths, PathNode
 # from dino.models.model import Model
 from .planner import Planner
 
@@ -57,7 +57,7 @@ class RRTPlanner(Planner):
                     m[2] = m[0].competence()  # float(len(m[1]))
 
                 if not models:
-                    raise ActionNotFoundException(f'No model found planning how to reach {goal}')
+                    raise ActionNotFound(f'No model found planning how to reach {goal}')
                 models = np.array(models)[np.argsort(m[2])]
                 model = models[0]
                 # model = uniformRowSampling(models, [prob for _, _, prob in models])
@@ -124,7 +124,7 @@ class RRTPlanner(Planner):
         if not settings.freeSpace(goal.space):
             print("NOT FREE!")
             print(settings.controlledSpaces)
-            raise ActionNotFoundException(
+            raise ActionNotFound(
                 f'Failed to create a path to reach {goal}. Space {goal.space} trying to be controlled twice!', None)
         settings.controlledSpaces += model.outcomeSpace
         print(settings.controlledSpaces)
@@ -377,7 +377,7 @@ class RRTPlanner(Planner):
                 # print(mindist)
                 # print(model)
             if not p1:
-                raise ActionNotFoundException(f'Failed to create a path to reach {goal}', mindist if mindist < math.inf else None)
+                raise ActionNotFound(f'Failed to create a path to reach {goal}', mindist if mindist < math.inf else None)
         # else:
         #     print('Yes!')
 

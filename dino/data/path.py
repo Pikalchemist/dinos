@@ -22,7 +22,7 @@ Paths[
 """
 
 
-class ActionNotFoundException(Exception):
+class ActionNotFound(Exception):
     def __init__(self, message, minDistanceReached=None):
         super().__init__(message)
         self.minDistanceReached = minDistanceReached
@@ -174,7 +174,7 @@ class PathNode(Paths):
 
     def toStr(self, short=False):
         paths = super().toStr(True) if self.paths else ''
-        return f"{'' if short else 'Node'} {type(self.action)}({self.action.toStr(short=True)} - to reach→ {self.goal.toStr(short=True) if self.goal else 'NoGoal'}){paths}"
+        return f"{'' if short else 'Node'} {type(self.action)}({self.action.toStr(short=True) if self.action else ''} - to reach→ {self.goal.toStr(short=True) if self.goal else 'NoGoal'}){paths}"
         # return "Node: {} ({}, {}) {} [{}]".format(self.goal, self.action, self.model, paths, self.state)
 
     def __repr__(self):

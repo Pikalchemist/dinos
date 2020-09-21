@@ -10,6 +10,7 @@ from dino.utils.move import MoveConfig
 from dino.data.event import InteractionEvent
 from dino.data.data import ActionList, Data
 from dino.data.space import SpaceKind, FormatParameters
+from dino.data.path import ActionNotFound
 
 
 class Performer(Module):
@@ -19,6 +20,8 @@ class Performer(Module):
 
     def __init__(self, agent, options={}):
         super().__init__('Performer', agent)
+        self.logger.tag = 'performer'
+
         self.agent = agent
         self.environment = self.agent.environment
         self.options = options
@@ -73,19 +76,26 @@ class Performer(Module):
         running = True
         # goal = None
 
+        i = 0
         while running:
             if goal:
                 if not groupedActionList:
+                    self.logger.debug2(
+                        f'Iter {i}: no more action to execute... trying to replan new ones')
                     replanning += 1
                     if replanning > maxReplanning:
-                        print('Out of replanning')
+                        self.logger.warning(
+                            f'Iter {i}: out of replanning')
                         break
-                    paths = self.agent.planner.plan(
-                        absoluteGoal, model=config.model)
+                    try:
+                        paths = self.agent.planner.plan(
+                            absoluteGoal, model=config.model)
+                    except ActionNotFound:
+                        break
                     # distance = paths.length()
                     # if distance < 2.:
                     #     break
-                    print('Replanning...')
+                    # print('Replanning...')
                     groupedActionList = paths.getGroupedActionList()
                 # groupedActionList = [groupedActionList[0]]
             # print('>>>>>>>>>>', groupedActionList)
@@ -125,11 +135,15 @@ class Performer(Module):
                     if goal:
                         distance = absoluteGoal.relativeData(
                             self.environment.state()).norm()
-                        print('DISTANCE', distance, absoluteGoal.relativeData(
-                            self.environment.state()))
+                        relative = absoluteGoal.relativeData(self.environment.state())
+                        self.logger.debug2(
+                            f'Iter {i}: distance to goal {distance:.3f} (max {maxDistance:.3f}) ({relative})')
                         if distance < maxDistance:
+                            self.logger.debug(
+                                f'Iter {i}: close enough to goal!')
                             running = False
                             break
+                i += 1
             if goal:
                 groupedActionList = None
             else:

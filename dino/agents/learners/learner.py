@@ -123,7 +123,7 @@ class Learner(Agent):
         strategy = self.trainStrategies.sample()
         config = MoveConfig(strategy=strategy)
 
-        self.logger.debug(f'Strategy used at iteration {self.iteration}: {config.strategy}', tag='strat')
+        self.logger.debug(f'Strategy used at iteration {self.iteration}: {config.strategy}', tag='strategy')
         return config
 
     def _postEpisode(self, memory, config):

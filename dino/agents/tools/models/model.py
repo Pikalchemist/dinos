@@ -16,7 +16,7 @@ from exlab.interface.serializer import Serializable
 from dino.data.data import *
 from dino.data.space import SpaceKind
 # from ..data.abstract import *
-from dino.data.path import ActionNotFoundException
+from dino.data.path import ActionNotFound
 
 
 '''
@@ -163,7 +163,7 @@ class Model(Serializable):
         try:
             competence, error, distance = self.inverse(goal, context)[3:6]
             return competence, error, distance
-        except ActionNotFoundException:
+        except ActionNotFound:
             return -1, -1, -1
 
     def goalCompetence(self, goal: Goal, context: Observation = None):

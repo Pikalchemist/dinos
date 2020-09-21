@@ -11,7 +11,7 @@ from dino.utils.move import MoveConfig
 # from dino.data.data import *
 from dino.data.space import SpaceKind
 from dino.data.event import InteractionEvent
-from dino.data.path import ActionNotFoundException
+from dino.data.path import ActionNotFound
 
 
 
@@ -25,6 +25,7 @@ class Strategy(Module):
         self.name = name if name else (self.__class__.__name__[
                                        :1].lower() + self.__class__.__name__[1:])
         super().__init__(f'Strategy {self.name}', agent)
+        self.logger.tag = 'strategy'
 
         self.agent = agent
         self.options = options
@@ -96,27 +97,27 @@ class Strategy(Module):
     def _runIteration(self, config):
         pass
 
-    # def reachGoalContext(self, config):
-    #     if config.goalContext:
-    #         print('Reaching goal context...')
-    #         config.goalContext = config.goalContext.convertTo(
-    #             self.agent.dataset, kind=SpaceKind.BASIC)
+    def reachGoalContext(self, config):
+        if config.goalContext:
+            print('Reaching goal context... UNIMP!')
+            # config.goalContext = config.goalContext.convertTo(
+            #     self.agent.dataset, kind=SpaceKind.BASIC)
 
-    #         try:
-    #             paths, _ = self.planner.planDistance(config.goalContext)
-    #             self.logger.debug("Planning generated for context goal {} in {} steps"
-    #                               .format(config.goalContext, len(paths)), 'PLAN')
-    #             self.testGoal(config.goalContext, paths,
-    #                           config.clone(model=None))
-    #         except ActionNotFoundException:
-    #             self.logger.warning("Context planning failed for goal {}, switching to random"
-    #                                 .format(config.goalContext), 'PLAN')
-    #             return False
+            # try:
+            #     paths, _ = self.planner.planDistance(config.goalContext)
+            #     self.logger.debug("Planning generated for context goal {} in {} steps"
+            #                       .format(config.goalContext, len(paths)), 'PLAN')
+            #     self.testGoal(config.goalContext, paths,
+            #                   config.clone(model=None))
+            # except ActionNotFound:
+            #     self.logger.warning("Context planning failed for goal {}, switching to random"
+            #                         .format(config.goalContext), 'PLAN')
+            #     return False
 
     def testActions(self, actions, config=MoveConfig()):
         try:
             self.testPaths(self.planner.planActions(actions), config)
-        except ActionNotFoundException:
+        except ActionNotFound:
             return
 
     def testGoal(self, goal, paths=None, config=MoveConfig()):

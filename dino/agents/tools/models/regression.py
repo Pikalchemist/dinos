@@ -18,7 +18,7 @@ from dino.utils.maths import multivariateRegression, multivariateRegressionError
 from dino.data.data import Data, Goal, Observation, Action
 # from dino.data.abstract import *
 from dino.data.space import SpaceKind
-from dino.data.path import ActionNotFoundException
+from dino.data.path import ActionNotFound
 
 
 class RegressionModel(Model):
@@ -40,6 +40,7 @@ class RegressionModel(Model):
         return max(0, min(1., (1. - distanceGoal - error ** 2) / np.exp((error * 20) ** 3)))
 
     def reachable(self, goal: Goal, context: Observation = None, precision=0.1, inverse=True):
+        assert(goal is not None)
         try:
             # norm = goal.norm() / goal.space.maxDistance
             # if norm < precision * 2:
@@ -60,15 +61,17 @@ class RegressionModel(Model):
             #     print(y0)
             #     print(goal)
             return goalDistanceNormalized < precision, y0, a0
-        except ActionNotFoundException:
+        except ActionNotFound:
             return False, None, None
 
     def inverse(self, goal: Goal, context: Observation = None, adaptContext=False):
+        assert(goal is not None)
         a0, y0, c0, comp, error, distance = self.bestLocality(
             goal, context, adaptContext=adaptContext)[:6]
         return a0, y0, c0, comp, error, distance  # , dist, distNormalized
 
     def npForward(self, action: Action, context: Observation = None, bestContext=True, debug=False):
+        assert(action is not None)
         # import pylab as plt
 
         # action = action.projection(self.actionSpace)
@@ -160,7 +163,7 @@ class RegressionModel(Model):
         # ids = ids[idsPart]
         #
         # if len(ids) == 0:
-        #     raise ActionNotFoundException("Not enough points to compute")
+        #     raise ActionNotFound("Not enough points to compute")
 
         print('=================================')
         print(dist)
@@ -168,13 +171,13 @@ class RegressionModel(Model):
         try:
             scores = [self.inverse(goal, self.contextSpace.getPoint(id_)[0])[
                 4] + d / 2 for id_, d in zip(ids, dist)]
-        except ActionNotFoundException:
+        except ActionNotFound:
             scores = []
             for id_, d in zip(ids, dist):
                 try:
                     scores.append(self.inverse(
                         goal, self.contextSpace.getPoint(id_)[0])[4] + d / 2)
-                except ActionNotFoundException:
+                except ActionNotFound:
                     scores.append(-1000)
         ids = ids[np.argsort(scores)]
         print(scores)
@@ -359,7 +362,7 @@ class RegressionModel(Model):
         ids = ids[idsPart]
 
         if len(ids) == 0:
-            raise ActionNotFoundException("Not enough points to compute")
+            raise ActionNotFound("Not enough points to compute")
 
         if getClosestOutcome:
             distanceContext = (self.contextSpace.getPoint(restrictionIds[0])[0].distanceTo(context) /
@@ -479,7 +482,7 @@ class RegressionModel(Model):
                     minY0Plain = y0Plain
                     minA0Plain = a0Plain
         if minY0Plain is None:
-            raise ActionNotFoundException(
+            raise ActionNotFound(
                 "Not enough points to compute action")
 
         y0 = self.outcomeSpace.asTemplate(minY0Plain)

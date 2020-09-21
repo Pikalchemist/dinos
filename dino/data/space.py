@@ -319,7 +319,11 @@ class Space(Serializable):
         return np.array([0.] * self.dim)
 
     def intersects(self, space):
-        return set(self.flatSpaces).intersection(set(space.flatSpaces))
+        if isinstance(space, list):
+            space = set([sp for s in space for sp in s.flatSpaces])
+        else:
+            space = set(space.flatSpaces)
+        return set(self.flatSpaces).intersection(space)
 
     def plainRandomPoint(self):
         return np.array([random.uniform(minb, maxb) for minb, maxb in self.bounds])
