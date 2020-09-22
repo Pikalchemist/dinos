@@ -13,7 +13,7 @@ from .wall import Wall
 class EmptyRoomScene(SceneSetup):
     DESCRIPTION = 'Just a mobile robot with no obstacle and no other objects.\n' +\
                   'Use: learning how to move.'
-    RESET_ITERATIONS = 10
+    RESET_ITERATIONS = 5
 
     def _setup(self):
         self.iterationReset = 0
@@ -29,7 +29,7 @@ class EmptyRoomScene(SceneSetup):
 
         # Walls
         w = 5
-        self.world.addChild(Wall((220.0, 200.0), (220.0, 400.0), w))
+        self.world.addChild(Wall((270.0, 200.0), (270.0, 400.0), w))
         # self.walls = [Wall((50.0, 50.0), (550.0, 50.0), w),
         #               Wall((550.0, 50.0), (550.0, 500.0), w),
         #               Wall((550.0, 500.0), (50.0, 500.0), w),

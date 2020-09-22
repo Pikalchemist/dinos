@@ -105,7 +105,7 @@ class SpaceManager(Module, Serializable):
             return spaces[0]
 
         # Look for exisiting multi space
-        r = [s for s in list_ if set(s.spaces) == set(spaces)]
+        r = [s for s in list_ if s and set(s.spaces) == set(spaces)]
         if len(r) == 0:
             s = type_(self, spaces)
             list_.append(s)

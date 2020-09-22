@@ -72,6 +72,7 @@ class RegressionModel(Model):
 
     def npForward(self, action: Action, context: Observation = None, bestContext=True, contextColumns=None, debug=False):
         assert(action is not None)
+        # contextColumns = self.contextColumns(contextColumns, )
         # import pylab as plt
 
         # action = action.projection(self.actionSpace)
@@ -138,10 +139,10 @@ class RegressionModel(Model):
         #     print(y)
         #     print(multivariateRegressionError(x, y, actionContextPlain))
 
-        return multivariateRegressionError(x, y, actionContextPlain, contextColumns=contextColumns)
+        return multivariateRegressionError(x, y, actionContextPlain, columns=self.multiContextColumns(contextColumns, space))
 
     def adaptContext(self, goal, context=None, relative=True, contextColumns=None):
-        if not context or not self.contextSpace:
+        if not context or not self.hasContext(self.contextSpace, contextColumns):
             return None
 
         self.outcomeSpace._validate()
@@ -169,14 +170,14 @@ class RegressionModel(Model):
         print(dist)
         print(ids)
         try:
-            scores = [self.inverse(goal, self.contextSpace.getPoint(id_)[0])[
+            scores = [self.inverse(goal, self.contextSpace.getPoint(id_)[0], contextColumns=contextColumns)[
                 4] + d / 2 for id_, d in zip(ids, dist)]
         except ActionNotFound:
             scores = []
             for id_, d in zip(ids, dist):
                 try:
                     scores.append(self.inverse(
-                        goal, self.contextSpace.getPoint(id_)[0])[4] + d / 2)
+                        goal, self.contextSpace.getPoint(id_)[0], contextColumns=contextColumns)[4] + d / 2)
                 except ActionNotFound:
                     scores.append(-1000)
         ids = ids[np.argsort(scores)]
@@ -206,6 +207,8 @@ class RegressionModel(Model):
     def _nearestData(self, goal, context=None, n=1, bestContext=True, adaptContext=False, outcome=True, contextColumns=None):
         self.outcomeSpace._validate()
         self.actionSpace._validate()
+        if not self.hasContext(self.contextSpace, contextColumns):
+            context = None
         if context:
             self.contextSpace._validate()
             if adaptContext:
@@ -243,7 +246,7 @@ class RegressionModel(Model):
             # print('numberContext', numberContext)
             if bestContext:
                 ids, _ = goalSpace.nearest(goalPlain, n=numberContext,
-                                           restrictionIds=restrictionIds, otherSpace=otherSpace, columns=self.multiContextColumns(contextColumns, goalSpace))
+                                           restrictionIds=restrictionIds, otherSpace=otherSpace)
                 cids, cdists = self.contextSpace.nearestDistance(contextPlain, n=self.NN_LOCALITY,
                                                                  restrictionIds=ids, otherSpace=otherSpace, columns=contextColumns)
 
@@ -260,7 +263,8 @@ class RegressionModel(Model):
                     goalContextPlain = Data.plainData(goalContext, space)
 
             restrictionIds, _ = self.contextSpace.nearestDistance(contextPlain, n=numberContext,
-                                                                  restrictionIds=restrictionIds, otherSpace=otherSpace, columns=contextColumns)
+                                                                  restrictionIds=restrictionIds, otherSpace=otherSpace,
+                                                                  columns=contextColumns)
             # restrictionIds, distContext = self.outcomeContextSpace.nearestDistance(goalContextPlain,
             #                                                                        n=numberContext,
             #                                                                        restrictionIds=restrictionIds,
@@ -286,18 +290,21 @@ class RegressionModel(Model):
         ids, dist = goalSpace.nearest(goalPlain,
                                       n=n,
                                       restrictionIds=restrictionIds,
-                                      otherSpace=otherSpace,
-                                      columns=self.multiContextColumns(contextColumns, goalSpace))
+                                      otherSpace=otherSpace)
         # ids, dist = goalContextSpace.nearest(goalContextPlain,
         #                                      n=n,
         #                                      restrictionIds=restrictionIds,
-        #                                      otherSpace=otherSpace)
+        #                                      otherSpace=otherSpace,
+                                            # columns=self.multiContextColumns(contextColumns, goalContextSpace))
         # print(dist)
 
         return ids, dist, context, restrictionIds, space, goal, goalPlain, goalContext, goalContextPlain
 
     def bestLocality(self, goal: Goal, context: Observation = None, getClosestOutcome=False, bestContext=True, adaptContext=False, contextColumns=None):
         """Compute most stable local action-outcome model around goal outcome."""
+        contextColumns = self.contextColumns(contextColumns, goal)
+        if not self.hasContext(self.contextSpace, contextColumns):
+            context = None
         # self.outcomeSpace._validate()
         # self.actionSpace._validate()
         # if context:
@@ -435,8 +442,10 @@ class RegressionModel(Model):
                 # print(ycPlain)
                 # print(aPlain)
                 # print(goalContextPlain)
+                columns = self.multiContextColumns(
+                    contextColumns, self.outcomeContextSpace)
                 a0Plain = multivariateRegression(
-                    ycPlain, aPlain, goalContextPlain)
+                    ycPlain, aPlain, goalContextPlain, columns=columns)
                 a0 = self.actionSpace.action(a0Plain)
 
                 actionCenter = np.mean(aPlain, axis=0)
@@ -453,7 +462,8 @@ class RegressionModel(Model):
                 # else:
                 #     ac0Plain = a0Plain
                 # y0Plain, error = multivariateRegressionError(acLargePlain, yLargePlain, ac0Plain)
-                y0Plain, error = self.npForward(a0, context)
+                y0Plain, error = self.npForward(
+                    a0, context, contextColumns=columns)
                 distanceGoal = euclidean(goalPlain, y0Plain)
                 # print('---')
                 # print(ycPlain)

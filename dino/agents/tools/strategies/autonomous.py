@@ -116,7 +116,7 @@ class AutonomousStrategy(RandomStrategy):
 
         # First pass: only random
         probFirstPass = 1. # TODO threshold(self.randomFirstPass, self.randomThreshold)
-        print(probFirstPass)
+        # print(probFirstPass)
         if not config.exploitation and random.uniform(0, 1) < probFirstPass:
             return 1., Paths()  # Random action
 

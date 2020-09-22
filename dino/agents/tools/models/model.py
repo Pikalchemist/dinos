@@ -17,6 +17,7 @@ from dino.data.data import *
 from dino.data.space import SpaceKind
 # from ..data.abstract import *
 from dino.data.path import ActionNotFound
+from dino.data.contextarea import ContextSpatialization
 
 
 '''
@@ -38,11 +39,19 @@ class Model(Serializable):
         self.actionSpace = dataset.multiColSpace(actionSpace)
         self.outcomeSpace = dataset.multiColSpace(outcomeSpace)
         self.contextSpace = dataset.multiColSpace(contextSpace)
+        self.contextSpace = self.contextSpace.convertTo(self.dataset, kind=SpaceKind.PRE)
+
         self.actionContextSpace = dataset.multiColSpace(
             [self.actionSpace, self.contextSpace], weight=0.5)
         self.outcomeContextSpace = dataset.multiColSpace(
             [self.outcomeSpace, self.contextSpace], weight=0.5)
+
         self.restrictionIds = restrictionIds
+        self.savedRestrictionIds = None
+
+        self.contextSpacialization = None
+        if self.contextSpace:
+            self.contextSpacialization = ContextSpatialization(self, self.outcomeSpace)
 
         # self.spacesHistory = DataEventHistory()
 
@@ -70,8 +79,49 @@ class Model(Serializable):
     #     obj = cls(dataset, a, y, c)
     #     return obj
 
+    # def actualOutcomeContextSpace(self, contextColumns):
+    #     if not np.any(contextColumns):
+    #         return self.outcomeSpace
+    #     return self.outcomeContextSpace
+    
+    # def actualActionContextSpace(self, contextColumns):
+    #     if not np.any(contextColumns):
+    #         return self.actionSpace
+    #     return self.actionContextSpace
+
     def update(self):
         pass
+
+    def pointAdded(self, event, progress):
+        if self.contextSpacialization:
+            outcome = event.outcomes.projection(self.outcomeSpace)
+            self.contextSpacialization.addPoint(outcome)
+
+    def saveRestrictionIds(self, newIds=None):
+        self.savedRestrictionIds = self.restrictionIds
+        if newIds is not None:
+            self.restrictionIds = newIds
+    
+    def restore(self):
+        self.restrictionIds = self.savedRestrictionIds
+    
+    def hasContext(self, contextSpace, contextColumns):
+        return contextSpace and np.any(contextColumns)
+
+    def contextColumns(self, contextColumns, goal):
+        if contextColumns is not None:
+            return contextColumns
+        if not self.contextSpacialization:
+            return None
+        return self.contextSpacialization.columns(goal)
+
+    def multiContextColumns(self, contextColumns, space):
+        if contextColumns is None or not np.any(contextColumns):
+            return None
+        indices = space.columnsFor(self.contextSpace)
+        cols = np.full(space.dim, True)
+        cols[indices] = contextColumns
+        return cols
 
     def continueFrom(self, previousModel):
         self.id = previousModel.id
@@ -177,63 +227,41 @@ class Model(Serializable):
                 ids, self.contextSpace.getIds(self.restrictionIds))
         return ids
 
-    def competence(self, precise=False, contextColumns=None):
-        return self.computeCompetence(self.std(precise=precise, contextColumns=contextColumns))
+    def competence(self, precise=False, onlyIds=None, contextColumns=None):
+        return self.computeCompetence(self.std(precise=precise, onlyIds=onlyIds, contextColumns=contextColumns))
 
-    def eventError(self, eventId, contextColumns=None):
-        action = self.actionSpace.getPoint(eventId)[0]
-        outcome = self.outcomeSpace.getPoint(eventId)[0]
-        context = self.contextSpace.getPoint(
-            eventId)[0] if self.contextSpace else None
+    # def eventError(self, eventId, contextColumns=None):
+    #     action = self.actionSpace.getPoint(eventId)[0]
+    #     outcome = self.outcomeSpace.getPoint(eventId)[0]
+    #     context = self.contextSpace.getPoint(
+    #         eventId)[0] if self.contextSpace else None
 
-        actionEstimated = self.inverse(outcome, context, contextColumns=contextColumns)[0]
-        actionOutcomeEstimated = self.forward(actionEstimated, context, contextColumns=contextColumns)[0]
-        outcomeEstimated = self.forward(action, context, contextColumns=contextColumns)[0]
+    #     actionEstimated = self.inverse(outcome, context, contextColumns=contextColumns)[0]
+    #     actionOutcomeEstimated = self.forward(actionEstimated, context, contextColumns=contextColumns)[0]
+    #     outcomeEstimated = self.forward(action, context, contextColumns=contextColumns)[0]
 
-        errorAction = actionEstimated.distanceTo(
-            action) / action.space.maxDistance
-        errorActionOutcome = actionOutcomeEstimated.distanceTo(
-            outcome) / outcome.space.maxDistance
-        errorAction = min(errorAction, errorActionOutcome)
-        errorOutcome = outcomeEstimated.distanceTo(
-            outcome) / outcome.space.maxDistance
-        # print(actionEstimated)
-        # print(action)
-        # print(outcomeEstimated)
-        # print(outcome)
-        # print(errorAction)
-        # print(errorOutcome)
-        # print(action.space.maxDistance)
-        # print(outcome.space.maxDistance)
-        return errorOutcome, errorAction
+    #     errorAction = actionEstimated.distanceTo(
+    #         action) / action.space.maxDistance
+    #     errorActionOutcome = actionOutcomeEstimated.distanceTo(
+    #         outcome) / outcome.space.maxDistance
+    #     errorAction = min(errorAction, errorActionOutcome)
+    #     errorOutcome = outcomeEstimated.distanceTo(
+    #         outcome) / outcome.space.maxDistance
+    #     # print(actionEstimated)
+    #     # print(action)
+    #     # print(outcomeEstimated)
+    #     # print(outcome)
+    #     # print(errorAction)
+    #     # print(errorOutcome)
+    #     # print(action.space.maxDistance)
+    #     # print(outcome.space.maxDistance)
+    #     return errorOutcome, errorAction
 
-    def eventForwardError(self, eventId, contextColumns=None):
-        action = self.actionSpace.getPoint(eventId)[0]
-        outcome = self.outcomeSpace.getPoint(eventId)[0]
-        context = self.contextSpace.getPoint(
-            eventId)[0] if self.contextSpace else None
-
-        outcomeEstimated = self.forward(action, context, contextColumns=contextColumns)[0]
-        zeroError = (outcome.length() < 0.00001) != (
-            outcomeEstimated.length() < 0.00001)
-        errorOutcome = outcomeEstimated.distanceTo(
-            outcome) / outcome.space.maxDistance + zeroError*0.0
-
-        # if errorOutcome > 0.1:
-        #     print('--- ERROR ---')
-        #     print(outcome)
-        #     print(outcomeEstimated)
-        #     print(errorOutcome)
-        #     print(context)
-        #     print(action)
-        #     print('---       ---')
-        return errorOutcome
-
-    def std(self, data=None, context: Observation = None, precise=False, contextColumns=None):
+    def std(self, data=None, context: Observation = None, precise=False, onlyIds=None, contextColumns=None):
         # print("Variance")
         if data is None and context is None:
             errors = self._errorEvents(
-                precise=precise, contextColumns=contextColumns)
+                precise=precise, onlyIds=onlyIds, contextColumns=contextColumns)
         else:
             errors = self._errorEstimations(
                 data=data, context=context, precise=precise, contextColumns=contextColumns)
@@ -260,17 +288,11 @@ class Model(Serializable):
         # print(np.mean(errors))
         # print(np.sort(errors)[-10:])
         return np.mean(errors) + 0.08 * np.std(errors)
-    
-    def multiContextColumns(self, contextColumns, space):
-        if contextColumns is None:
-            return None
-        indices = space.columnsFor(self.contextSpace)
-        cols = np.fill(space.dim, True)
-        cols[indices] = contextColumns
-        return cols
 
-    def _errorEvents(self, precise=False, exceptAlmostZero=True, contextColumns=None):
+    def _errorEvents(self, precise=False, exceptAlmostZero=True, onlyIds=None, contextColumns=None):
         ids = self.getIds()
+        if onlyIds is not None:
+            ids = onlyIds
         if exceptAlmostZero:
             data = self.outcomeSpace.getData(ids)
             indices = np.sum(
@@ -294,7 +316,7 @@ class Model(Serializable):
 
     def _errorEstimations(self, data=None, context: Observation = None, precise=False, exceptAlmostZero=True, contextColumns=None):
         data = data if data else self.outcomeSpace.getData(self.restrictionIds)
-        if self.contextSpace:
+        if self.hasContext(self.contextSpace, contextColumns):
             context = context if context else self.contextSpace.getData(
                 self.restrictionIds)
         else:
@@ -318,10 +340,37 @@ class Model(Serializable):
             errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist(
             )), self.contextSpace.point(c.tolist()), contextColumns=contextColumns)[1] for d, c in zip(data, context)]
         else:
-            errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist()), contextColumns=contextColumns)[
+            errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist()))[
                 1] for d in data]
 
         return errors
+    
+    def eventForwardError(self, eventId, contextColumns=None):
+        action = self.actionSpace.getPoint(eventId)[0]
+        outcome = self.outcomeSpace.getPoint(eventId)[0]
+        context = self.contextSpace.getPoint(
+            eventId)[0] if self.hasContext(self.contextSpace, contextColumns) else None
+
+        contextColumns = self.contextColumns(contextColumns, outcome) if context else None
+        # print(contextColumns)
+        outcomeEstimated = self.forward(
+            action, context, contextColumns=contextColumns)[0]
+        # print(outcome)
+        # print(outcomeEstimated)
+        zeroError = (outcome.length() < 0.00001) != (
+            outcomeEstimated.length() < 0.00001)
+        errorOutcome = outcomeEstimated.distanceTo(
+            outcome) / outcome.space.maxDistance + zeroError*0.0
+
+        # if errorOutcome > 0.1:
+        #     print('--- ERROR ---')
+        #     print(outcome)
+        #     print(outcomeEstimated)
+        #     print(errorOutcome)
+        #     print(context)
+        #     print(action)
+        #     print('---       ---')
+        return errorOutcome
 
     def variance(self, data=None, context: Observation = None, precise=False, contextColumns=None):
         return self.std(data=data, context=context, precise=precise, contextColumns=contextColumns) ** 2

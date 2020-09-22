@@ -138,12 +138,17 @@ class DataSpace(Space):
     def computeDistances(self, x, columns=None):
         """Compute array of normalized distances between data and the point given."""
         self._validate()
-        x = Data.plainData(x, self)
+        x = Data.npPlainData(x, self)
         if self._number == 0:
             return np.array([])
         #return np.sqrt(np.sum(((self.data[:self._number] - x) / self._nnWeights)**2, axis=1)) / self.maxDistance
-        data = self.data[:self._number, columns] if columns is not None else self.data[:self._number]
-        return operations._computeDistances(data, x, self._nnWeights, self.maxDistance)
+        data = self.data[:self._number]
+        weights = self._nnWeights
+        if columns is not None:
+            data = self.data[:, columns]
+            x = x[columns]
+            weights = weights[columns]
+        return operations._computeDistances(data, x, weights, self.maxDistance)
 
     def computePerformances(self, x, columns=None):
         """Compute performances for reaching the given point."""

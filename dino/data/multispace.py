@@ -25,14 +25,17 @@ class MultiColSpace(Space):
             space.childrenSpaces.append(self)
 
     @staticmethod
-    def create(spaces):
+    def create(spaces, spaceManager=None):
         if not spaces:
+            if spaceManager:
+                return spaceManager.multiColSpace([])
             return None
         spaceManager = list(set([space.spaceManager for space in spaces]))
         if len(spaceManager) > 1:
             raise Exception(
                 "All spaces should lay within the same space manager")
-        return spaceManager[0].multiColSpace(spaces)
+        s = spaceManager[0].multiColSpace(spaces)
+        return s
 
     def icon(self):
         return super().icon() + '∥'
@@ -52,13 +55,13 @@ class MultiColSpace(Space):
         # All sub spaces must be primitive
         return sum([s.primitive() for s in self.spaces]) == len(self.spaces) and not self.null()
 
-    def createDataSpace(self, dataset=None, kind=None):
-        spaces = [s.createDataSpace(dataset, kind) for s in self.spaces]
-        return MultiColDataSpace.create(spaces)
+    def createDataSpace(self, spaceManager=None, kind=None):
+        spaces = [s.createDataSpace(spaceManager, kind) for s in self.spaces]
+        return MultiColDataSpace.create(spaces, spaceManager=spaceManager)
 
-    def createLinkedSpace(self, dataset=None, kind=None):
-        spaces = [s.createLinkedSpace(dataset, kind) for s in self.spaces]
-        return MultiColSpace.create(spaces)
+    def createLinkedSpace(self, spaceManager=None, kind=None):
+        spaces = [s.createLinkedSpace(spaceManager, kind) for s in self.spaces]
+        return MultiColSpace.create(spaces, spaceManager=spaceManager)
 
 
 class MultiColDataSpace(MultiColSpace, DataSpace):

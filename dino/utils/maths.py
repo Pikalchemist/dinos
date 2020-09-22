@@ -96,15 +96,21 @@ def mixedSort(values1, values2, min1=None, max1=None, min2=None, max2=None):
     return indices, values
 
 
-def multivariateRegression(x, y, x0, contextColumns=None):
+def multivariateRegression(x, y, x0, columns=None):
     """Compute a multivariate linear regression model y = f(x) using (X,y) and use it to compute f(x0)."""
+    if columns is not None:
+        x = x[:, columns]
+        x0 = np.array(x0)[columns]
     try:
         return operations.multivariateRegression(x, y, x0)
     except ValueError as e:
         logging.critical(f"Regression failed: y is {y.shape[0]}x{y.shape[1]}d, X is {x.shape[0]}x{x.shape[1]}d and goal is {len(x0)}d ({e})")
 
 
-def multivariateRegressionError(x, y, x0, testSetX=None, testSetY=None, contextColumns=None):
+def multivariateRegressionError(x, y, x0, testSetX=None, testSetY=None, columns=None):
+    if columns is not None:
+        x = x[:, columns]
+        x0 = np.array(x0)[columns]
     try:
         return operations.multivariateRegressionError(x, y, x0)
     except ValueError as e:
