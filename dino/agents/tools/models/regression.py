@@ -463,7 +463,7 @@ class RegressionModel(Model):
                 #     ac0Plain = a0Plain
                 # y0Plain, error = multivariateRegressionError(acLargePlain, yLargePlain, ac0Plain)
                 y0Plain, error = self.npForward(
-                    a0, context, contextColumns=columns)
+                    a0, context, contextColumns=contextColumns)
                 distanceGoal = euclidean(goalPlain, y0Plain)
                 # print('---')
                 # print(ycPlain)

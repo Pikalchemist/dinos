@@ -348,10 +348,15 @@ class Model(Serializable):
     def eventForwardError(self, eventId, contextColumns=None):
         action = self.actionSpace.getPoint(eventId)[0]
         outcome = self.outcomeSpace.getPoint(eventId)[0]
+
+        contextColumns = self.contextColumns(contextColumns, outcome)
+
         context = self.contextSpace.getPoint(
             eventId)[0] if self.hasContext(self.contextSpace, contextColumns) else None
 
-        contextColumns = self.contextColumns(contextColumns, outcome) if context else None
+        if context is None:
+            contextColumns = None
+
         # print(contextColumns)
         outcomeEstimated = self.forward(
             action, context, contextColumns=contextColumns)[0]
