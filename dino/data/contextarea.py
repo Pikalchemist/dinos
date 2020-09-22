@@ -1,13 +1,15 @@
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
+from exlab.interface.graph import Graph
+
 from . import operations
 
 
 class ContextSpatialization(object):
     MAX_AREAS = 1000
     NN_NUMBER = 20
-    MINIMUM_POINTS = 500
+    MINIMUM_POINTS = 100
     THRESHOLD_ADD = 0.05
     THRESHOLD_DEL = 0.001
 
@@ -85,7 +87,8 @@ class ContextSpatialization(object):
                 bestDel = (p, i, columns)
 
         area = self.findArea(point)
-        area.addPoint(id_)
+        if area:
+            area.addPoint(id_)
 
         for best, verb in ((bestAdd, 'add'), (bestDel, 'del')):
             if best:
@@ -106,6 +109,13 @@ class ContextSpatialization(object):
                 if createNew:
                     self._addArea(ContextArea(self, point, newColumns))
         # self.model.restore()
+    
+    # Visual
+    def visualizeAreas(self, options={}):
+        g = Graph(title=f'Context areas from {self.space}', options=options)
+        for area in self.areas:
+            g.scatter(self.space.getData(area.ids))
+        return g
 
 
 class ContextArea(object):
