@@ -265,7 +265,7 @@ class Model(Serializable):
         if contextColumns is None:
             return None
         indices = space.columnsFor(self.contextSpace)
-        cols = np.ones(space.dim)
+        cols = np.fill(space.dim, True)
         cols[indices] = contextColumns
         return cols
 
