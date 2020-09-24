@@ -106,7 +106,7 @@ class Model(Serializable):
         self.restrictionIds = self.savedRestrictionIds
     
     def hasContext(self, contextSpace, contextColumns):
-        return contextSpace and np.any(contextColumns)
+        return contextSpace and (contextColumns is None or np.any(contextColumns))
 
     def contextColumns(self, contextColumns, goal):
         if contextColumns is not None:

@@ -66,6 +66,7 @@ class Environment(SpaceManager):
         manage(self).attach_counter(IterationCounter())
         self.scheduledActionCounter = 0
         self.lock = threading.Lock()
+        self.terminateThreads = False
 
         self.evaluators = []
 
@@ -252,8 +253,16 @@ class Environment(SpaceManager):
     def waitNextIteration(self, agent):
         # iteration = self.counter.t
         # while self.counter.t == iteration:
+        if self.terminateThreads:
+            raise Exception('ThreadTerminated')
         agent.iterationEvent.wait()
         agent.iterationEvent.clear()
+        if self.terminateThreads:
+            raise Exception('ThreadTerminated')
+    
+    def checkTerminated(self):
+        if self.terminateThreads:
+            raise Exception('ThreadTerminated')
 
     def waitAllScheduledActionsExecuted(self):
         with self.lock:
@@ -290,23 +299,33 @@ class Environment(SpaceManager):
 
         # Will count as 1 iteration, even if the duration is different from the timestep setting
         lastTime = time.time()
-        while True:
-            if not self.waitAllScheduledActionsExecuted():
-                return
-            with self.lock:
-                self._preIteration()
-                self.engine.run()
-                for host in self.world.hosts():
-                    host.scheduledAction = False
+        try:
+            while True:
+                if not self.waitAllScheduledActionsExecuted():
+                    return
+                with self.lock:
+                    self._preIteration()
+                    self.engine.run()
+                    for host in self.world.hosts():
+                        host.scheduledAction = False
 
-                self.scheduledActionCounter = 0
+                    self.scheduledActionCounter = 0
+                    if not evaluating:
+                        manage(self).counter.next_iteration()
+                    for agent in self.agents():
+                        agent.iterationEvent.set()
                 if not evaluating:
-                    manage(self).counter.next_iteration()
-                for agent in self.agents():
-                    agent.iterationEvent.set()
-            if not evaluating:
-                self.timeByIteration.append(time.time() - lastTime)
-                lastTime = time.time()
+                    self.timeByIteration.append(time.time() - lastTime)
+                    lastTime = time.time()
+        except KeyboardInterrupt:
+            self.logger.error('KeyboardInterrupt! Killing all threads')
+            self.terminateThreads = True
+            for agent in self.agents():
+                agent.iterationEvent.set()
+            for t in threads:
+                t.join()
+            self.terminateThreads = False
+            self.logger.info('All threads terminated')
 
     # Wrappers
     def image(self):

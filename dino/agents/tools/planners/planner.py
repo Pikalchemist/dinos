@@ -10,8 +10,11 @@ from exlab.utils.io import parameter
 # from ..utils.debug import timethis
 # from ..utils.maths import uniformRowSampling
 from dino.data.data import Data, Goal, SingleAction, Action, ActionList
-from dino.data.path import ActionNotFound, Path, Paths, PathNode
+from dino.data.path import ActionNotFound, Path, PathNode
+from dino.data.space import SpaceKind
 # from dino.models.model import Model
+
+from collections import namedtuple
 
 import numpy as np
 from scipy.spatial.distance import euclidean
@@ -38,9 +41,13 @@ class PlanSettings(object):
         self.compute_actions = compute_actions
         self.length = 0
         self.depth = -1
+
         self.controlledSpaces = []
+        self.dontMoveSpaces = []
+
         self.allowContextPlanning = True
         self.mayUseContext = False
+        self.hierarchical = None
 
     def freeSpace(self, space):
         for s in self.controlledSpaces:
@@ -54,6 +61,9 @@ class PlanSettings(object):
         return obj
 
 
+Part = namedtuple('Part', ['model', 'goal'])
+
+
 class Planner(Module):
     """
     Plans action sequences to reach given goals.
@@ -61,6 +71,8 @@ class Planner(Module):
     - model hierarchy: to find primitive actions correponding to a goal
     - same model skill chaining: to reach out of range goals in a given model
     """
+
+    MAX_MOVE_UNCHANGED_SPACES = 1.
 
     def __init__(self, agent, hierarchical=None, chaining=None, options={}):
         super().__init__('planner', agent)
@@ -82,67 +94,65 @@ class Planner(Module):
 
         parts = goal.flat()
         space = goal.space
-        # delegated = [[p, [p.space], 1] for p in parts if p.space.delegateto]
-        for i in range(1):  # TODO  id:12
+
+        self.logger.debug(f'Parting space to find models reaching {space}')
+
+        for _ in range(1):
             # Find models related to our goal
             # models [(model, goal, related_parts, prob), ...]
-            parts_left = list(parts)
+            partsLeft = list(parts)
             partition = []
-            while parts_left:
-                models = [[m, m.reachesSpaces([p.space for p in parts_left]), 0] for m in self.dataset.models
-                          if settings.freeSpace(space)]
-                models = [[m, list(p), prob]
-                          for m, p, prob in models if len(p) > 0]
-                # models += delegated
-                for m in models:
-                    m[2] = m[0].competence()  # float(len(m[1]))
+            while partsLeft:
+                models = []
+                for model in self.dataset.models:
+                    spaces = list(model.reachesSpaces([p.space for p in partsLeft]))
+                    if len(spaces) > 0 and settings.freeSpace(space):
+                        models.append((model, spaces, model.competence()))
 
                 if not models:
-                    raise ActionNotFound(
-                        f'No model found planning how to reach {goal}')
-                models = np.array(models)[np.argsort(m[2])]
-                model = models[0]
+                    raise ActionNotFound(f'No model found planning how to reach {goal}')
+
+                models = np.array(models)
+                models = models[np.argsort(models[:, 2])]
+                bestModel = models[0]
                 # model = uniformRowSampling(models, [prob for _, _, prob in models])
 
-                parts_left = [p for p in parts_left if p.space not in model[1]]
-                # if isinstance(model[0], Model):  # Inverse model
+                partsLeft = [p for p in partsLeft if p.space not in bestModel[1]]
                 partition.append(
-                    (model[0], Goal(*[p for p in parts if p.space in model[1]]), model[1]))
-                # else:  # Delegated space
-                #     partition += self.partitions(self.dataset.delegate_goal(model[0]))
+                    Part(bestModel[0], Goal(*[p for p in parts if p.space in bestModel[1]])))
         return partition
 
-    def plan(self, goal, hierarchical=None, state=None, model=None, settings=PlanSettings()):
-        settings = settings.clone()
-        return self.planDistance(goal, hierarchical=hierarchical, state=state, model=model, settings=settings)[0]
+    def plan(self, goal, state=None, model=None, settings=PlanSettings()):
+        return self.planDistance(goal, state=state, model=model, settings=settings)[0]
 
-    def planDistance(self, goal, hierarchical=None, state=None, model=None, settings=PlanSettings()):
+    def planDistance(self, goal, state=None, model=None, settings=PlanSettings()):
         settings = settings.clone()
         settings.depth += 1
 
-        goal = goal.convertTo(self.dataset)
+        goal = goal.convertTo(self.dataset, kind=SpaceKind.BASIC)
         if goal.space.primitive():
-            return Paths(), 0
+            raise Exception(f'Primitive actions such as {goal} cannot be goal, thus not planned!')
 
         if model:
-            p, distance = self.__plan(
-                model, goal, hierarchical=hierarchical, state=state, settings=settings)
-            return Paths([p]), distance
+            partition = [Part(model, goal)]
+        else:
+            partition = self.partitions(goal)
+        # Using only 1 element from the partition
+        partition = [partition[0]]
 
-        partition = self.partitions(goal)
-        distance = 0
-
+        totalDistance = 0
         paths = []
-        for part in partition:
+        for model, subgoal in partition:
             path, dist = self.__plan(
-                part[0], part[1], hierarchical=hierarchical, state=state, settings=settings)
-            distance += dist
+                model, subgoal, state=state, settings=settings)
+            totalDistance += dist
             paths.append(path)
 
-        return Paths(paths), distance
+        return paths[0], totalDistance
 
-    def planActions(self, actionList, hierarchical=None, state=None, model=None, settings=PlanSettings()):
+    def planActions(self, actionList, state=None, model=None, settings=PlanSettings()):
         settings = settings.clone()
+
         # print('---- planActions')
         actionList = actionList.convertTo(self.dataset)
         nodes = []
@@ -151,29 +161,28 @@ class Planner(Module):
             # print(action)
             # print(action.space.primitive())
             if not action.space.primitive():
-                node.paths = self.plan(
-                    action, hierarchical=hierarchical, state=state, model=model, settings=settings)
+                node.execution = self.plan(
+                    action, state=state, model=model, settings=settings)
             # print(node.paths)
             nodes.append(node)
         # print('----')
-        return Paths([Path(nodes)])
+        return Path(nodes)
 
-    def __plan(self, model, goal, hierarchical=None, state=None, settings=PlanSettings()):
+    def __plan(self, model, goal, state=None, settings=PlanSettings()):
         settings = settings.clone()
 
-        # raise Exception()
+        self.logger.debug(f'=== New planning (d{settings.depth}) === -> {goal} using {model} with context {state}')
 
-        self.logger.debug(f'=== New planning (d{settings.depth}) === -> {goal} using {model}')
-
+        # Checking if space already planned
         if not settings.freeSpace(goal.space):
-            print("NOT FREE!")
-            print(settings.controlledSpaces)
-            raise ActionNotFound(
-                f'Failed to create a path to reach {goal}. Space {goal.space} trying to be controlled twice!', None)
+            error = f'Failed to create a path to reach {goal}. Space {goal.space} trying to be controlled twice! (controlled spaces: {settings.controlledSpaces})'
+            self.logger.debug(error)
+            raise ActionNotFound(error, None)
         settings.controlledSpaces += model.outcomeSpace
         print(settings.controlledSpaces)
 
-        hierarchical = hierarchical if hierarchical is not None else self.hierarchical
+        # Settings
+        hierarchical = parameter(settings.hierarchical, self.hierarchical)
         space = model.outcomeSpace
         if self.environment:
             state = state if state else self.environment.state(self.dataset)
@@ -186,8 +195,9 @@ class Planner(Module):
         minrand = -200
         maxrand = 200
         maxdist = 2 + 0.02 * goal.norm()
-        lastmaxdist = 10 + 0.1 * goal.norm()
-        maxiter = 100
+        maxdistIncomplete = 5 + 0.1 * goal.norm()
+        # lastmaxdist = 10 + 0.1 * goal.norm()
+        maxiter = 30
 
         # init variables
         mindist = math.inf
@@ -195,23 +205,23 @@ class Planner(Module):
         zero = space.zero()
         zeroPlain = zero.plain()
         nodes = [PathNode(pos=zero, state=state)]
-        nodePos = np.zeros((maxiter + 1, space.dim))
-        path = []
+        nodePositions = np.zeros((maxiter + 1, space.dim))
+        path = Path()
         dist = 0
         directGoal = True
         # previousMove = None
         # print('GOAL: {}'.format(goal))
         # print('================')
         lastPos = None
+
+        # Main loop
         for i in range(maxiter):
+            # Finding a subgoal
             if random.randint(0, 100) <= goalSampleRate or directGoal:
                 subgoaldistant = goal
             else:
                 subgoaldistant = space.goal(
                     [random.uniform(minrand, maxrand) for x in range(space.dim)])
-            
-            self.logger.debug2(
-                f'(d{settings.depth}) Iter {i}: subgoal {subgoaldistant} (goal {goal})')
 
             # dlist = [euclidean(node.pos.plain(), subgoalPlain) for node in nodes]
             # nearestNode = nodes[dlist.index(min(dlist))]
@@ -235,12 +245,16 @@ class Planner(Module):
 
             subgoal = subgoaldistant
 
+            self.logger.debug2(
+                f'(d{settings.depth}) Iter {i}: chosen subgoal is {subgoal}(->{subgoaldistant}) (direct={directGoal}) (final goal {goal}) with context {state}')
+
+            # Nearest Node
             subgoalPlain = subgoal.plain()
             dlist = np.sum(
-                (nodePos[:len(nodes)] - subgoalPlain) ** 2, axis=1) ** 0.5
+                (nodePositions[:len(nodes)] - subgoalPlain) ** 2, axis=1) ** 0.5
             nearestNode = nodes[np.argmin(dlist)]
 
-            distanceToNode = 0.
+            distancesToNode = 0.
             lastVariance = -1.
             # We are looking for a valid point in the outcome space
             for j in range(10):
@@ -248,13 +262,14 @@ class Planner(Module):
                     move = subgoal - nearestNode.pos
                 else:
                     # subgoal = subgoaldistant
-                    move *= distanceToNode / move.norm()
+                    move *= distancesToNode / move.norm()
 
                 # moveContext = move.extends(context)
-                ids, dists, c0 = model.nearestOutcome(
+                ids, _, _ = model.nearestOutcome(
                     move, context=context, n=5)
                 # ids, dists = model.outcomeContextSpace.nearestDistance(moveContext, n=10)
                 nearestMove = model.outcomeSpace.getPoint(ids)[0]
+                nearestMoveId = ids[0]
                 # print('----', j)
                 # print(move)
                 # print(nearestMove)
@@ -262,15 +277,14 @@ class Planner(Module):
                 # print(model.outcomeSpace.denseEnough(ids))
                 # print(model.outcomeSpace.maxDistance * 0.1)
 
-                distanceToNode = 0.9 * \
-                    np.mean(
-                        np.sum(np.array(model.outcomeSpace.getPlainPoint(ids)) ** 2, axis=1) ** .5)
-                distanceToMove = np.mean(np.sum(np.array(
+                distancesToNode = 0.9 * np.mean(np.sum(np.array(
+                    model.outcomeSpace.getPlainPoint(ids) - nearestNode.pos.npPlain()) ** 2, axis=1) ** .5)
+                distancesToMove = np.mean(np.sum(np.array(
                     model.outcomeSpace.getPlainPoint(ids) - move.npPlain()) ** 2, axis=1) ** .5)
-                # print('!', distanceToMove)
+                # print('!', distancesToMove)
                 # print(model.outcomeSpace.getPlainPoint(ids) - move.npPlain())
                 # if j == 0:
-                #     distanceToNode = 10.
+                #     distancesToNode = 10.
 
                 variance = model.outcomeSpace.variance(ids)
                 if abs(lastVariance - variance) <= 0.05 * variance:
@@ -278,12 +292,14 @@ class Planner(Module):
                 lastVariance = variance
 
                 # model.outcomeSpace.denseEnough(ids, threshold=0.1) or
-                if distanceToMove <= model.outcomeSpace.maxDistance * 0.25:
+                if distancesToMove <= model.outcomeSpace.maxDistance * 0.25:
                     break
 
-            # print('-->>> ', nearestMove)
-            if c0:
-                context = c0
+            # print('-->>> ', c0)
+            # if c0:
+            #     context = c0
+            #     self.logger.debug2(
+            #         f'(d{settings.depth}) Iter {i}: changing context to {context}')
 
             # Use whether nearest move, or directly the chosen move according to the nearest move distance
             # print('===')
@@ -304,7 +320,9 @@ class Planner(Module):
 
             tryDirectMove = True
             attemptMove = move
+            contextPath = None
 
+            # Trying move
             reachable, y0, a0 = model.reachable(attemptMove, context=context)
             # print('>', reachable, attemptMove, y0, a0)
             # model.npForward(a0, context, debug=True)
@@ -313,9 +331,18 @@ class Planner(Module):
             # print(y0)
             # print(euclidean((nearestNode.pos + y0).plain(), goal.plain()))
             # print(reachable)
-            if not reachable:
-                self.logger.debug2(
-                    f'(d{settings.depth}) Iter {i}: move {attemptMove} not reachable, our nearest move is {nearestMove} (after {j+1} attempt(s))')
+
+            newPos = nearestNode.pos + y0
+            dist = euclidean(newPos.plain(), goal.plain())
+            if not reachable or dist > mindist:
+                # Attempt nearest move
+                if dist > mindist:
+                    reachable = False
+                    self.logger.debug2(
+                        f'(d{settings.depth}) Iter {i}: we are way too far from subgoal! Using {nearestMove} instead ({dist} > {mindist})')
+                else:
+                    self.logger.debug2(
+                        f'(d{settings.depth}) Iter {i}: move {attemptMove} not reachable, our nearest move is {nearestMove} (after {j+1} attempt(s))')
 
                 # print('invalid')
                 if tryDirectMove:
@@ -324,60 +351,91 @@ class Planner(Module):
                     # print('REACHAAAAABLE?', reachable, y0, a0)
                     # print('>>', reachable, nearestMove, y0, a0)
 
-                if not reachable:
-                    nearestMoveHalf = nearestMove * 0.5
-                    reachable, y0, a0 = model.reachable(
-                        nearestMoveHalf, context=context)
-                    # print('REACHAAAAABLE?', reachable, y0, a0)
-                    # print('>>>', reachable, nearestMoveHalf, y0, a0)
+            if not reachable:
+                # Attempt 1/2 nearest move
+                nearestMoveHalf = nearestMove * 0.5
+                reachable, y0, a0 = model.reachable(
+                    nearestMoveHalf, context=context)
+                # print('REACHAAAAABLE?', reachable, y0, a0)
+                # print('>>>', reachable, nearestMoveHalf, y0, a0)
 
-                    if not reachable:
-                        directGoal = False
-                        self.logger.debug2(
-                            f'(d{settings.depth}) Iter {i}: not reachable!!')
-                        continue
-            else:
+            if not reachable and model.contextSpace:
+                c0 = model.contextSpace.getPoint(nearestMoveId)[0]
                 self.logger.debug2(
-                    f'(d{settings.depth}) Iter {i}: move {attemptMove} is reachable')
+                    f'(d{settings.depth}) Iter {i}: move still not reachable, trying to reach a different context {c0}')
+
+                reachable, y0, a0 = model.reachable(
+                    nearestMoveHalf, context=c0)
+                
+                if reachable:
+                    self.logger.debug2(
+                        f'(d{settings.depth}) Iter {i}: move reachable with new context, is the context reachable?')
+                    
+                    try:
+                        contextPath = self.plan(c0, nearestNode.state, settings=settings)
+                    except ActionNotFound:
+                        self.logger.debug(
+                            f'(d{settings.depth}) Iter {i}: context {c0} is not reachable')
+                        reachable = False
+
+            if not reachable:
+                directGoal = False
+                self.logger.debug2(
+                    f'(d{settings.depth}) Iter {i}: not reachable!!')
+                continue
             # print('valid')
             # print(a0)
             # print(y0)
 
-            newPos = nearestNode.pos + y0
-            dist = euclidean(newPos.plain(), goal.plain())
-            # print('dist', dist)
-            if dist > mindist:
-                # print('BOEZJPOIDVJPDVS *****')
-                self.logger.debug2(
-                    f'(d{settings.depth}) Iter {i}: we are way too far from subgoal! {dist} > {mindist}')
-                reachable, y0b, a0b = model.reachable(
-                    nearestMove, context=context)
-                # print('>>', reachable, nearestMove, y0)
-                if reachable:
-                    y0 = y0b
-                    a0b = a0b
+            # # print('dist', dist)
+            # if dist > mindist:
+            #     # print('BOEZJPOIDVJPDVS *****')
+            #     self.logger.debug2(
+            #         f'(d{settings.depth}) Iter {i}: we are way too far from subgoal! {dist} > {mindist}')
+            #     reachable, y0b, a0b = model.reachable(
+            #         nearestMove, context=context)
+            #     # print('>>', reachable, nearestMove, y0)
+            #     if reachable:
+            #         y0 = y0b
+            #         a0b = a0b
 
-            newPos = nearestNode.pos + y0
-            if lastPos and np.sum(np.abs(newPos.npPlain() - lastPos)) < 1.:
-                self.logger.debug2(
-                    f'(d{settings.depth}) Iter {i}: deadlock, we are not moving enough! Stopping here')
-                break
-            lastPos = newPos.plain()
+            # Creating a new node
             newState = nearestNode.state.copy().apply(a0, self.dataset) if state else None
+            if settings.dontMoveSpaces:
+                difference = newState.difference(nearestNode.state)
+                dmChanged = False
+                for dmSpace in settings.dontMoveSpaces:
+                    self.logger.warning(f'{newState.context().projection(dmSpace)} vs {state.context().projection(dmSpace)} by doing {a0}')
+                    dmDiff = difference.projection(dmSpace)
+                    if dmDiff.norm() > self.MAX_MOVE_UNCHANGED_SPACES:
+                        dmChanged = True
+                        break
+                if dmChanged:
+                    directGoal = False
+                    self.logger.debug2(
+                        f'(d{settings.depth}) Iter {i}: move {attemptMove} is reachable but it affects {dmSpace}: {dmDiff} that shouldnt be changed')
+                    continue
+
+            self.logger.debug2(
+                f'(d{settings.depth}) Iter {i}: move {attemptMove} is usable')
+
             newNode = PathNode(pos=newPos, action=a0, goal=y0, model=model, parent=nearestNode,
                                state=newState)
+            newNode.context = contextPath
+            nodePositions[len(nodes)] = newPos.npPlain()
+            nodes.append(newNode)
             self.logger.debug2(
                 f'(d{settings.depth}) Iter {i}: node {newNode} attached to {nearestNode}')
 
-            nodePos[len(nodes)] = newPos.npPlain()
-            nodes.append(newNode)
-
+            # Distance
             dist = euclidean(newPos.plain(), goal.plain())
             if dist > mindist:
                 directGoal = False
             if dist < mindist:
                 mindist = dist
-                minnode = newNode
+                if dist < maxdistIncomplete:
+                    minnode = newNode
+
             # print(dist)
             self.logger.debug2(
                 f'(d{settings.depth}) Iter {i}: distance from goal {dist:.3f} (max {maxdist:.3f})')
@@ -386,22 +444,19 @@ class Planner(Module):
                     f'(d{settings.depth}) Iter {i}: close enough to the goal {dist:.3f} (max {maxdist:.3f})')
 
                 # print('FOUND')
-                node = newNode
-                while node.parent is not None:
-                    path.append(node)
-                    node.valid = True
-                    #dist += euclidean(zeroPlain, node.goal.plain())
-                    node = node.parent
+                path = newNode.createPath(goal)
                 break
+        
+            newPos = nearestNode.pos + y0
+            if lastPos and np.sum(np.abs(newPos.npPlain() - lastPos)) < 1.:
+                self.logger.debug2(
+                    f'(d{settings.depth}) Iter {i}: deadlock, we are not moving enough! Stopping here')
+                break
+            lastPos = newPos.plain()
 
-        if mindist < lastmaxdist and not path:
-            node = minnode
-            while node.parent is not None:
-                path.append(node)
-                node.valid = True
-                node = node.parent
+        if minnode and not path:
+            path = minnode.createPath(goal)
 
-        path = list(reversed(path))
         # print(goal)
         # self._plotNodes(nodes, goal)
         # if path:
@@ -416,41 +471,41 @@ class Planner(Module):
         for node in path:
             print("x {}  (@ {})".format(node.goal, node))'''
         self._plotNodes(nodes, goal)
-        if not path:
-            # print('Failed!')
-            p1 = None
-            if settings.allowContextPlanning:
-                # print('Trying context planning')
-                c0, p0, d0 = self._contextPlanning(
-                    model, goal, hierarchical=hierarchical, state=state, settings=settings)
-                if p0:
-                    lastState = p0[0][-1].state
-                    # print('Successful context planning')
-                    settings.controlledSpaces = settings.controlledSpaces[:-1]
+        # if not path:
+        #     # print('Failed!')
+        #     p1 = None
+        #     if settings.allowContextPlanning:
+        #         # print('Trying context planning')
+        #         c0, p0, d0 = self._contextPlanning(
+        #             model, goal, state=state, settings=settings)
+        #         if p0:
+        #             lastState = p0[0][-1].state
+        #             # print('Successful context planning')
+        #             settings.controlledSpaces = settings.controlledSpaces[:-1]
 
-                    newSettings = settings.clone()
-                    newSettings.allowContextPlanning = False
-                    p1, d1 = self.planDistance(
-                        goal, hierarchical=hierarchical, state=lastState, settings=newSettings)
-                    # print('RESULT?')
-                    # print(p1)
-                    if p1:
-                        mindist = d1
-                        paths = p0.extends(p1)
-                        path = paths[0].nodes()
-                        # print(path)
-                        # print('^^^^^^^^')
-                # print(mindist)
-                # print(model)
-            if not p1:
-                self.logger.warning(
-                    f"(d{settings.depth}) Planning failed for goal {goal}")
-                raise ActionNotFound(f'Failed to create a path to reach {goal}', mindist if mindist < math.inf else None)
-        # else:
-        #     print('Yes!')
+        #             newSettings = settings.clone()
+        #             newSettings.allowContextPlanning = False
+        #             p1, d1 = self.planDistance(
+        #                 goal, state=lastState, settings=newSettings)
+        #             # print('RESULT?')
+        #             # print(p1)
+        #             if p1:
+        #                 mindist = d1
+        #                 paths = p0.extends(p1)
+        #                 path = paths[0].nodes()
+        #                 # print(path)
+        #                 # print('^^^^^^^^')
+        #         # print(mindist)
+        #         # print(model)
+        #     if not p1:
+        #         self.logger.warning(
+        #             f"(d{settings.depth}) Planning failed for goal {goal}")
+        #         raise ActionNotFound(f'Failed to create a path to reach {goal}', mindist if mindist < math.inf else None)
+        # # else:
+        # #     print('Yes!')
 
         self.logger.debug(
-            f"(d{settings.depth}) Planning generated for goal {goal} in {i+1} step(s)")
+            f"(d{settings.depth}) Planning {'generated' if path else 'failed'} for goal {goal} in {i+1} step(s)")
 
         if hierarchical:
             self.logger.debug2(
@@ -460,8 +515,8 @@ class Planner(Module):
                 if not node.action.space.primitive():
                     anyNonPrimitive = True
                     # print('NODDE?')
-                    node.paths = self.plan(
-                        node.action, hierarchical=hierarchical, state=state)
+                    node.execution = self.plan(
+                        node.action, state=state)
             if anyNonPrimitive:
                 self.logger.debug2(
                     f"(d{settings.depth}) Planning sub level actions... [Finished]")
@@ -474,9 +529,11 @@ class Planner(Module):
         #     print('OVEERRRRR')
         #     print(path)
 
-        return Path(path), max(0, mindist)
+        print(path)
 
-    def _contextPlanning(self, model, goal, hierarchical=None, state=None, settings=PlanSettings()):
+        return path, max(0, mindist)
+
+    def _contextPlanning(self, model, goal, state=None, settings=PlanSettings()):
         settings = settings.clone()
         path = []
         print(model.controllableContext())
@@ -489,7 +546,7 @@ class Planner(Module):
 
         try:
             cpath, cdistance = self.planDistance(
-                c0, hierarchical=hierarchical, state=state, settings=settings)
+                c0, state=state, settings=settings)
         except Exception:
             return None, None, None
         print('--------')

@@ -12,7 +12,7 @@ from dino.utils.maths import sigmoid, threshold
 from dino.data.data import Action, ActionList
 # from dino.data.data import *
 from dino.data.space import Space
-from dino.data.path import ActionNotFound, Paths
+from dino.data.path import ActionNotFound, Path
 
 from .random import RandomStrategy
 
@@ -76,16 +76,16 @@ class AutonomousStrategy(RandomStrategy):
         # assert config.exploitation is False
         assert config.depth == 0
         goal = config.goal
-        paths = None
+        path = None
 
         for _ in self.performer.iterative():
             # Choose between local and global exploration
             # timethissub(1)
-            probUseGoal, paths = self.useGoalCriteria(goal, config)
+            probUseGoal, path = self.useGoalCriteria(goal, config)
             useGoal = random.uniform(0, 1) > probUseGoal
             self.logger.debug(
-                f'goal exploration decision: criteria={probUseGoal}->{useGoal} exploration={config.exploitation} paths={paths}')
-            # print(paths)
+                f'goal exploration decision: criteria={probUseGoal}->{useGoal} exploration={config.exploitation} path={path}')
+            # print(path)
             # timethissub(1, "Init localGlobalCriteria")
             # if not config.exploitation:
             #     self.criteria[-1].append(probUseGoal)
@@ -97,9 +97,10 @@ class AutonomousStrategy(RandomStrategy):
                 # print('----Paths----')
                 # print(goal)
                 # print('---')
-                # print(paths)
-                self.testGoal(goal, paths, config)
+                # print(path)
+                self.testPath(path, config)
 
+            #elif not config.exploitation:
             else:  # We have chosen random exploration
                 # if random.uniform(0, 1) <= 0.3 or not config.model:
                 #     actionSpaces = self.agent.dataset.controllableSpaces()
@@ -108,7 +109,7 @@ class AutonomousStrategy(RandomStrategy):
                 # , actionSpaces=actionSpaces
                 self.testRandomAction(config)
 
-        return paths
+        return path
 
     def useGoalCriteria(self, goal, config):
         """Criteria used to choose between local and global exploration (Straight from Matlab SGIM code)."""
@@ -118,14 +119,17 @@ class AutonomousStrategy(RandomStrategy):
         probFirstPass = 1. # TODO threshold(self.randomFirstPass, self.randomThreshold)
         # print(probFirstPass)
         if not config.exploitation and random.uniform(0, 1) < probFirstPass:
-            return 1., Paths()  # Random action
+            return 1., Path()  # Random action
 
         # Try planning to goal
         try:
-            paths, distance = self.planner.planDistance(goal, model=config.model)
+            path, distance = self.planner.planDistance(goal, model=config.model, settings=config.plannerSettings)
         except ActionNotFound:
-            self.logger.warning(f"Planning failed for goal {goal}, switching to random")
-            return 1., Paths()  # Random action
+            path = None
+        if not path:
+            self.logger.warning(
+                f"Planning failed for goal {goal}, switching to random")
+            return 1., path  # Random action
 
         # Compute criteria
         if config.exploitation:
@@ -147,7 +151,7 @@ class AutonomousStrategy(RandomStrategy):
             x = (mean_dist - space.options['err']) / space.options['range']
             prob = 0.8*(sigmoid(x) - 0.5) + 0.5'''
         # prob = 0.9*(sigmoid(x) - 0.5) + 0.5   # From matlab SGIM code
-        return prob, paths
+        return prob, path
 
     # def runLocalOptimization(self, a, goal, initial_simplex=None, config=None):
     #     """Perform local exploration using Nelder-Mead optimization method."""

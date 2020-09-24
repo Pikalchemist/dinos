@@ -80,7 +80,7 @@ class SpaceManager(Module, Serializable):
     # Space conversion
     def convertSpace(self, space, kind=None, toData=None):
         toData = toData if toData is not None else self.storesData  # space.canStoreData()
-        kind = kind if kind else space.kind
+        kind = kind if kind is not None else space.kind
 
         relatedSpace = ([s for s in self.spaces if s.linkedTo(
             space) and s.kind == kind] + [None])[0]

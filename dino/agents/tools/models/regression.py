@@ -226,7 +226,7 @@ class RegressionModel(Model):
         goal = goal.projection(goalSpace)
         goalPlain = Data.npPlainData(goal, goalSpace)
         space = goalContextSpace if context else goalSpace
-        context = context.convertTo(kind=SpaceKind.PRE).projection(
+        context = context.convertTo(self.dataset, kind=SpaceKind.PRE).projection(
             self.contextSpace) if context else None
         goalContext = goal.extends(context)
         goalContextPlain = Data.plainData(goalContext, space)
@@ -285,18 +285,25 @@ class RegressionModel(Model):
             # print("Selecting! 1 {}".format(restrictionIds))
             # print("Distances! 1 {}".format([goal.distanceTo(self.outcomeSpace.getPoint(id_)[0]) for id_ in restrictionIds]))
             # print("Distances! 2 {}".format([context.distanceTo(self.contextSpace.getPoint(id_)[0]) for id_ in restrictionIds]))
+            # print("Distances! 1 {}".format(
+            #     [self.outcomeSpace.getPoint(id_)[0] for id_ in restrictionIds]))
+            # print("Distances! 2 {}".format(
+            #     [self.contextSpace.getPoint(id_)[0] for id_ in restrictionIds]))
 
         # Compute best locality candidates
-        ids, dist = goalSpace.nearest(goalPlain,
-                                      n=n,
-                                      restrictionIds=restrictionIds,
-                                      otherSpace=otherSpace)
-        # ids, dist = goalContextSpace.nearest(goalContextPlain,
-        #                                      n=n,
-        #                                      restrictionIds=restrictionIds,
-        #                                      otherSpace=otherSpace,
-                                            # columns=self.multiContextColumns(contextColumns, goalContextSpace))
+        # ids, dist = goalSpace.nearest(goalPlain,
+        #                               n=n,
+        #                               restrictionIds=restrictionIds,
+        #                               otherSpace=otherSpace)
+        ids, dist = space.nearest(goalContextPlain,
+                                  n=n,
+                                  restrictionIds=restrictionIds,
+                                  otherSpace=otherSpace,
+                                  columns=self.multiContextColumns(contextColumns, space))
+        # print(ids)
         # print(dist)
+        # print("Distances! 3 {}".format(
+        #     [self.outcomeSpace.getPoint(id_)[0] for id_ in ids]))
 
         return ids, dist, context, restrictionIds, space, goal, goalPlain, goalContext, goalContextPlain
 

@@ -7,6 +7,9 @@
 import copy
 import random
 
+from exlab.utils.io import parameter
+from dino.agents.tools.planners.planner import PlanSettings
+
 
 """
 Misc objects
@@ -32,19 +35,25 @@ class MoveConfig(object):
     """
 
     def __init__(self, model=None, exploitation=False, depth=0, strategy=None, goal=None, goalContext=None,
-                 lastEvent=None, sampling="", iterations=1, iteration=-1, allowReplanning=True, evaluating=False):
-        self.model = model
+                 lastEvent=None, sampling="", iterations=1, iteration=-1, allowReplanning=True, evaluating=False,
+                 plannerSettings=None):
         self.exploitation = exploitation
+        self.evaluating = evaluating
         self.depth = depth
+
         self.strategy = strategy
+        self.model = model
         self.goal = goal
         self.goalContext = goalContext
+
         self.lastEvent = lastEvent
         self.sampling = sampling
+
         self.iterations = iterations
         self.iteration = iteration
         self.allowReplanning = allowReplanning
-        self.evaluating = evaluating
+
+        self.plannerSettings = parameter(plannerSettings, PlanSettings())
 
     def clone(self, **kwargs):
         new = copy.copy(self)

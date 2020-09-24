@@ -42,5 +42,11 @@ class State(object):
     def context(self):
         return self._context
 
+    def difference(self, previous, space=None):
+        diff = self._context.difference(previous._context)
+        if space:
+            diff = diff.projection(diff)
+        return diff
+
     def copy(self):
         return self.__class__(self.environment, list(self.values))

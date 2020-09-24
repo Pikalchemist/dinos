@@ -7,15 +7,18 @@
 from exlab.modular.module import Module
 
 from dino.utils.move import MoveConfig
+
 from dino.data.event import InteractionEvent
 from dino.data.data import ActionList, Data
 from dino.data.space import SpaceKind, FormatParameters
-from dino.data.path import ActionNotFound
+from dino.data.path import Path, ActionNotFound
+
+from dino.agents.tools.planners.planner import PlanSettings
 
 
 class Performer(Module):
     """
-    Executes Paths created by a planner or ActionList
+    Executes Paths created by a planner
     """
 
     def __init__(self, agent, options={}):
@@ -28,83 +31,83 @@ class Performer(Module):
 
         self.iterations = max(1, options.get('iterations', 1))
 
-    def perform(self, paths, config=MoveConfig()):
+    def perform(self, path, config=MoveConfig()):
         """
-        Tests a specific Paths and stores consequences in memory.
-        :param paths: Paths object (created by a planner)
+        Tests a specific Path and stores consequences in memory.
+        :param path: Path object (created by a planner)
         """
-        groupedActionList = paths.getGroupedActionList()
-        # print(groupedActionList)
-        return self.__perform(groupedActionList, config)
+        return self.__perform(path, config)
 
-    def performGoal(self, goal, paths=None, config=MoveConfig()):
-        if paths:
-            groupedActionList = paths.getGroupedActionList()
-        else:
-            groupedActionList = None
-        return self.__perform(groupedActionList, config, goal=goal)
+    # def performGoal(self, goal, path=None, config=MoveConfig()):
+    #     if paths:
+    #         groupedActionList = paths.getGroupedActionList()
+    #     else:
+    #         groupedActionList = None
+    #     return self.__perform(path, config)
 
-    def performActions(self, actionList, config=MoveConfig()):
+    def performActions(self, actionList, goal=None, config=MoveConfig()):
         """
         Tests a specific action list and stores consequences in memory.
         :param actionList: ActionList
         """
-        return self.__perform([(None, actionList)], config)
+        path = self.agent.planner.planActions(actionList)
+        return self.__perform(path, config)
 
-    def __perform(self, groupedActionList, config, goal=None):
+    def __perform(self, path, config, i=0):
         """
         Tests a specific action list and stores consequences in memory.
         """
         results = []
-        actionListExecuted = ActionList()
         # mem = []
 
+        if path.goal:
+            absoluteGoal = path.goal.absoluteData(self.environment.state())
+        else:
+            absoluteGoal = None
         if not config.allowReplanning:
-            goal = None
-        if goal:
-            absoluteGoal = goal.absoluteData(self.environment.state())
+            absoluteGoal = None
             # print("======== GOAL ========", absoluteGoal)
+
+        # goal = None
 
         replanning = 0
         maxReplanning = 10
         maxDistance = 3.
+        nodes = list(path.nodes)
 
+        actionListExecuted = ActionList()
         formatParameters = FormatParameters()
-        oStart = self.agent.observe(formatParameters=formatParameters)
-        oPrevious = self.agent.observe(formatParameters=formatParameters)
-        o = None
-        running = True
-        # goal = None
-
-        i = 0
-        while running:
-            if goal:
-                if not groupedActionList:
-                    self.logger.debug2(
-                        f'Iter {i}: no more action to execute... trying to replan new ones')
-                    replanning += 1
-                    if replanning > maxReplanning:
-                        self.logger.warning(
-                            f'Iter {i}: out of replanning')
-                        break
-                    try:
-                        paths = self.agent.planner.plan(
-                            absoluteGoal, model=config.model)
-                    except ActionNotFound:
-                        break
-                    # distance = paths.length()
-                    # if distance < 2.:
-                    #     break
-                    # print('Replanning...')
-                    groupedActionList = paths.getGroupedActionList()
-                # groupedActionList = [groupedActionList[0]]
-            # print('>>>>>>>>>>', groupedActionList)
-            for node, actionList in groupedActionList:
-                if not running:
+        plannerSettings = PlanSettings()
+        observationsPrevious = None
+        # oStart = self.agent.observe(formatParameters=formatParameters)
+        while True:
+            if absoluteGoal and not nodes:
+                self.logger.debug2(
+                    f'Iter {i}: no more action to execute... trying to replan new ones')
+                replanning += 1
+                if replanning > maxReplanning:
+                    self.logger.warning(
+                        f'Iter {i}: out of replanning')
                     break
-                # print('WEEEESH', node, actionList)
-                # print(len(actionList))
-                for action in actionList:
+                try:
+                    newPath = self.agent.planner.plan(
+                        absoluteGoal, settings=plannerSettings)
+                    nodes = newPath.nodes
+                except ActionNotFound:
+                    break
+            
+            if not nodes:
+                break
+
+            for node in nodes:
+                if node.context:
+                    results += self.__perform(node.context, config)
+                    observationsPrevious = None
+                if node.execution:
+                    results += self.__perform(node.execution, config)
+                    observationsPrevious = None
+                if not node.context and not node.execution:
+                    action = node.action
                     # print("=========")
                     # print(node.goal)
                     # print(action)
@@ -116,23 +119,25 @@ class Performer(Module):
                     actionListExecuted.append(actionExecuted)
 
                     # print(actions[i])
+                    if observationsPrevious is None:
+                        observationsPrevious = self.agent.observe(formatParameters=formatParameters)
                     self.agent._performAction(action, config=config)
                     # print(action)
                     # print("Tasks : " + str(spaces))
                     # print(y_list)
                     #real_actions += actions[i].tolist()
                     # print("---")
-                    o = self.agent.observe(formatParameters=formatParameters)
-                    y = o.difference(oPrevious)
+                    observations = self.agent.observe(formatParameters=formatParameters)
+                    y = observations.difference(observationsPrevious)
                     results.append(InteractionEvent(self.environment.counter.last,
                                                     actionExecuted,
                                                     primitiveActionExecuted,
                                                     y,
-                                                    oPrevious.convertTo(kind=SpaceKind.PRE)))
-                    oPrevious = o
+                                                    observationsPrevious.convertTo(kind=SpaceKind.PRE)))
+                    observationsPrevious = observations
 
                     # Check Distance
-                    if goal:
+                    if absoluteGoal:
                         distance = absoluteGoal.relativeData(
                             self.environment.state()).norm()
                         relative = absoluteGoal.relativeData(self.environment.state())
@@ -141,15 +146,11 @@ class Performer(Module):
                         if distance < maxDistance:
                             self.logger.debug(
                                 f'Iter {i}: close enough to goal!')
-                            running = False
-                            break
+                            return results
                 i += 1
-            if goal:
-                groupedActionList = None
-            else:
-                break
-        if o:
-            y = o.difference(oStart)
+            nodes = None
+        # if o:
+        #     y = o.difference(oStart)
         #results.append(InteractionEvent(self.getIteration(), actionListExecuted, y))
 
         return results

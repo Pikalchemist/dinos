@@ -108,6 +108,9 @@ class ModelDataset(Dataset):
     def findModelsByActionSpace(self, actionSpace, models=None):
         models = models if models else self.models
         return [m for m in models if m.coversActionSpaces(actionSpace)]
+    
+    def competences(self, precise=False):
+        return {model: model.competence(precise=precise) for model in self.models}
 
     # Graph
     def dependencyGraph(self, models=None):

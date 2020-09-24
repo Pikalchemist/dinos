@@ -90,6 +90,7 @@ class Strategy(Module):
         return memory
 
     def runIteration(self, config):
+        self.agent.environment.checkTerminated()
         self.agent.syncCounter()
         self.agent.environment.setupIteration(config)
         self._runIteration(config)
@@ -116,19 +117,19 @@ class Strategy(Module):
 
     def testActions(self, actions, config=MoveConfig()):
         try:
-            self.testPaths(self.planner.planActions(actions), config)
+            self.testPath(self.planner.planActions(actions), config)
         except ActionNotFound:
             return
 
-    def testGoal(self, goal, paths=None, config=MoveConfig()):
-        results = self.performer.performGoal(goal, paths, config)
-        # print('Tested', results)
-        # self.n += InteractionEvent.incrementList(results, self.n)
-        self.memory += results
+    # def testGoal(self, goal, paths=None, config=MoveConfig()):
+    #     results = self.performer.performGoal(goal, paths, config)
+    #     # print('Tested', results)
+    #     # self.n += InteractionEvent.incrementList(results, self.n)
+    #     self.memory += results
 
-    def testPaths(self, paths, config=MoveConfig()):
+    def testPath(self, path, config=MoveConfig()):
         """Test a specific complex action and store consequences in memory."""
-        results = self.performer.perform(paths)
+        results = self.performer.perform(path)
         # self.n += InteractionEvent.incrementList(results, self.n)
         self.memory += results
 
