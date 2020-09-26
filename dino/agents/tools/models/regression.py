@@ -244,6 +244,7 @@ class RegressionModel(Model):
             numberContext = int(self.NN_CONTEXT + (len(restrictionIds)
                                                    if restrictionIds is not None else self.contextSpace.number) * 0.04)
             # print('numberContext', numberContext)
+            # print(contextPlain)
             if bestContext:
                 ids, _ = goalSpace.nearest(goalPlain, n=numberContext,
                                            restrictionIds=restrictionIds, otherSpace=otherSpace)
@@ -261,6 +262,7 @@ class RegressionModel(Model):
                     # print(context)
                     goalContext = goal.extends(context)
                     goalContextPlain = Data.plainData(goalContext, space)
+            # print(contextPlain)
 
             restrictionIds, _ = self.contextSpace.nearestDistance(contextPlain, n=numberContext,
                                                                   restrictionIds=restrictionIds, otherSpace=otherSpace,
@@ -289,6 +291,9 @@ class RegressionModel(Model):
             #     [self.outcomeSpace.getPoint(id_)[0] for id_ in restrictionIds]))
             # print("Distances! 2 {}".format(
             #     [self.contextSpace.getPoint(id_)[0] for id_ in restrictionIds]))
+            # print('===')
+            # for id_ in restrictionIds:
+            #     print(f'{self.actionSpace.getPoint(id_)[0]} + {self.contextSpace.getPoint(id_)[0]} -> {self.outcomeSpace.getPoint(id_)[0]}')
 
         # Compute best locality candidates
         # ids, dist = goalSpace.nearest(goalPlain,
@@ -304,6 +309,20 @@ class RegressionModel(Model):
         # print(dist)
         # print("Distances! 3 {}".format(
         #     [self.outcomeSpace.getPoint(id_)[0] for id_ in ids]))
+        # print('===')
+        # for id_ in ids:
+        #     print(f'{self.actionSpace.getPoint(id_)[0]} + {self.contextSpace.getPoint(id_)[0]} -> {self.outcomeSpace.getPoint(id_)[0]}')
+
+        # print(ids)
+        indices = np.sum(
+            np.abs(self.outcomeSpace.getData(ids)), axis=1) > self.outcomeSpace.maxDistance * self.ALMOST_ZERO_FACTOR
+        if np.sum(indices) < n * 2 // 10:
+            ids = ids[~indices]
+        if np.sum(~indices) < n * 2 // 10:
+            ids = ids[indices]
+        # print(ids)
+            # if np.sum(indices) > 0:
+            #     data = data[indices]
 
         return ids, dist, context, restrictionIds, space, goal, goalPlain, goalContext, goalContextPlain
 

@@ -68,6 +68,7 @@ class Space(Serializable):
 
         self._bounds = [[-1., 1.] for i in range(self.dim)]
         self.maxDistance = 1.
+        self.maxDistancePerColumn = np.full(self.dim, 1.)
 
         # Multi
         self.invalid = False

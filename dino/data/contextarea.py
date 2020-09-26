@@ -13,10 +13,12 @@ class ContextSpatialization(object):
     THRESHOLD_ADD = 0.05
     THRESHOLD_DEL = 0.001
 
-    def __init__(self, model, space):
+    def __init__(self, model, space, boolean=False):
         self.model = model
         self.space = space
+        self.evaluatedSpace = self.model.contextSpace
         self.areas = []
+        self.boolean = boolean
         self.centers = np.zeros((self.MAX_AREAS, space.dim))
     
     @property
@@ -48,7 +50,7 @@ class ContextSpatialization(object):
         area = self.findArea(goal)
         # print(area)
         if not area:
-            return np.full(self.model.contextSpace.dim, False)
+            return np.full(self.evaluatedSpace.dim, False)
         return area.columns
     
     def findAllPointAreas(self):
@@ -62,6 +64,7 @@ class ContextSpatialization(object):
     def addPoint(self, point):
         if self.space.number < self.MINIMUM_POINTS:
             return
+
         point = point.projection(self.space)
         nearest, _ = self.space.nearest(point, n=self.NN_NUMBER)
         id_ = nearest[0]
@@ -75,7 +78,7 @@ class ContextSpatialization(object):
         bestAdd = ()
         bestDel = ()
         # print(point)
-        for i in range(self.model.contextSpace.dim):
+        for i in range(self.evaluatedSpace.dim):
             columns = np.copy(currentColumns)
             columns[i] = not columns[i]
             # print(columns)
@@ -122,7 +125,7 @@ class ContextArea(object):
     def __init__(self, manager, center, columns):
         self.manager = manager
         self.center = center
-        self.columns = columns  # self.manager.contextSpace.dim
+        self.columns = columns
         self.ids = np.array([])
     
     def addPoint(self, id_):

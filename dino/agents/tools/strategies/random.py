@@ -37,7 +37,7 @@ class RandomStrategy(Strategy):
         self.testRandomAction()
 
     # test modifications on both simple and complex agents
-    def testRandomAction(self, config=MoveConfig(), actionSpaces=None):
+    def testRandomAction(self, config=MoveConfig(), actionSpaces=None, zero=False):
         """Build and test a random action."""
         if not actionSpaces:
             actionSpaces = [a.space for a in self.agent.actions(onlyPrimitives=not self.exploreNonPrimitive)]
@@ -69,7 +69,10 @@ class RandomStrategy(Strategy):
         #         actions.append(action)'''
 
         actions = []
-        action = SingleAction(space, [random.uniform(minb, maxb) for minb, maxb in space.bounds])
+        if zero:
+            action = space.zero()
+        else:
+            action = SingleAction(space, [random.uniform(minb, maxb) for minb, maxb in space.bounds])
         actions.append(action)
 
         actions = ActionList(*actions)

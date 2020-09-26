@@ -100,14 +100,16 @@ class AutonomousStrategy(RandomStrategy):
                 # print(path)
                 self.testPath(path, config)
 
-            #elif not config.exploitation:
-            else:  # We have chosen random exploration
+            elif not config.exploitation:  # We have chosen random exploration
                 # if random.uniform(0, 1) <= 0.3 or not config.model:
                 #     actionSpaces = self.agent.dataset.controllableSpaces()
                 # else:
                 #     actionSpaces = self.agent.dataset.controllableSpaces(config.model.actionSpace.iterate())
                 # , actionSpaces=actionSpaces
                 self.testRandomAction(config)
+            
+            else:
+                self.testRandomAction(config, zero=True)
 
         return path
 

@@ -189,6 +189,10 @@ class Planner(Module):
             goal = goal.relativeData(state)
         goal = goal.projection(space)
 
+        attemptedUnreachable = []
+        attemptedBreakConstraint = []
+        lastInvalids = []
+
         # parameters
         range_ = 200
         goalSampleRate = 50
@@ -197,7 +201,7 @@ class Planner(Module):
         maxdist = 2 + 0.02 * goal.norm()
         maxdistIncomplete = 5 + 0.1 * goal.norm()
         # lastmaxdist = 10 + 0.1 * goal.norm()
-        maxiter = 30
+        maxiter = 100
 
         # init variables
         mindist = math.inf
@@ -214,6 +218,9 @@ class Planner(Module):
         # print('================')
         lastPos = None
 
+        invalidPointRatioLimit = 0.02
+        ignoreConstraintDistanceLimit = 0.05 * space.maxDistance
+
         # Main loop
         for i in range(maxiter):
             # Finding a subgoal
@@ -222,6 +229,13 @@ class Planner(Module):
             else:
                 subgoaldistant = space.goal(
                     [random.uniform(minrand, maxrand) for x in range(space.dim)])
+
+            if lastInvalids:
+                invalids = np.array(lastInvalids[-10:])
+                dists = np.sum((invalids - subgoaldistant.npPlain()) ** 2, axis=1) ** 0.5
+                if np.any(dists < invalidPointRatioLimit * space.maxDistance):
+                    self.logger.debug2(f'(d{settings.depth}) Iter {i}: Too close to invalid point, retrying...')
+
 
             # dlist = [euclidean(node.pos.plain(), subgoalPlain) for node in nodes]
             # nearestNode = nodes[dlist.index(min(dlist))]
@@ -382,6 +396,8 @@ class Planner(Module):
                 directGoal = False
                 self.logger.debug2(
                     f'(d{settings.depth}) Iter {i}: not reachable!!')
+                attemptedUnreachable.append(newPos.plain())
+                lastInvalids.append(newPos.plain())
                 continue
             # print('valid')
             # print(a0)
@@ -401,7 +417,7 @@ class Planner(Module):
 
             # Creating a new node
             newState = nearestNode.state.copy().apply(a0, self.dataset) if state else None
-            if settings.dontMoveSpaces:
+            if settings.dontMoveSpaces and dist > ignoreConstraintDistanceLimit:
                 difference = newState.difference(nearestNode.state)
                 dmChanged = False
                 for dmSpace in settings.dontMoveSpaces:
@@ -414,6 +430,8 @@ class Planner(Module):
                     directGoal = False
                     self.logger.debug2(
                         f'(d{settings.depth}) Iter {i}: move {attemptMove} is reachable but it affects {dmSpace}: {dmDiff} that shouldnt be changed')
+                    attemptedBreakConstraint.append(newPos.plain())
+                    lastInvalids.append(newPos.plain())
                     continue
 
             self.logger.debug2(
@@ -470,7 +488,7 @@ class Planner(Module):
         '''print(len(nodes))
         for node in path:
             print("x {}  (@ {})".format(node.goal, node))'''
-        self._plotNodes(nodes, goal)
+        self._plotNodes(nodes, goal, attemptedUnreachable, attemptedBreakConstraint)
         # if not path:
         #     # print('Failed!')
         #     p1 = None
@@ -557,10 +575,16 @@ class Planner(Module):
 
         # model.inverse()
     
-    def _plotNodes(self, nodes, goal):
+    def _plotNodes(self, nodes, goal, attemptedUnreachable, attemptedBreakConstraint):
         import matplotlib.pyplot as plt
         goalPlain = goal.plain()
         # plt.figure()
+        if attemptedUnreachable:
+            attemptedUnreachable = np.array(attemptedUnreachable)
+            plt.scatter(attemptedUnreachable[:, 0], -attemptedUnreachable[:, 1], marker='.', color='black')
+        if attemptedBreakConstraint:
+            attemptedBreakConstraint = np.array(attemptedBreakConstraint)
+            plt.scatter(attemptedBreakConstraint[:, 0], -attemptedBreakConstraint[:, 1], marker='o', color='purple')
         plt.scatter(goalPlain[0], -goalPlain[1], marker='x', color='orange')
         for node in nodes:
             if node.parent is not None:
