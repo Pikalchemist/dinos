@@ -88,9 +88,10 @@ class InteractionEvent(Serializable):
             idAction = point.space.addPoint(point, self.iteration, action=True)
             self.actionsRegister.append((point.space.id, idAction))
 
-        for point in self.primitiveActions.flat():
-            idAction = point.space.addPoint(point, self.iteration, action=True)
-            self.primitiveActionsRegister.append((point.space.id, idAction))
+        if not self.actions == self.primitiveActions:
+            for point in self.primitiveActions.flat():
+                idAction = point.space.addPoint(point, self.iteration, action=True)
+                self.primitiveActionsRegister.append((point.space.id, idAction))
 
         for point in self.outcomes.flat():
             idOutcome = point.space.addPoint(point, self.iteration, cost)

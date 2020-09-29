@@ -171,7 +171,7 @@ class ModelDataset(Dataset):
         return m is not None
 
     def controlContext(self, goalContext, currentContext):
-        if not currentContext:
+        if not currentContext or not goalContext:
             return goalContext
 
         space = goalContext.space

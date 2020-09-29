@@ -238,8 +238,8 @@ class DataSpace(Space):
         
         x = np.array(x)
         if weights is not None:
-            data = data * weights
-            x = x * weights
+            data = data * weights / np.sum(weights)
+            x = x * weights / np.sum(weights)
         if columns:
             x = x[:, columns]
 

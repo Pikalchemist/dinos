@@ -111,8 +111,8 @@ class Data(Serializable):
     def absoluteData(self, state):
         return self.__class__(*[part.absoluteData(state) for part in self._parts])
 
-    def relativeData(self, state):
-        return self.__class__(*[part.relativeData(state) for part in self._parts])
+    def relativeData(self, state, ignoreRelative=False):
+        return self.__class__(*[part.relativeData(state, ignoreRelative=ignoreRelative) for part in self._parts])
     
     def clone(self):
         return self.__class__(*[part.clone() for part in self._parts])
@@ -347,9 +347,9 @@ class SingleData(Data):
                     break
         return self.__class__(self.space, value).setRelative(False)
 
-    def relativeData(self, state):
+    def relativeData(self, state, ignoreRelative=False):
         value = self.value
-        if not self.relative:
+        if not self.relative or ignoreRelative:
             for s in state:
                 if s.space.matches(self.space):
                     value = [v1 - v2 for v1, v2 in zip(self.value, s.value)]

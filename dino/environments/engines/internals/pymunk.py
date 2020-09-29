@@ -105,7 +105,7 @@ class PymunkEngine(InternalEngine):
                 self.clock.tick(
                     50*(self.speedupFrames if self.speedupFrames is not None else 1000000))
                 pygame.display.set_caption(
-                    f"GUI fps: {self.clock.get_fps():.0f}")
+                    f"{self.windowTitle()} | GUI fps: {self.clock.get_fps():.0f}")
 
     def _hide(self):
         pygame.display.set_caption(

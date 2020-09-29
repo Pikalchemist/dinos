@@ -206,7 +206,7 @@ class Evaluator(Serializable):
 
     def evaluatePlanning(self, point):
         try:
-            _, distance = self.agent.planner.planDistance(
+            _, _, distance = self.agent.planner.planDistance(
                 point)  # , hierarchical=False)
             # print(dist)
             error = min(1., distance / point.space.maxDistance)
@@ -274,7 +274,7 @@ class Evaluator(Serializable):
                 error = 1.
             print('DISTANCE', reached, difference, distance, error)
             return error, point, reached
-            # paths, dist = self.agent.planner.planDistance(point)#, hierarchical=False)
+            # paths, _, dist = self.agent.planner.planDistance(point)#, hierarchical=False)
             # spaces = list(env.dataset.outcomeSpaces)
             # for s in spaces:
             #     env.scene.property(s.property).save()

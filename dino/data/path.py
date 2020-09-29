@@ -164,20 +164,29 @@ class PathNode(object):
     Represents a couple (action, goal) where the action should reach the goal
     """
 
-    def __init__(self, action=None, goal=None, model=None, pos=None, parent=None, state=None):
+    def __init__(self, action=None, goal=None, model=None, pos=None, absPos=None, parent=None, state=None):
         super().__init__()
         self.action = action
         self.goal = goal
 
         self.model = model
         self.pos = pos
+        self.absPos = absPos
         self.parent = parent
         self.state = state
+
+        self.failures = 0
 
         self.context = None
         self.execution = None
 
         self.valid = False
+    
+    def validate(self):
+        self.valid = True
+    
+    def penalty(self):
+        return 1 + 0.1 * self.failures ** 1.1
 
     def length(self):
         return self.goal.length()

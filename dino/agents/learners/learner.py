@@ -133,7 +133,12 @@ class Learner(Agent):
         if not config.evaluating:
             for event in memory:
                 self.addEvent(event, config)
-
+    
+    def _postTest(self, memory, config):
+        print('Done.')
+        if not config.evaluating:
+            for event in memory:
+                self.addEvent(event, config)
     # Api
     # def apiget_time(self, range_=(-1, -1)):
     #     return {'data': iterrange(self.iterationTimes, range_)}

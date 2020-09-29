@@ -18,7 +18,10 @@ import sys
 import os
 
 from scipy.optimize import OptimizeResult
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, RANSACRegressor
+from sklearn import linear_model
+from numpy.linalg import LinAlgError
+import matplotlib.pyplot as plt
 
 
 from dino.data import operations
@@ -102,26 +105,62 @@ def multivariateRegression(x, y, x0, columns=None):
         x = x[:, columns]
         x0 = np.array(x0)[columns]
     try:
+        # ransac = linear_model.RANSACRegressor()
+        # ransac.fit(x, y)
+        # return ransac.predict([x0])[0]
         return operations.multivariateRegression(x, y, x0)
     except ValueError as e:
         logging.critical(f"Regression failed: y is {y.shape[0]}x{y.shape[1]}d, X is {x.shape[0]}x{x.shape[1]}d and goal is {len(x0)}d ({e})")
+        # return operations.multivariateRegression(x, y, x0)
 
 
 def multivariateRegressionError(x, y, x0, testSetX=None, testSetY=None, columns=None):
     if columns is not None:
         x = x[:, columns]
         x0 = np.array(x0)[columns]
+    # if len(x.shape) == 2:
+    #     plt.figure()
+    #     plt.scatter(x[:, 0], x[:, 1])
+    #     plt.scatter(y[:, 0], y[:, 1])
     try:
+        # ransac = linear_model.RANSACRegressor()
+        # ransac.fit(x, y)
+        # # return ransac.predict([x0])[0], 1.-ransac.score(x, y)
+        # return ransac.predict([x0])[0], 1.-ransac.score(x[ransac.inlier_mask_], y[ransac.inlier_mask_])
+
         return operations.multivariateRegressionError(x, y, x0)
     except ValueError as e:
         logging.critical(f"Regression failed: y is {y.shape[0]}x{y.shape[1]}d, X is {x.shape[0]}x{x.shape[1]}d and goal is {len(x0)}d ({e})")
+        return operations.multivariateRegressionError(x[:1 + len(x) // 2], y[:1 + len(x) // 2], x0)
+    except LinAlgError as e:
+        # print('ERRR====')
+        # print(x)
+        # print(y)
+        # print(x0)
+        return operations.multivariateRegressionError(x[:1 + len(x) // 2], y[:1 + len(x) // 2], x0)
 
+def mre(x, y, x0):
+    # code from scipy LinearRegression:
+    number = int(len(x) * 0.9)
+    x_offset = np.average(x[:number], axis=0)
+    y_offset = np.average(y[:number], axis=0)
 
-# def multivariateRegressionVector(X, y, x0):
-#     """Compute a multivariate linear regression model y = f(x) using (X,y) and use it to compute f(x0)."""
-#     Xf = np.array([x.flatten() for x in X])
-#     yf = np.array([x.flatten() for x in y])
-#     return y[0].asTemplate(multivariateRegression(Xf, yf, xg.npflatten()).tolist())
+    coef_ = np.linalg.lstsq(x[:number] - x_offset, y[:number] - y_offset, rcond=None)[0]
+    if y.ndim == 1:
+        coef_ = np.ravel(coef_)
+
+    intercept_ = y_offset - np.dot(x_offset, coef_)
+    y0 = np.array(x0).dot(coef_) + intercept_
+    yp = np.sum(np.square(x.dot(coef_) + intercept_ - y), axis=1)
+    error = np.sum(yp)# / np.sum(0.01 + np.square(y - np.mean(y)))
+    # print('===')
+    # print(x)
+    # print(y)
+    # print(yp)
+    # print(error)
+    # + 0.01 to avoid dividing by zero when all y are equal
+
+    return y0, error, yp
 
 
 def normalEquation(X, y):

@@ -51,7 +51,7 @@ class Model(Serializable):
 
         self.contextSpacialization = None
         if self.contextSpace:
-            self.contextSpacialization = ContextSpatialization(self, self.outcomeSpace)
+            self.contextSpacialization = (ContextSpatialization(self, self.outcomeSpace), ContextSpatialization(self, self.contextSpace))
 
         # self.spacesHistory = DataEventHistory()
 
@@ -95,7 +95,10 @@ class Model(Serializable):
     def pointAdded(self, event, progress):
         if self.contextSpacialization:
             outcome = event.outcomes.projection(self.outcomeSpace)
-            self.contextSpacialization.addPoint(outcome)
+            self.contextSpacialization[0].addPoint(outcome)
+
+            # context = event.context.projection(self.contextSpace)
+            # self.contextSpacialization[1].addPoint(context)
 
     def saveRestrictionIds(self, newIds=None):
         self.savedRestrictionIds = self.restrictionIds
@@ -108,12 +111,12 @@ class Model(Serializable):
     def hasContext(self, contextSpace, contextColumns):
         return contextSpace and (contextColumns is None or np.any(contextColumns))
 
-    def contextColumns(self, contextColumns, goal):
+    def contextColumns(self, contextColumns, goal, context):
         if contextColumns is not None:
             return contextColumns
         if not self.contextSpacialization:
             return None
-        return self.contextSpacialization.columns(goal)
+        return self.contextSpacialization[0].columns(goal)# & self.contextSpacialization[1].columns(context)
 
     def multiContextColumns(self, contextColumns, space):
         if contextColumns is None or not np.any(contextColumns):
@@ -192,15 +195,17 @@ class Model(Serializable):
     def nonControllableContext(self):
         return self.dataset.nonControllableSpaces(self.contextSpace, merge=True)
 
-    def forward(self, action: Action, context: Observation = None, contextColumns=None):
-        value, error = self.npForward(action, context, contextColumns=contextColumns)
+    def forward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False):
+        value, error = self.npForward(action, context, contextColumns=contextColumns, ignoreFirst=ignoreFirst)
+        if value is None or np.isnan(np.sum(value)):
+            return None, 1
         return Data(self.outcomeSpace, value.tolist()), error
 
     def computeCompetence(self, error, distanceGoal=0):
         distanceGoal = min(distanceGoal, 1.)
-        return max(0, min(1., (1. - distanceGoal - error ** 2) / np.exp((error * 4.15) ** 3)))
+        return max(0, min(1, (1. - distanceGoal - error) / np.exp((error * 4.15) ** 3)))
 
-    def npForward(self, action: Action, context: Observation = None, contextColumns=None):
+    def npForward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False):
         raise NotImplementedError()
 
     def inverse(self, goal: Goal, context: Observation = None, contextColumns=None):
@@ -284,10 +289,10 @@ class Model(Serializable):
             std = self.goalCompetenceError(d, c)[1]
             stds.append(std)'''
         # error = np.median(errors)
-        errors = errors[errors < np.percentile(errors, 99)]
+        # errors = errors[errors < np.percentile(errors, 99)]
         # print(np.mean(errors))
         # print(np.sort(errors)[-10:])
-        return np.mean(errors) + 0.08 * np.std(errors)
+        return np.mean(errors)# + 0.08 * np.std(errors)
 
     def _errorEvents(self, precise=False, exceptAlmostZero=True, onlyIds=None, contextColumns=None):
         ids = self.getIds()
@@ -348,26 +353,37 @@ class Model(Serializable):
     def eventForwardError(self, eventId, contextColumns=None):
         action = self.actionSpace.getPoint(eventId)[0]
         outcome = self.outcomeSpace.getPoint(eventId)[0]
+        if self.contextSpace:
+            context = self.contextSpace.getPoint(eventId)[0]
+        else:
+            context = None
+        # print(f'{self.actionSpace.getPoint(eventId)[0]} + {self.contextSpace.getPoint(eventId)[0]} -> {self.outcomeSpace.getPoint(eventId)[0]}')
 
-        contextColumns = self.contextColumns(contextColumns, outcome)
+        contextColumns = self.contextColumns(contextColumns, outcome, context)
 
-        context = self.contextSpace.getPoint(
-            eventId)[0] if self.hasContext(self.contextSpace, contextColumns) else None
+        context = context if self.hasContext(self.contextSpace, contextColumns) else None
 
         if context is None:
             contextColumns = None
 
         # print(contextColumns)
         outcomeEstimated = self.forward(
-            action, context, contextColumns=contextColumns)[0]
+            action, context, contextColumns=contextColumns, ignoreFirst=True)[0]
+        if not outcomeEstimated:
+            return 1.
+
         # print(outcome)
         # print(outcomeEstimated)
         zeroError = (outcome.length() < 0.00001) != (
             outcomeEstimated.length() < 0.00001)
         errorOutcome = outcomeEstimated.distanceTo(
-            outcome) / outcome.space.maxDistance + zeroError*0.0
+            outcome) / (outcome.space.maxDistance if outcome.space.maxDistance != 0 else 1.) + zeroError*0.0
 
+        errorOutcome = min(errorOutcome, 0.5)
         # if errorOutcome > 0.1:
+        #     if context:
+        #         context = context.plain()
+        #     print(f'Failed {errorOutcome} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
         #     print('--- ERROR ---')
         #     print(outcome)
         #     print(outcomeEstimated)

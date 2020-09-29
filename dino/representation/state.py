@@ -22,7 +22,7 @@ class State(object):
     def update(self):
         self._context = Data(*self.values)
 
-    def apply(self, action, dataset):
+    def apply(self, action, dataset, overwrite=None):
         variations = {}
         actionSpace = action.space
         context = self.context()
@@ -36,6 +36,11 @@ class State(object):
         for i, part in enumerate(self.values):
             if part.space in variations.keys():
                 self.values[i] = part + variations[part.space]
+            if overwrite:
+                overpart = overwrite.projection(part.space)
+                if overpart:
+                    self.values[i] = overpart
+
         self.update()
         return self
 

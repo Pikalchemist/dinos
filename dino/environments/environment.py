@@ -74,7 +74,7 @@ class Environment(SpaceManager):
         self.options = options
         # self.discrete = options.get('discrete', False)
 
-        self.timestep = options.get('timestep', 2.0)  # 2 seconds per action
+        self.timestep = options.get('timestep', 3.0)  # 2 seconds per action
         # self.unitWindow = options.get("window", 5)  # number of unit
 
         self.timeByIteration = []

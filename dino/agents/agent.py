@@ -181,7 +181,12 @@ class Agent(Module):
         self.schedule(self._test, config)
 
     def _test(self, config):
-        self.testStrategies.sample().run(config)
+        memory = self.testStrategies.sample().run(config)
+
+        self._postTest(memory, config)
+    
+    def _postTest(self, memory, config):
+        pass
 
     def perform(self, action):
         self.performer.performActions(action)
@@ -196,10 +201,10 @@ class Agent(Module):
             self.iteration += 1
         return result
     
-    def propertySpace(self, filter_=None):
+    def propertySpace(self, filter_=None, kind=None):
         space = self.environment.world.cascadingProperty(filter_).space
         if self.dataset:
-            space = space.convertTo(spaceManager=self.dataset)
+            space = space.convertTo(spaceManager=self.dataset, kind=kind)
         return space
 
     # def addReachStrategy(self, strategy):

@@ -110,7 +110,7 @@ class Engine(object):
         pass
 
     def windowTitle(self):
-        return f'Dino {self.environment.name} - {self.scene.name}'
+        return f'Dino {self.environment.name} - {self.scene.name} - {self.environment.iteration}'
 
     # Image / Video
     def display(self):

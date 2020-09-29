@@ -20,8 +20,8 @@ from .data import Data
 class SpaceRegion(object):
     """Implements an evaluation region."""
 
-    def __init__(self, targetSpace, options, bounds=None, parent=None, manager=None, tag='', contextSpace=None,
-                 regions=None):
+    def __init__(self, targetSpace, options, bounds=None, parent=None, manager=None, tag='',
+                 contextSpace=None, regions=None):
         """
         bounds float list dict: contains min and max boundaries of the region
         options dict: different options used by the evaluation model
@@ -50,7 +50,7 @@ class SpaceRegion(object):
         #   'cost': cost of strategy (usually strategies involving a teacher have a higher cost)
         self.options = {
             "cost": 1.0,
-            "window": 25,
+            "window": 10,
             "maxAttempts": 20,
             "maxPoints": 50,
             "minSurface": 0.05
@@ -59,6 +59,7 @@ class SpaceRegion(object):
 
         self.points = []
         self.pointValues = []
+        self.progresses = []
         self.evaluation = 0.
         '''for i in range(len(options['costs'])):
             self.points.append([])
@@ -146,10 +147,12 @@ class SpaceRegion(object):
         return inBounds
 
     def controllableContext(self, dataset):
+        if not self.contextSpace:
+            return False
         return dataset.controllableSpaces(self.contextSpace)
 
-    def addPoint(self, point, progress, firstAlwaysNull=True, populating=False):
-        """Add a point and its progress in the attached evaluation region."""
+    def addPoint(self, point, value, firstAlwaysNull=True, populating=False):
+        """Add a point and its value in the attached evaluation region."""
         point = Data.plainData(point, self.space)
         assert len(point) == len(self.bounds)
 
@@ -159,10 +162,11 @@ class SpaceRegion(object):
         #     return
 
         if firstAlwaysNull and len(self.points) == 0:
-            progress = 0.
+            value = 0.
         self.points.append(point)
-        self.pointValues.append(progress)
+        self.pointValues.append(value)
         self.computeEvaluation()
+        # print(f'{self.evaluation}')
         addedInChildren = False
 
         maxPoints = self.options['maxPoints']
@@ -178,16 +182,16 @@ class SpaceRegion(object):
             # Traverse tree
             addedInChildren = True
             if point[self.splitDim] < self.splitValue:
-                self.leftChild.addPoint(point, progress)
+                self.leftChild.addPoint(point, value)
             else:
-                self.rightChild.addPoint(point, progress)
+                self.rightChild.addPoint(point, value)
         # Remove oldest points and pointValues
         if len(self.points) > maxPoints:
             self.points = self.points[-maxPoints:]
             self.pointValues = self.pointValues[-maxPoints:]
 
         if not addedInChildren and not populating and self.manager:
-            self.manager.logger.debug(f'Adding point [{", ".join(["{:.4f}".format(p) for p in point])}] with progress {progress:.3e} to region {self}', tag=self.tag)
+            self.manager.logger.debug(f'Adding point [{", ".join(["{:.4f}".format(p) for p in point])}] with value {value:.3e} to region {self}', tag=self.tag)
 
     def computeEvaluation(self):
         pass
@@ -244,11 +248,11 @@ class SpaceRegion(object):
         #print("Split done on dimension " + str(self.splitDim) + " at value: " + str(self.splitValue))
 
         # Add all points of the parent region in the child regions according to the cut
-        for point, progress in zip(self.points, self.pointValues):
+        for point, value in zip(self.points, self.pointValues):
             if point[self.splitDim] < self.splitValue:
-                self.leftChild.addPoint(point, progress, populating=True)
+                self.leftChild.addPoint(point, value, populating=True)
             else:
-                self.rightChild.addPoint(point, progress, populating=True)
+                self.rightChild.addPoint(point, value, populating=True)
 
     # def greedyCut(self):
     #     """UNTESTED method to define a cut greedily."""

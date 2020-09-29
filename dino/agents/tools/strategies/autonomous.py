@@ -64,52 +64,31 @@ class AutonomousStrategy(RandomStrategy):
         self.criteria.append([])
 
     def _runIteration(self, config):
-        # timethissub(3)
-        self.reachGoalContext(config)
-        if config.goal:
+        if config.goal and self.reachGoalContext(config):
             self.exploreGoal(config)
         else:
             self.testRandomAction(config)
-        # timethissub(3, "All exploreGoal")
 
     def exploreGoal(self, config):
         # assert config.exploitation is False
         assert config.depth == 0
-        goal = config.goal
+        config.reachedGoal = 'random chosen instead'
         path = None
 
-        for _ in self.performer.iterative():
-            # Choose between local and global exploration
-            # timethissub(1)
-            probUseGoal, path = self.useGoalCriteria(goal, config)
-            useGoal = random.uniform(0, 1) > probUseGoal
-            self.logger.debug(
-                f'goal exploration decision: criteria={probUseGoal}->{useGoal} exploration={config.exploitation} path={path}')
-            # print(path)
-            # timethissub(1, "Init localGlobalCriteria")
-            # if not config.exploitation:
-            #     self.criteria[-1].append(probUseGoal)
-            #     self.methods[-1].append(1 if useGoal else 0)
+        # for _ in self.performer.iterative():
+        # Choose between local and global exploration
+        probUseGoal, path = self.useGoalCriteria(config.goal, config)
+        useGoal = random.uniform(0, 1) > probUseGoal
+        self.logger.debug(
+            f'goal exploration decision: criteria={probUseGoal}->useGoal={useGoal} exploration={config.exploitation} path={path}')
 
-            # print('Goal: {}'.format(goal))
-            if useGoal:  # We have chosen local optimizattion
-                # print("Using Local optimization after random for n=" + str(self.n) + ", ~probUseGoal: " + str(probUseGoal))
-                # print('----Paths----')
-                # print(goal)
-                # print('---')
-                # print(path)
-                self.testPath(path, config)
-
-            elif not config.exploitation:  # We have chosen random exploration
-                # if random.uniform(0, 1) <= 0.3 or not config.model:
-                #     actionSpaces = self.agent.dataset.controllableSpaces()
-                # else:
-                #     actionSpaces = self.agent.dataset.controllableSpaces(config.model.actionSpace.iterate())
-                # , actionSpaces=actionSpaces
-                self.testRandomAction(config)
-            
-            else:
-                self.testRandomAction(config, zero=True)
+        if useGoal:  # We have chosen local optimizattion
+            self.testPath(path, config)
+            config.reachedGoal = self.agent.environment.state().context().projection(config.goal.space)
+        elif not config.exploitation:  # We have chosen random exploration
+            self.testRandomAction(config)
+        else:
+            self.testRandomAction(config, zero=True)
 
         return path
 
@@ -118,17 +97,18 @@ class AutonomousStrategy(RandomStrategy):
         prob = 1.0
 
         # First pass: only random
-        probFirstPass = 1. # TODO threshold(self.randomFirstPass, self.randomThreshold)
+        probFirstPass = 0.1 # TODO threshold(self.randomFirstPass, self.randomThreshold)
         # print(probFirstPass)
         if not config.exploitation and random.uniform(0, 1) < probFirstPass:
             return 1., Path()  # Random action
 
         # Try planning to goal
         try:
-            path, distance = self.planner.planDistance(goal, model=config.model, settings=config.plannerSettings)
+            path, _, distance = self.planner.planDistance(goal, model=config.model, settings=config.plannerSettings)
         except ActionNotFound:
             path = None
         if not path:
+            config.reachedGoal = 'planning failed'
             self.logger.warning(
                 f"Planning failed for goal {goal}, switching to random")
             return 1., path  # Random action

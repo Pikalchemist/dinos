@@ -72,7 +72,7 @@ class Agent(Cylinder):
 
     def move(self, parameters, property=None):
         self.performAction(self._move, args=(
-            parameters, property), duration=1.0, step=0.05)
+            parameters, property), duration=0.6, step=0.05)
 
     def _move(self, parameters, property=None):
         # print("MOVE")
@@ -81,7 +81,9 @@ class Agent(Cylinder):
         wl = min(max(parameters[0], -1), 1)  # ** 3
         wr = 0. if self.onlyX else min(max(parameters[1], -1), 1)  # ** 3
         noise = 0.
-        pw = 12000
+        pw = 10000
+
+        # self.body.apply_impulse_at_local_point(Vec2d(1.0, 0.0) * pw * float(wl), (0, 0))
 
         if self.omni:
             self.body.apply_impulse_at_local_point(Vec2d(1.0, 0.0) * pw * float(wl + random.uniform(-noise, noise)) +
