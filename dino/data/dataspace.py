@@ -235,7 +235,7 @@ class DataSpace(Space):
 
         if len(ids) == 0:
             return np.array([], dtype=np.int32), np.array([])
-        
+
         x = np.array(x)
         if weights is not None:
             data = data * weights / np.sum(weights)

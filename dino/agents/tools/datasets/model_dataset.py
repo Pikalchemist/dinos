@@ -15,11 +15,14 @@ from .dataset import Dataset
 class ModelDataset(Dataset):
     """The dataset used to record actions, outcomes and procedures."""
 
-    def __init__(self, modelClass=Model, parent=None, options={}):
+    MODEL_PERF_COMPETENCE = 0.5
+    MODEL_PERF_DURATION = 120
+
+    def __init__(self, modelClass=Model, options={}):
         """
         options dict: parameters for the dataset
         """
-        super().__init__(parent=parent, options=options)
+        super().__init__(options=options)
         self.logger.tag = 'dataset'
 
         self.modelClass = modelClass
@@ -78,25 +81,30 @@ class ModelDataset(Dataset):
     # Models
     def model(self, index):
         return next(s for s in self.models if s.id == index)
+    
+    def enabledModels(self):
+        return [model for model in self.models if model.enabled]
 
     def registerModel(self, model):
         if model not in self.models:
             self.logger.info(f'New model added: {model}', tag='model')
             self.models.append(model)
             self.computeSpaces()
+            model.createdSince = self.learner.iteration
 
     def unregisterModel(self, model):
         if model in self.models:
             self.logger.info(f'Model removed: {model}', tag='model')
             self.models.remove(model)
             self.computeSpaces()
+            model.createdSince = -1
 
-    def replaceModel(self, currentModel, newModel):
+    def replaceModel(self, model, newModel):
         # del self.models[self.models.index(newModel)]
-        # self.models[self.models.index(currentModel)] = newModel
-        self.unregisterModel(currentModel)
-        self.unregisterModel(newModel)
-        newModel.continueFrom(currentModel)
+        # self.models[self.models.index(model)] = newModel
+        self.unregisterModel(model)
+        self.registerModel(newModel)
+        newModel.continueFrom(model)
 
     def findModelByOutcomeSpace(self, outcomeSpace, models=None):
         return (self.findModelsByOutcomeSpace(outcomeSpace, models) + [None])[0]
@@ -110,11 +118,11 @@ class ModelDataset(Dataset):
         return [m for m in models if m.coversActionSpaces(actionSpace)]
     
     def competences(self, precise=False):
-        return {model: model.competence(precise=precise) for model in self.models}
+        return {model: model.competence(precise=precise) for model in self.models if model.enabled}
 
     # Graph
     def dependencyGraph(self, models=None):
-        models = models if models else self.models
+        models = models if models else self.enabledModels()
 
         graph = {}
         for model in models:
@@ -143,13 +151,13 @@ class ModelDataset(Dataset):
         return any(visit(node) for node in graph)
 
     # Spaces
-    def controllableSpaces(self, spaces=None, merge=False):
-        return self.__controllableSpaces(True, spaces, merge)
+    def controllableSpaces(self, spaces=None, merge=False, performant=False):
+        return self.__controllableSpaces(True, spaces, merge, performant)
 
-    def nonControllableSpaces(self, spaces=None, merge=False):
-        return self.__controllableSpaces(False, spaces, merge)
+    def nonControllableSpaces(self, spaces=None, merge=False, performant=False):
+        return self.__controllableSpaces(False, spaces, merge, performant)
 
-    def __controllableSpaces(self, controllable, spaces=None, merge=False):
+    def __controllableSpaces(self, controllable, spaces=None, merge=False, performant=False):
         spaces = spaces if spaces else self.actionExplorationSpaces
         if type(spaces) in (list, set):
             spaces = [space.convertTo(kind=SpaceKind.BASIC)
@@ -162,13 +170,15 @@ class ModelDataset(Dataset):
             return self.multiColSpace(spaces)
         return spaces
 
-    def controllableSpace(self, space):
+    def controllableSpace(self, space, performant=False):
         if space is None or space.null():
             return False
         if space.primitive():
             return True
-        m = self.findModelByOutcomeSpace(space)
-        return m is not None
+        models = self.findModelsByOutcomeSpace(space)
+        if performant:
+            models = [model for model in models if model.performant(self.MODEL_PERF_COMPETENCE, self.MODEL_PERF_DURATION)]
+        return len(models) > 0
 
     def controlContext(self, goalContext, currentContext):
         if not currentContext or not goalContext:

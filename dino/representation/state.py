@@ -26,12 +26,16 @@ class State(object):
         variations = {}
         actionSpace = action.space
         context = self.context()
-        for model in dataset.models:
+        for model in dataset.enabledModels():
             if model.isCoveredByActionSpaces(actionSpace):
-                result = model.forward(action, context)
-                parts = result[0].flat()
-                for part in parts:
-                    variations[part.space] = part
+                result, _ = model.forward(action, context)
+                if result:
+                    parts = result.flat()
+                    for part in parts:
+                        variations[part.space] = part
+                else:
+                    print(f'======= {model} {action} {context}')
+                    result[0].flat()
 
         for i, part in enumerate(self.values):
             if part.space in variations.keys():

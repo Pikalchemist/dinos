@@ -30,6 +30,7 @@ class MultiColSpace(Space):
             if spaceManager:
                 return spaceManager.multiColSpace([])
             return None
+
         spaceManager = list(set([space.spaceManager for space in spaces]))
         if len(spaceManager) > 1:
             raise Exception(
@@ -56,11 +57,11 @@ class MultiColSpace(Space):
         return sum([s.primitive() for s in self.spaces]) == len(self.spaces) and not self.null()
 
     def createDataSpace(self, spaceManager=None, kind=None):
-        spaces = [s.createDataSpace(spaceManager, kind) for s in self.spaces]
+        spaces = [s.convertTo(spaceManager, kind, True) for s in self.spaces]
         return MultiColDataSpace.create(spaces, spaceManager=spaceManager)
 
     def createLinkedSpace(self, spaceManager=None, kind=None):
-        spaces = [s.createLinkedSpace(spaceManager, kind) for s in self.spaces]
+        spaces = [s.convertTo(spaceManager, kind, False) for s in self.spaces]
         return MultiColSpace.create(spaces, spaceManager=spaceManager)
 
 

@@ -49,6 +49,7 @@ class PlanSettings(object):
         self.forceContextPlanning = False
         self.mayUseContext = False
         self.hierarchical = None
+        self.maxIterations = None
 
     def freeSpace(self, space):
         for s in self.controlledSpaces:
@@ -59,6 +60,7 @@ class PlanSettings(object):
     def clone(self):
         obj = copy.copy(self)
         obj.controlledSpaces = list(self.controlledSpaces)
+        obj.dontMoveSpaces = list(self.dontMoveSpaces)
         return obj
 
 
@@ -74,6 +76,7 @@ class Planner(Module):
     """
 
     MAX_MOVE_UNCHANGED_SPACES = 1.
+    GOAL_SAMPLE_RATE = 0.2
 
     def __init__(self, agent, hierarchical=None, chaining=None, options={}):
         super().__init__('planner', agent)
@@ -105,7 +108,7 @@ class Planner(Module):
             partition = []
             while partsLeft:
                 models = []
-                for model in self.dataset.models:
+                for model in self.dataset.enabledModels():
                     spaces = list(model.reachesSpaces([p.space for p in partsLeft]))
                     if len(spaces) > 0 and settings.freeSpace(space):
                         models.append([model, spaces])
@@ -155,6 +158,7 @@ class Planner(Module):
 
     def planActions(self, actionList, state=None, model=None, settings=PlanSettings()):
         settings = settings.clone()
+        settings.depth += 1
 
         # print('---- planActions')
         actionList = actionList.convertTo(self.dataset)
@@ -196,6 +200,8 @@ class Planner(Module):
             ids, _, _ = model.nearestOutcome(
                 move, context=context, n=5, nearestUseContext=False)
             # ids, dists = model.outcomeContextSpace.nearestDistance(moveContext, n=5, restrictionIds=ids)
+            if len(ids) == 0:
+                return None, None, 0
             nearestMove = model.outcomeSpace.getPoint(ids)[0]
             nearestMoveId = ids[0]
 
@@ -231,8 +237,6 @@ class Planner(Module):
         return move, nearestMove, nearestMoveId
 
     def __plan(self, model, goal, state=None, settings=PlanSettings()):
-        settings = settings.clone()
-
         self.logger.debug(f'=== New planning (d{settings.depth}) === -> {goal} using {model} with context {state}')
 
         # Checking if space already planned
@@ -245,15 +249,14 @@ class Planner(Module):
         # print(settings.controlledSpaces)
 
         # Settings
-        hierarchical = parameter(settings.hierarchical, self.hierarchical)
+        # hierarchical = parameter(settings.hierarchical, self.hierarchical)
         space = model.outcomeSpace
         # if self.environment:
 
         state = state if state else self.environment.state(self.dataset)
+        goal = goal.projection(space)
         goal = goal.relativeData(state)
         startPos = state.context().projection(space)
-
-        goal = goal.projection(space)
 
         self.logger.debug(f'== Relative goal is {goal} (starting pos {startPos})')
 
@@ -262,23 +265,22 @@ class Planner(Module):
         lastInvalids = []
 
         # parameters
-        range_ = 200
-        goalSampleRate = 50
-        minrand = -200
-        maxrand = 200
-        maxdist = 2 + 0.02 * goal.norm()
-        maxdistIncomplete = 5 + 0.1 * goal.norm()
-        # lastmaxdist = 10 + 0.1 * goal.norm()
-        maxiter = 20
+        maxIter = parameter(settings.maxIterations, 20)
+        if settings.dontMoveSpaces:
+            maxIter *= 10
+        maxIterNoNodes = 20
 
         # init variables
+        maxdist = 2 + 0.02 * goal.norm()
+        maxdistIncomplete = 5 + 0.1 * goal.norm()
+
         mindist = math.inf
         minnode = None
+
         zero = space.zero()
-        zeroPlain = zero.plain()
         nodes = [PathNode(pos=zero, absPos=startPos, state=state)]
-        # nodePositions = np.zeros((maxiter + 1, space.dim))
-        # nodePenalties = np.ones(maxiter + 1)
+        # nodePositions = np.zeros((maxIter + 1, space.dim))
+
         path = Path()
         dist = 0
         directGoal = True
@@ -291,9 +293,9 @@ class Planner(Module):
         ignoreConstraintDistanceLimit = 0.05 * space.maxDistance
 
         # Main loop
-        for i in range(maxiter):
+        for i in range(maxIter):
             # Finding a subgoal
-            if random.randint(0, 100) <= goalSampleRate or directGoal:
+            if random.uniform(0, 1) <= self.GOAL_SAMPLE_RATE or directGoal:
                 subgoaldistant = goal
             else:
                 subgoaldistant = self.generateRandomPoint(goal, space)
@@ -307,8 +309,10 @@ class Planner(Module):
                             break
                         subgoaldistant = self.generateRandomPoint(goal, space)
                         # self.logger.debug2(f'(d{settings.depth}) Iter {i}: Too close to invalid point, retrying...')
-                        
-
+            
+            if len(nodes) <= 3 and i > maxIterNoNodes:
+                self.logger.warning(f'Not enough nodes, aborting...')
+                break
 
             # dlist = [euclidean(node.pos.plain(), subgoalPlain) for node in nodes]
             # nearestNode = nodes[dlist.index(min(dlist))]
@@ -347,6 +351,10 @@ class Planner(Module):
 
             move, nearestMove, nearestMoveId = self.findClosestMove(
                 subgoal, nearestNode, model, context)
+            
+            if move is None:
+                print(f'!!!!!!!! {model} {goal} {context}')
+                continue
 
             self.logger.debug2(
                 f'(d{settings.depth}) Iter {i}: corresponding chosen move is {move}')
@@ -448,24 +456,40 @@ class Planner(Module):
                     self.logger.debug2(
                         f'(d{settings.depth}) Iter {i}: move reachable with new context, is the context reachable?')
 
+                    
+                    newSettings = settings.clone()
+                    if i == 0:
+                        newSettings.dontMoveSpaces.append(goal.space)
+                    # First context planning
+                    # if i == 0:
+                    #     newSettings.maxIterations = 100
                     try:
-                        contextPath, contextState = self.plan(c0.setRelative(False), nearestNode.state, settings=settings)
+                        contextPath, contextState = self.plan(c0.setRelative(False), nearestNode.state, settings=newSettings)
+                    except ActionNotFound:
+                        contextPath = None
+                    
+                    # Try without dontMoveSpaces constraint
+                    if not contextPath:
+                        newSettings.dontMoveSpaces = []
+                        try:
+                            contextPath, contextState = self.plan(c0.setRelative(False), nearestNode.state, settings=newSettings)
+                        except ActionNotFound:
+                            contextPath = None
 
-                        if contextPath:
-                            c0 = contextState.context()
-                            attemptMove = nearestMove
+                    if contextPath:
+                        c0 = contextState.context()
+                        attemptMove = nearestMove
+                        reachable, y0, a0 = model.reachable(
+                            attemptMove, context=c0)
+
+                        if not reachable:
+                            attemptMove = nearestMove * 0.5
                             reachable, y0, a0 = model.reachable(
                                 attemptMove, context=c0)
 
-                            if not reachable:
-                                attemptMove = nearestMove * 0.5
-                                reachable, y0, a0 = model.reachable(
-                                    attemptMove, context=c0)
-
-                    except ActionNotFound:
+                    if not reachable:
                         self.logger.debug(
                             f'(d{settings.depth}) Iter {i}: context {c0} is not reachable')
-                        reachable = False
 
             if not reachable:
                 directGoal = False
@@ -507,7 +531,7 @@ class Planner(Module):
                 for dmSpace in settings.dontMoveSpaces:
                     dmDiff = difference.projection(dmSpace)
                     if dmDiff.norm() > self.MAX_MOVE_UNCHANGED_SPACES:
-                        self.logger.warning(f'{newState.context().projection(dmSpace)} vs {state.context().projection(dmSpace)} by doing {a0}')
+                        # self.logger.warning(f'{newState.context().projection(dmSpace)} vs {state.context().projection(dmSpace)} by doing {a0}')
                         dmChanged = True
                         break
                 if dmChanged:

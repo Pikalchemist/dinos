@@ -25,6 +25,10 @@ class ContextSpatialization(object):
     @property
     def dataset(self):
         return self.model.dataset
+    
+    def continueFrom(self, cs):
+        for area in cs.areas:
+            self._addArea(area.cloneTo(self))
 
     def _addArea(self, area):
         if len(self.areas) >= self.MAX_AREAS:
@@ -207,6 +211,21 @@ class ContextArea(object):
         self.ids = np.array([])
         self.stability = 0
     
+    def cloneTo(self, manager):
+        columns = np.full(manager.evaluatedSpace.dim, False)
+
+        posn = 0
+        poso = 0
+        for sn in manager.evaluatedSpace.cols:
+            for so in self.manager.evaluatedSpace.cols:
+                if sn.matches(so):
+                    columns[posn:posn + sn.dim] = self.columns[poso:poso + so.dim]
+                    break
+                poso += so.dim
+            posn += sn.dim
+
+        new = self.__class__(manager, self.center, columns)
+
     def addPoint(self, id_):
         self.ids = np.append(self.ids, id_)
     

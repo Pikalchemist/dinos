@@ -12,6 +12,7 @@ from scipy.spatial.distance import euclidean
 
 from exlab.modular.module import Module
 from exlab.interface.serializer import Serializable
+from exlab.utils.io import parameter
 
 from dino.representation.entity import Entity
 
@@ -79,12 +80,12 @@ class SpaceManager(Module, Serializable):
     
     # Space conversion
     def convertSpace(self, space, kind=None, toData=None):
-        toData = toData if toData is not None else self.storesData  # space.canStoreData()
-        kind = kind if kind is not None else space.kind
+        toData = parameter(toData, self.storesData)  # space.canStoreData()
+        kind = parameter(kind, space.kind)
 
-        relatedSpace = ([s for s in self.spaces if s.linkedTo(
-            space) and s.kind == kind] + [None])[0]
-        if relatedSpace:
+        relatedSpace = next(iter([s for s in self.spaces if s.linkedTo(
+            space) and s.kind == kind]), None)
+        if relatedSpace is not None:
             return relatedSpace
 
         if toData:
@@ -105,7 +106,7 @@ class SpaceManager(Module, Serializable):
             return spaces[0]
 
         # Look for exisiting multi space
-        r = [s for s in list_ if s and set(s.spaces) == set(spaces)]
+        r = [s for s in list_ if set(s.spaces) == set(spaces)]
         if len(r) == 0:
             s = type_(self, spaces)
             list_.append(s)
@@ -139,7 +140,7 @@ class SpaceManager(Module, Serializable):
                         f"All spaces should be a DataSpace or none: {spaces}")
                 canStoreData = dataSpaces[0]
             else:
-                canStoreData = False
+                canStoreData = self.storesData
 
         return self._multiSpaceWeighted(spaces, list_=self.multiColSpaces,
                                         type_=MultiColDataSpace if canStoreData else MultiColSpace, weight=weight)

@@ -33,7 +33,15 @@ class Model(Serializable):
                  register=True):
         self.id = Model.number
         Model.number += 1
+
         self.dataset = dataset
+        self.enabled = True
+
+        self._lastCompetence = None
+
+        self.createdSince = -1
+        self.lowCompetenceSince = -1
+        self.evaluations = {}
 
         # self.amt = AMT()
         self.actionSpace = dataset.multiColSpace(actionSpace)
@@ -47,7 +55,7 @@ class Model(Serializable):
             [self.outcomeSpace, self.contextSpace], weight=0.5)
 
         self.restrictionIds = restrictionIds
-        self.savedRestrictionIds = None
+        # self.savedRestrictionIds = None
 
         self.contextSpacialization = None
         if self.contextSpace:
@@ -59,7 +67,8 @@ class Model(Serializable):
             self.dataset.registerModel(self)
 
     def __repr__(self):
-        return f'Model({self.actionSpace} | {self.contextSpace} => {self.outcomeSpace})'
+        disabled = '❌' if not self.enabled else ''
+        return f'{disabled}Model({self.actionSpace} | {self.contextSpace} => {self.outcomeSpace})'
 
     def _serialize(self, serializer):
         dict_ = {}
@@ -100,13 +109,13 @@ class Model(Serializable):
             # context = event.context.projection(self.contextSpace)
             # self.contextSpacialization[1].addPoint(context)
 
-    def saveRestrictionIds(self, newIds=None):
-        self.savedRestrictionIds = self.restrictionIds
-        if newIds is not None:
-            self.restrictionIds = newIds
+    # def saveRestrictionIds(self, newIds=None):
+    #     self.savedRestrictionIds = self.restrictionIds
+    #     if newIds is not None:
+    #         self.restrictionIds = newIds
     
-    def restore(self):
-        self.restrictionIds = self.savedRestrictionIds
+    # def restore(self):
+    #     self.restrictionIds = self.savedRestrictionIds
     
     def hasContext(self, contextSpace, contextColumns):
         return contextSpace and (contextColumns is None or np.any(contextColumns))
@@ -130,14 +139,21 @@ class Model(Serializable):
         self.id = previousModel.id
         previousModel.id = -1
 
-        self.interestMaps = previousModel.interestMaps
+        self.createdSince = previousModel.createdSince
+        self.lowCompetenceSince = previousModel.lowCompetenceSince
+        self.evaluations = previousModel.evaluations
+
+        # if self.contextSpacialization and previousModel.contextSpacialization:
+        #     self.contextSpacialization[0].continueFrom(
+        #         previousModel.contextSpacialization[0])
+
         # previousModel.spacesHistory.extend(self.spacesHistory)
-        self.spacesHistory = previousModel.spacesHistory
+        # self.spacesHistory = previousModel.spacesHistory
 
     def matches(self, model, ignoreContext=False):
         return (self.actionSpace == model.actionSpace and
                 self.outcomeSpace == model.outcomeSpace and
-                (ignoreContext or self.contextSpace == model.contextSpace))
+                (ignoreContext or self.contextSpace == model.contextSpace or (not self.contextSpace and not model.contextSpace)))
 
     def reachesSpaces(self, spaces):
         spaces = self.dataset.convertSpaces(spaces)
@@ -233,7 +249,25 @@ class Model(Serializable):
         return ids
 
     def competence(self, precise=False, onlyIds=None, contextColumns=None):
-        return self.computeCompetence(self.std(precise=precise, onlyIds=onlyIds, contextColumns=contextColumns))
+        c = self.computeCompetence(self.std(precise=precise, onlyIds=onlyIds, contextColumns=contextColumns))
+        if onlyIds is None and contextColumns is None and precise:
+            self._lastCompetence = c
+        return c
+    
+    @property
+    def lastCompetence(self):
+        if self._lastCompetence is None:
+            self._lastCompetence = self.competence(precise=True)
+        return self._lastCompetence
+    
+    @property
+    def duration(self):
+        if self.createdSince == -1:
+            return 0
+        return self.dataset.learner.iteration - self.createdSince
+    
+    def performant(self, competence, duration):
+        return self.lastCompetence >= competence and self.duration >= duration
 
     # def eventError(self, eventId, contextColumns=None):
     #     action = self.actionSpace.getPoint(eventId)[0]
@@ -379,11 +413,12 @@ class Model(Serializable):
         errorOutcome = outcomeEstimated.distanceTo(
             outcome) / (outcome.space.maxDistance if outcome.space.maxDistance != 0 else 1.) + zeroError*0.0
 
-        errorOutcome = min(errorOutcome, 0.5)
+        errorOutcome = min(errorOutcome, 1.)
+
         # if errorOutcome > 0.1:
         #     if context:
         #         context = context.plain()
-        #     print(f'Failed {errorOutcome} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
+        #     print(f'Failed {errorOutcome:.2f} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
         #     print('--- ERROR ---')
         #     print(outcome)
         #     print(outcomeEstimated)

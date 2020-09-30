@@ -16,6 +16,7 @@ from scipy.spatial.distance import euclidean
 from sklearn.neighbors import NearestNeighbors
 
 from exlab.interface.serializer import Serializable
+from exlab.utils.io import parameter
 
 # from dino.utils.io import getVisual, plotData, visualize
 # from dino.utils.logging import Logger
@@ -158,7 +159,7 @@ class Space(Serializable):
         return self.toStr()
 
     def convertTo(self, spaceManager=None, kind=None, toData=None):
-        spaceManager = spaceManager if spaceManager else self.spaceManager
+        spaceManager = parameter(spaceManager, self.spaceManager)
         return spaceManager.convertSpace(self, kind=kind, toData=toData)
 
     @property

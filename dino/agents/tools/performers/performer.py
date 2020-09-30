@@ -160,6 +160,7 @@ class Performer(Module):
                                                     y,
                                                     observationsPrevious.convertTo(kind=SpaceKind.PRE)))
                     observationsPrevious = observations
+                    # print(f'#### {results[-1]}')
 
                 # Check Distance
                 # print('Miaou')

@@ -11,7 +11,6 @@ import time
 from ..agent import Agent
 
 from exlab.utils.io import parameter
-from exlab.modular.module import manage
 
 from dino.utils.move import MoveConfig
 # from ...utils.maths import uniformSampling, iterrange
@@ -39,7 +38,7 @@ class Learner(Agent):
         dataset = parameter(dataset, self.DATASET_CLASS())
         super().__init__(environment, dataset=dataset, performer=performer,
                          planner=planner, options=options)
-        manage(dataset).attach(self)
+        self.dataset.attachLearner(self)
 
         # if self.dataset:
         #     self.addChildModule(self.dataset)
@@ -135,7 +134,6 @@ class Learner(Agent):
                 self.addEvent(event, config)
     
     def _postTest(self, memory, config):
-        print('Done.')
         if not config.evaluating:
             for event in memory:
                 self.addEvent(event, config)
