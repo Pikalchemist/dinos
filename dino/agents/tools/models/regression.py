@@ -521,6 +521,9 @@ class RegressionModel(Model):
                     ycPlain, aPlain, goalContextPlain, columns=columns)
                 a0 = self.actionSpace.action(a0Plain)
 
+                if a0.norm() > self.actionSpace.maxDistance:
+                    continue
+
                 actionCenter = np.mean(aPlain, axis=0)
                 actionCenterDistance = np.mean(
                     np.sum((aPlain - actionCenter) ** 2, axis=1) ** .5)

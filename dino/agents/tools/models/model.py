@@ -42,6 +42,7 @@ class Model(Serializable):
         self.createdSince = -1
         self.lowCompetenceSince = -1
         self.evaluations = {}
+        self.attemptedContextSpaces = {}
 
         # self.amt = AMT()
         self.actionSpace = dataset.multiColSpace(actionSpace)

@@ -20,7 +20,7 @@ class ContextSpatialization(object):
         self.space = space
         self.evaluatedSpace = self.model.contextSpace
         self.boolean = boolean
-        self._resetAreas()
+        self.resetAreas()
     
     @property
     def dataset(self):
@@ -44,13 +44,13 @@ class ContextSpatialization(object):
         self.areas.remove(area)
         self.findAllPointAreas()
     
-    def _resetAreas(self):
+    def resetAreas(self):
         self.areas = []
         self.centers = np.zeros((self.MAX_AREAS, self.space.dim))
         self.stability = 0
     
     def allTrue(self):
-        self._resetAreas()
+        self.resetAreas()
         self._addArea(ContextArea(self, self.space.zero(), np.full(self.evaluatedSpace.dim, True)))
 
     def findArea(self, point):
@@ -124,7 +124,7 @@ class ContextSpatialization(object):
 
             if fullComp < bestFullComp - self.THRESHOLD_RESET * 2:
                 print('Reset all areas!')
-                self._resetAreas()
+                self.resetAreas()
                 area = ContextArea(self, point, columns)
                 self._addArea(area)
 

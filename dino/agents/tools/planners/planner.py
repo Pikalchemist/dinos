@@ -397,9 +397,10 @@ class Planner(Module):
                 # print(euclidean((nearestNode.pos + y0).plain(), goal.plain()))
                 # print(reachable)
 
-                newPos = nearestNode.pos + y0
-                absPos = startPos + newPos
-                dist = euclidean(newPos.plain(), subgoal.plain())
+                if reachable:
+                    newPos = nearestNode.pos + y0
+                    absPos = startPos + newPos
+                    dist = euclidean(newPos.plain(), subgoal.plain())
                 if not reachable or dist > mindist:
                     # Attempt nearest move
                     if dist > mindist:
