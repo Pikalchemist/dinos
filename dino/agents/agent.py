@@ -160,11 +160,14 @@ class Agent(Module):
         return self.host.observeFrom(formatParameters=formatParameters)
     
     def schedule(self, method, *args, **kwargs):
-        def func():
-            method(*args, **kwargs)
-            self.scheduled = None
+        if self.environment.threading:
+            def func():
+                method(*args, **kwargs)
+                self.scheduled = None
 
-        self.scheduled = func
+            self.scheduled = func
+        else:
+            method(*args, **kwargs)
 
     def reach(self, configOrGoal=MoveConfig()):
         if not isinstance(configOrGoal, MoveConfig):

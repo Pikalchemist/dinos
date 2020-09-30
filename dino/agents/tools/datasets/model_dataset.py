@@ -77,6 +77,10 @@ class ModelDataset(Dataset):
         for y in dataset.outcomeSpaces:
             result.outcomeSpaces.append(OutcomeSpace.clone_without_content(y))
         return result'''
+    
+    # Triggered when new data are added
+    def updated(self):
+        self.invalidateCompetences()
 
     # Models
     def model(self, index):
@@ -119,6 +123,10 @@ class ModelDataset(Dataset):
     
     def competences(self, precise=False):
         return {model: model.competence(precise=precise) for model in self.models if model.enabled}
+    
+    def invalidateCompetences(self):
+        for model in self.models:
+            model.invalidateCompetences()
 
     # Graph
     def dependencyGraph(self, models=None):

@@ -64,6 +64,10 @@ class SpaceManager(Module, Serializable):
     @property
     def size(self):
         return len(self.spaces)
+    
+    # Triggered when new data are added
+    def updated(self):
+        pass
 
     # Spaces
     def registerSpace(self, space):

@@ -203,7 +203,6 @@ class Planner(Module):
             if len(ids) == 0:
                 return None, None, 0
             nearestMove = model.outcomeSpace.getPoint(ids)[0]
-            nearestMoveId = ids[0]
 
             # print('----', j)
             # print(move)
@@ -234,7 +233,12 @@ class Planner(Module):
             # model.outcomeSpace.denseEnough(ids, threshold=0.1) or
             if distancesToMove <= model.outcomeSpace.maxDistance * 0.25:
                 break
-        return move, nearestMove, nearestMoveId
+        return move, nearestMove
+    
+    def findClosestMoveWithoutContext(self, subgoal, nearestNode, model):
+        move = subgoal - nearestNode.pos
+        ids, _, _ = model.nearestOutcome(move, n=1)
+        return move, model.outcomeSpace.getPoint(ids)[0], ids[0]
 
     def __plan(self, model, goal, state=None, settings=PlanSettings()):
         self.logger.debug(f'=== New planning (d{settings.depth}) === -> {goal} using {model} with context {state}')
@@ -349,9 +353,9 @@ class Planner(Module):
             self.logger.debug2(
                 f'(d{settings.depth}) Iter {i}: chosen subgoal is {subgoal}(->{subgoaldistant}) (direct={directGoal}) (final goal {goal}) with context {state}')
 
-            move, nearestMove, nearestMoveId = self.findClosestMove(
+            move, nearestMove = self.findClosestMove(
                 subgoal, nearestNode, model, context)
-            
+
             if move is None:
                 print(f'!!!!!!!! {model} {goal} {context}')
                 continue
@@ -426,9 +430,22 @@ class Planner(Module):
                         attemptMove, context=context)
                     # print('REACHAAAAABLE?', reachable, y0, a0)
                     # print('>>>', reachable, nearestMoveHalf, y0, a0)
+                
+                if reachable and subgoal.norm() > 0.01:
+                    if y0.norm() < 0.02:
+                        reachable = False
+                    else:
+                        # diff = (subgoal - y0).norm() / subgoal.norm()
+                        orientation = 1. - subgoal.npPlain().dot(y0.npPlain()) / (subgoal.norm() * y0.norm())
+                        if orientation > 0.4 or y0.norm() < 0.2 * goal.norm() or y0.norm() > 5.0 * goal.norm():
+                            reachable = False
+                            self.logger.debug2(
+                                f'(d{settings.depth}) Iter {i}: we\'re way too far from goal!')
 
             if (settings.forceContextPlanning or not reachable) and model.contextSpace:
-                attemptMove = move
+                attemptMove, nearestMove, nearestMoveId = self.findClosestMoveWithoutContext(
+                    subgoal, nearestNode, model)
+
                 c0 = model.contextSpace.getPoint(nearestMoveId)[0]
                 if settings.forceContextPlanning:
                     self.logger.debug2(

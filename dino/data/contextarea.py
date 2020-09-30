@@ -37,17 +37,20 @@ class ContextSpatialization(object):
         self.centers[len(self.areas), :] = area.center.npPlain()
         self.areas.append(area)
         self.findAllPointAreas()
+        self.model.invalidateCompetences()
 
     def _removeArea(self, area):
         index = self.areas.index(area)
         self.centers[index:-1, :] = self.centers[index+1:, :]
         self.areas.remove(area)
         self.findAllPointAreas()
+        self.model.invalidateCompetences()
     
     def resetAreas(self):
         self.areas = []
         self.centers = np.zeros((self.MAX_AREAS, self.space.dim))
         self.stability = 0
+        self.model.invalidateCompetences()
     
     def allTrue(self):
         self.resetAreas()

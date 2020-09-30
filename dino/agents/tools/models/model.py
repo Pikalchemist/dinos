@@ -37,7 +37,8 @@ class Model(Serializable):
         self.dataset = dataset
         self.enabled = True
 
-        self._lastCompetence = None
+        self.allowCompetenceCaching = True
+        self.invalidateCompetences()
 
         self.createdSince = -1
         self.lowCompetenceSince = -1
@@ -250,16 +251,30 @@ class Model(Serializable):
         return ids
 
     def competence(self, precise=False, onlyIds=None, contextColumns=None):
+        if onlyIds is None and contextColumns is None:
+            if self._lastCompetencePrecise:
+                return self._lastCompetencePrecise
+            elif not precise and self._lastCompetence:
+                return self._lastCompetence
+
         c = self.computeCompetence(self.std(precise=precise, onlyIds=onlyIds, contextColumns=contextColumns))
-        if onlyIds is None and contextColumns is None and precise:
-            self._lastCompetence = c
+
+        if onlyIds is None and contextColumns is None:
+            if precise:
+                self._lastCompetencePrecise = c
+            else:
+                self._lastCompetence = c
         return c
     
-    @property
-    def lastCompetence(self):
-        if self._lastCompetence is None:
-            self._lastCompetence = self.competence(precise=True)
-        return self._lastCompetence
+    def invalidateCompetences(self):
+        self._lastCompetence = None
+        self._lastCompetencePrecise = None
+    
+    # @property
+    # def lastCompetence(self):
+    #     if self._lastCompetence is None:
+    #         self._lastCompetence = self.competence(precise=True)
+    #     return self._lastCompetence
     
     @property
     def duration(self):
@@ -268,7 +283,7 @@ class Model(Serializable):
         return self.dataset.learner.iteration - self.createdSince
     
     def performant(self, competence, duration):
-        return self.lastCompetence >= competence and self.duration >= duration
+        return self.competence(precise=True) >= competence and self.duration >= duration
 
     # def eventError(self, eventId, contextColumns=None):
     #     action = self.actionSpace.getPoint(eventId)[0]

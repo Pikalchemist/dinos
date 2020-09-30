@@ -74,6 +74,7 @@ class Environment(SpaceManager):
         self.options = options
         # self.discrete = options.get('discrete', False)
 
+        self.threading = True
         self.timestep = options.get('timestep', 3.0)  # 2 seconds per action
         # self.unitWindow = options.get("window", 5)  # number of unit
 
@@ -244,9 +245,12 @@ class Environment(SpaceManager):
                         f'{p.space} is not bound to an effector!')
                 effector.perform(p)
         
-            self.scheduledActionCounter += 1
-        if sync:
+            if self.threading:
+                self.scheduledActionCounter += 1
+        if sync and self.threading:
             self.waitNextIteration(agent)
+        else:
+            self.run()
 
         return self.reward(action)
     
@@ -291,17 +295,18 @@ class Environment(SpaceManager):
 
     def run(self, evaluating=False):
         # Will run as long as actions are scheduled
-        for agent, _ in self.scheduledActions().items():
-            agent.syncCounter()
-        threads = [threading.Thread(target=m) for m in self.scheduledActions().values()]
-        for t in threads:
-            t.start()
+        if self.threading:
+            for agent, _ in self.scheduledActions().items():
+                agent.syncCounter()
+            threads = [threading.Thread(target=m) for m in self.scheduledActions().values()]
+            for t in threads:
+                t.start()
 
         # Will count as 1 iteration, even if the duration is different from the timestep setting
         lastTime = time.time()
         try:
             while True:
-                if not self.waitAllScheduledActionsExecuted():
+                if self.threading and not self.waitAllScheduledActionsExecuted():
                     return
                 with self.lock:
                     self._preIteration()
@@ -309,23 +314,28 @@ class Environment(SpaceManager):
                     for host in self.world.hosts():
                         host.scheduledAction = False
 
-                    self.scheduledActionCounter = 0
+                    if self.threading:
+                        self.scheduledActionCounter = 0
                     if not evaluating:
                         manage(self).counter.next_iteration()
-                    for agent in self.agents():
-                        agent.iterationEvent.set()
+                    if self.threading:
+                        for agent in self.agents():
+                            agent.iterationEvent.set()
                 if not evaluating:
                     self.timeByIteration.append(time.time() - lastTime)
                     lastTime = time.time()
+                if not self.threading:
+                    return
         except KeyboardInterrupt:
-            self.logger.error('KeyboardInterrupt! Killing all threads')
-            self.terminateThreads = True
-            for agent in self.agents():
-                agent.iterationEvent.set()
-            for t in threads:
-                t.join()
-            self.terminateThreads = False
-            self.logger.info('All threads terminated')
+            if self.threading:
+                self.logger.error('KeyboardInterrupt! Killing all threads')
+                self.terminateThreads = True
+                for agent in self.agents():
+                    agent.iterationEvent.set()
+                for t in threads:
+                    t.join()
+                self.terminateThreads = False
+                self.logger.info('All threads terminated')
 
     # Wrappers
     def image(self):
