@@ -23,6 +23,10 @@ class MultiColSpace(Space):
         # Hook when spaces are modified and this one has to be recomputed
         for space in self.spaces:
             space.childrenSpaces.append(self)
+        
+        rowAggregations = [space.rowAggregation for space in self.spaces]
+        self.incoherentRowsAlignement = np.sum(
+            rowAggregations) != 0 and np.sum(rowAggregations) < len(rowAggregations)
 
     @staticmethod
     def create(spaces, spaceManager=None):
@@ -206,6 +210,11 @@ class MultiRowDataSpace(DataSpace):
         if short:
             return f"({spaces})({self.dim})@⛁"
         return f"@⛁({spaces})({self.dim})"
+    
+    def applyTo(self, entity):
+        if not entity:
+            return self
+        return next(iter([row for row in self.rows if row.matchesEntity(entity)]), self)
 
     # @property
     # def colSpaces(self):
@@ -228,11 +237,11 @@ class MultiRowDataSpace(DataSpace):
         return self.spaces
 
     @property
-    def colsType(self):
+    def baseCols(self):
         return [self.spaces[0]]
 
     @property
-    def rowsType(self):
+    def baseRows(self):
         return self.spaces
 
     @property

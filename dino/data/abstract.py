@@ -1,8 +1,17 @@
+from enum import Enum
+
 from .space import SpaceKind
+
+
+class AMTElementKind(Enum):
+    NONE = 'none'
+    ENTITY = 'entity'
+    PROPERTY = 'property'
 
 
 class AMTBase(object):
     NAME = 'Base'
+    KIND = AMTElementKind.NONE
 
     def __init__(self, context, parent=None, element=None):
         self.context = context
@@ -38,12 +47,12 @@ class AMTBase(object):
     #         parent.addChild(self)
 
     # Visitor
-    def abstractElements(self):
+    def abstractedElements(self, kind=None):
         elements = set()
-        if self.abstract and self.element:
+        if self.abstract and self.element and (not kind or self.KIND.value == kind.value):
             elements.add(self.element)
         elements |= set(
-            e for child in self.children for e in child.abstractElements())
+            e for child in self.children for e in child.abstractedElements())
         return elements
 
     def assignableElements(self):
@@ -53,6 +62,19 @@ class AMTBase(object):
         if self.abstract and self.element:
             assignables[self.element] = set(self.element.assignables)
         return assignables
+    
+    def abstractedEntities(self):
+        return self.abstractedElements(kind=AMTElementKind.ENTITY)
+
+    def abstractedEntityProperties(self):
+        elements = {}
+        if self.element and self.KIND.value == AMTElementKind.PROPERTY.value and list(self.children)[0].abstract:
+            entity = list(self.children)[0].element
+            elements[entity] = elements.get(entity, set()) | set([self.element])
+        for child in self.children:
+            for entity, childElements in child.abstractedEntityProperties().items():
+                elements[entity] = elements.get(entity, set()) | childElements
+        return elements
 
     def assign(self, element, value):
         tree = self.copy()
@@ -161,7 +183,7 @@ class AMT(AMTBase):
                 pass
         else:
             expr = self.multicol(
-                *[self.abstractSpace(s, abstractNewElements=abstractNewElements) for s in space.flatCols])
+                *[self.abstractSpace(s, abstractNewElements=abstractNewElements) for s in space.flatColsWithoutMultiRows])
         if appendToChildren:
             self.addChild(expr)
         return expr
@@ -212,6 +234,7 @@ class AMTElementLinked(AMTBase):
 
 class AMTEntity(AMTElementLinked):
     NAME = 'Entity'
+    KIND = AMTElementKind.ENTITY
 
     def __init__(self, context, entity=None, element=None):
         super().__init__(context, element=element, assigned=entity)
@@ -232,6 +255,7 @@ class AMTEntity(AMTElementLinked):
 
 class AMTProperty(AMTElementLinked):
     NAME = 'Property'
+    KIND = AMTElementKind.PROPERTY
 
     def __init__(self, context, entity, propertyName=None, element=None, kind=SpaceKind.BASIC):
         super().__init__(context, element=element, assigned=propertyName)
@@ -248,7 +272,7 @@ class AMTProperty(AMTElementLinked):
     def get(self, spaceManager):
         if len(self.element.assignables) == 0:
             raise Exception(
-                f'{self.element} has no possible assignable values!)
+                f'{self.element} has no possible assignable values!')
 
         if self.context.sameRowsSpaces:
             allAssignables = self.context.assignableElements()
@@ -274,7 +298,8 @@ class AMTProperty(AMTElementLinked):
 
     @staticmethod
     def _namePattern(obj, index):
-        return f'({chr(ord('a') + index)})'
+        n = chr(ord('a') + index)
+        return f'({n})'
 
     def _fullnamePattern(self, name):
         return f'{self.entity.name()}.{name}'
@@ -282,8 +307,8 @@ class AMTProperty(AMTElementLinked):
 
 class AMTElement(object):
     def __init__(self, context, cls, assigned=None):
-        if assigned:
-            name = repr(assigned)
+        # if assigned:
+        #     name = repr(assigned)
         self.context = context
         self.cls = cls
         self.assignables = set()

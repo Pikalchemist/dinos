@@ -39,6 +39,7 @@ class DataSpace(Space):
         self.actions = []
 
         self.continuous = True  # ids == lids
+        self.incoherentRowsAlignement = False
 
     def icon(self):
         return '@☰'

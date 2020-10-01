@@ -30,9 +30,9 @@ class RegressionModel(Model):
     MAXIMUM_NULL = 5
 
     def __init__(self, dataset, actionSpace, outcomeSpace, contextSpace=[], restrictionIds=None, model=None,
-                 register=True):
+                 register=True, metaData={}):
         super().__init__(dataset, actionSpace, outcomeSpace,
-                         contextSpace, restrictionIds, model, register)
+                         contextSpace, restrictionIds, model, register, metaData)
 
     def computeCompetence(self, error, distanceGoal=0):
         distanceGoal = min(distanceGoal, 1.)
@@ -82,13 +82,14 @@ class RegressionModel(Model):
             # print(goal)
             return False, None, None
 
-    def inverse(self, goal: Goal, context: Observation = None, adaptContext=False, contextColumns=None):
+    def inverse(self, goal: Goal, context: Observation = None, adaptContext=False, contextColumns=None, entity=None):
         assert(goal is not None)
         a0, y0, c0, comp, error, distance = self.bestLocality(
-            goal, context, adaptContext=adaptContext, contextColumns=contextColumns)[:6]
+            goal, context, adaptContext=adaptContext, contextColumns=contextColumns, entity=entity)[:6]
         return a0, y0, c0, comp, error, distance  # , dist, distNormalized
 
-    def npForward(self, action: Action, context: Observation = None, bestContext=True, contextColumns=None, ignoreFirst=False, debug=False):
+    def npForward(self, action: Action, context: Observation = None, bestContext=True, contextColumns=None,
+                  ignoreFirst=False, entity=None, debug=False):
         assert(action is not None)
         # contextColumns = self.contextColumns(contextColumns, )
         # import pylab as plt
@@ -134,7 +135,8 @@ class RegressionModel(Model):
         #                                                   otherSpace=self.outcomeContextSpace)
 
         results = self._nearestData(
-            action, context, self.NN_LOCALITY, bestContext, outcome=False, contextColumns=contextColumns, nearestUseContext=True, ignoreFirst=ignoreFirst)
+            action, context, self.NN_LOCALITY, bestContext, outcome=False, contextColumns=contextColumns,
+            nearestUseContext=True, ignoreFirst=ignoreFirst, entity=entity)
         ids, dist, context, restrictionIds, space, action, actionPlain, actionContext, actionContextPlain = results
 
         # if debug:
@@ -159,7 +161,7 @@ class RegressionModel(Model):
 
         return multivariateRegressionError(x, y, actionContextPlain, columns=self.multiContextColumns(contextColumns, space))
 
-    def adaptContext(self, goal, context=None, relative=True, contextColumns=None):
+    def adaptContext(self, goal, context=None, relative=True, contextColumns=None, entity=None):
         if not context or not self.hasContext(self.contextSpace, contextColumns):
             return None
 
@@ -210,7 +212,7 @@ class RegressionModel(Model):
         print(self.outcomeSpace.getPoint(index)[0])
 
         # merge
-        nonControllable = context.projection(self.nonControllableContext())
+        nonControllable = context.projection(self.nonControllableContext(), entity=entity)
         c0 = c0controllable.extends(nonControllable)
 
         if relative:
@@ -223,9 +225,15 @@ class RegressionModel(Model):
         return self._nearestData(goal, context, n, bestContext, adaptContext, outcome=True, nearestUseContext=nearestUseContext,
             contextColumns=contextColumns)[:3]
 
-    def _nearestData(self, goal, context=None, n=1, bestContext=True, adaptContext=False, outcome=True, nearestUseContext=True, contextColumns=None, ignoreFirst=False):
+    def _nearestData(self, goal, context=None, n=1, bestContext=True, adaptContext=False, outcome=True,
+                     nearestUseContext=True, contextColumns=None, ignoreFirst=False, entity=None):
         self.outcomeSpace._validate()
         self.actionSpace._validate()
+        if self.contextSpace:
+            self.contextSpace._validate()
+            self.outcomeContextSpace._validate()
+            self.actionContextSpace._validate()
+
         if not self.hasContext(self.contextSpace, contextColumns):
             context = None
         if context:
@@ -246,7 +254,7 @@ class RegressionModel(Model):
         goalPlain = Data.npPlainData(goal, goalSpace)
         space = goalContextSpace if context else goalSpace
         context = context.convertTo(self.dataset, kind=SpaceKind.PRE).projection(
-            self.contextSpace) if context else None
+            self.contextSpace, entity=entity) if context else None
         goalContext = goal.extends(context)
         goalContextPlain = Data.plainData(goalContext, space)
 
@@ -361,11 +369,13 @@ class RegressionModel(Model):
 
         return ids, dist, context, restrictionIds, space, goal, goalPlain, goalContext, goalContextPlain
 
-    def bestLocality(self, goal: Goal, context: Observation = None, getClosestOutcome=False, bestContext=True, adaptContext=False, contextColumns=None):
+    def bestLocality(self, goal: Goal, context: Observation = None, getClosestOutcome=False, bestContext=True,
+                     adaptContext=False, contextColumns=None, entity=None):
         """Compute most stable local action-outcome model around goal outcome."""
         contextColumns = self.contextColumns(contextColumns, goal, context)
         if not self.hasContext(self.contextSpace, contextColumns):
             context = None
+
         # self.outcomeSpace._validate()
         # self.actionSpace._validate()
         # if context:
@@ -417,7 +427,7 @@ class RegressionModel(Model):
         #                                              otherSpace=self.actionSpace)
 
         results = self._nearestData(
-            goal, context, self.NN_LOCALITY, bestContext, adaptContext, outcome=True, contextColumns=contextColumns)
+            goal, context, self.NN_LOCALITY, bestContext, adaptContext, outcome=True, contextColumns=contextColumns, entity=entity)
         ids, dist, context, restrictionIds, space, goal, goalPlain, goalContext, goalContextPlain = results
 
         minPointsY = 5

@@ -88,7 +88,7 @@ class SpaceManager(Module, Serializable):
         kind = parameter(kind, space.kind)
 
         relatedSpace = next(iter([s for s in self.spaces if s.linkedTo(
-            space) and s.kind == kind]), None)
+            space) and s.kind.value == kind.value]), None)
         if relatedSpace is not None:
             return relatedSpace
 
@@ -104,13 +104,16 @@ class SpaceManager(Module, Serializable):
         return data.convertTo(self, kind=kind, toData=toData)
 
     # Multi Spaces
-    def _multiSpace(self, spaces, list_, type_):
+    def _multiSpace(self, spaces, list_, type_, orderWise=False):
         # Only 1 space -> return the space itself
         if len(spaces) == 1:
             return spaces[0]
 
         # Look for exisiting multi space
-        r = [s for s in list_ if set(s.spaces) == set(spaces)]
+        if orderWise:
+            r = [s for s in list_ if s.spaces == spaces]
+        else:
+            r = [s for s in list_ if set(s.spaces) == set(spaces)]
         if len(r) == 0:
             s = type_(self, spaces)
             list_.append(s)
@@ -118,8 +121,8 @@ class SpaceManager(Module, Serializable):
         else:
             return r[0]
 
-    def _multiSpaceWeighted(self, spaces, list_, type_, weight=None):
-        space = self._multiSpace(spaces, list_, type_)
+    def _multiSpaceWeighted(self, spaces, list_, type_, weight=None, orderWise=False):
+        space = self._multiSpace(spaces, list_, type_, orderWise=orderWise)
 
         if weight:
             space.clearSpaceWeight()
@@ -151,23 +154,24 @@ class SpaceManager(Module, Serializable):
 
     def multiRowSpace(self, spaces, canStoreData=None):
         # spaces = list(set([subSpace for space in spaces for subSpace in space]))
-        spaces = list(set([space for space in spaces if space is not None]))
+        # spaces = list(set([space for space in spaces if space is not None]))
+        spaces = [space for space in spaces if space is not None]
 
         if not spaces:
             return
         if len(spaces) == 1:
             return spaces[0]
 
-        return self._multiSpaceWeighted(spaces, list_=self.multiRowSpaces, type_=MultiRowDataSpace)
+        return self._multiSpaceWeighted(spaces, list_=self.multiRowSpaces, type_=MultiRowDataSpace, orderWise=True)
 
     # List Spaces
     def space(self, index_name, kind=SpaceKind.BASIC):
-        return next(s for s in self.spaces if (s.name == index_name and (s.kind == kind or s.native == s))
+        return next(s for s in self.spaces if (s.name == index_name and (s.kind.value == kind.value or s.native == s))
                     or s.id == index_name)
 
     def spaceSearch(self, property=None, kind=SpaceKind.BASIC):
         if property:
-            return ([s for s in self.spaces if s.boundProperty == property and s.kind == kind] + [None])[0]
+            return next(iter([s for s in self.spaces if s.boundProperty == property and s.kind.value == kind.value]), None)
         return None
 
     def getActionSpaces(self, spaces):
@@ -178,11 +182,11 @@ class SpaceManager(Module, Serializable):
                 and not s.noaction]
 
     def getActionPrimitiveSpaces(self, spaces):
-        return [s for s in spaces if s.primitive() and s.kind == SpaceKind.BASIC and not s.noaction]
+        return [s for s in spaces if s.primitive() and s.kind.value == SpaceKind.BASIC.value and not s.noaction]
 
     def getOutcomeSpaces(self, spaces):
         return [s for s in spaces if s.observable()
-                and s.kind == SpaceKind.BASIC]
+                and s.kind.value == SpaceKind.BASIC.value]
 
     # Data
     def addEvent(self, event, cost=1.):

@@ -1,6 +1,8 @@
 import numpy as np
 from pymunk import Vec2d
 
+import random
+
 from dino.environments.scene import SceneSetup
 from dino.evaluation.tests import UniformGridTest
 
@@ -18,11 +20,14 @@ class EmptyRoomScene(SceneSetup):
     def _setup(self):
         self.iterationReset = 0
 
-        # self.cylinder = Cylinder((200, 400))
-        self.world.addChild(Agent((300, 300), name='Agent'))
-        self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
-        # self.world.addChild(Cylinder((500, 300), name='Cylinder2'))
         # Add agent
+        self.world.addChild(Agent((300, 300), name='Agent'))
+
+        # Add cylinders
+        self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
+        self.world.addChild(Cylinder((500, 300), name='Cylinder2', color=(128, 224, 0)))
+    
+
         # self.agent = Agent((200, 400), radius=30, name='agent',
         #                    omni=True, xydiscretization=self.world.xydiscretization)
         # self.world.addEntity(self.agent)
@@ -49,8 +54,19 @@ class EmptyRoomScene(SceneSetup):
         if self.iterationReset >= self.RESET_ITERATIONS:
             self.iterationReset = 0
             self.world.child('Agent').body.position = (300, 300)
-            pos = self.world.child('Agent').body.position
-            self.world.child('#Cylinder1').body.position = pos + Vec2d(40. + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
+
+            if self.world.child('#Cylinder1'):
+                pos = self.world.child('Agent').body.position
+
+                obj = self.world.child('#Cylinder1').body
+                if self.world.child('#Cylinder2'):
+                    if random.uniform(0, 1) < 0.5:
+                        obj2 = obj
+                        obj = self.world.child('#Cylinder2').body
+                    else:
+                        obj2 = self.world.child('#Cylinder2').body
+                    obj2.position = pos + Vec2d(200. + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
+                obj.position = pos + Vec2d(40. + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
 
     def setupIteration(self, config):
         pass

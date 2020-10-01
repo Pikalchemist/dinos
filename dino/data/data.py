@@ -156,27 +156,41 @@ class Data(Serializable):
         return np.array(self.plain())
 
     # Projections
-    def singleSpaceComposante(self, singleSpace):
+    def singleSpaceComposante(self, singleSpace, entity=None):
         flatten = self.flat()
-        pm = ([d for d in flatten if d.space == singleSpace] + [Data()])[0]
-        if not pm and singleSpace.rowAggregation:
-            for possibility in singleSpace.rows:
-                spaces = possibility.flatColsWithMultiRows
-                projection = [self.singleSpaceComposante(s) for s in spaces]
-                projection = [p for p in projection if p != Data()]
-                if len(spaces) == len(projection):
-                    return self.__class__._vectorClass_(singleSpace, [v for p in projection for v in p.valueOrdered])
+        # print(flatten)
+        pm = next(iter([part for part in flatten if part.space.findMatchingSpaceRows(
+            singleSpace, idSensitive=True, entity=entity)]), Data())
         if not pm:
-            pm = ([d for d in flatten if d.space.native == singleSpace.native and d.space.kind == singleSpace.kind]
-                  + [Data()])[0]
+            pm = next(iter([part for part in flatten if part.space.findMatchingSpaceRows(
+                singleSpace, entity=entity)]), Data())
         if not pm:
-            pm = ([d for d in flatten if d.space.native ==
-                   singleSpace.native] + [Data()])[0]
-
+            pm = next(iter([part for part in flatten if part.space.findMatchingSpaceRows(
+                singleSpace, kindSensitive=False, entity=entity)]), Data())
+        pm = pm.applyTo(entity)
         return pm
+        # pm = next(iter([d for d in flatten if d.space.matches(singleSpace, dataSensitive=True)]), Data())
+        # # print(self)
+        # # print(flatten)
+        # # print(pm)
+        # if not pm and singleSpace.rowAggregation:
+        #     for possibility in singleSpace.rows:
+        #         spaces = possibility.flatColsWithMultiRows
+        #         projection = [self.singleSpaceComposante(s) for s in spaces]
+        #         projection = [p for p in projection if p != Data()]
+        #         if len(spaces) == len(projection):
+        #             return SingleData(singleSpace, [v for p in projection for v in p.valueOrdered])
+        # if not pm:
+        #     pm = ([d for d in flatten if d.space.native == singleSpace.native and d.space.kind.value == singleSpace.kind.value]
+        #           + [Data()])[0]
+        # if not pm:
+        #     pm = ([d for d in flatten if d.space.native ==
+        #            singleSpace.native] + [Data()])[0]
 
-    def projection(self, space, allowAbstraction=True):
-        parts = [self.singleSpaceComposante(s)
+        # return pm
+
+    def projection(self, space, allowAbstraction=True, entity=None):
+        parts = [self.singleSpaceComposante(s, entity=entity)
                  for s in space.flatColsWithMultiRows]
         # if self.abstract:
         #     parts = [self.singleSpaceComposante(s) for s in space.flatColsWithMultiRows]
@@ -195,21 +209,20 @@ class Data(Serializable):
         return self.__class__._vectorClass_(*[p for p in parts if p != Data()])
 
     # Entity
-    def _findSpaceEntity(self, space, entity):
-        if not space.rowAggregation:
-            return self.singleSpaceComposante(space)
-        parts = [[p for p in possibility if p.boundProperty.entity == entity]
-                 for possibility in space.groupedCols[0]]
-        part = [
-            possibility for group in parts for possibility in group if possibility][0]
-        return self.__class__._vectorClass_(part, np.array(self.valueOrdered)[self.space.columnsFor(space)])
+    # def _findSpaceEntity(self, space, entity):
+    #     if not space.rowAggregation:
+    #         return self.singleSpaceComposante(space)
+    #     parts = [[p for p in possibility if p.boundProperty.entity == entity]
+    #              for possibility in space.groupedCols[0]]
+    #     part = [
+    #         possibility for group in parts for possibility in group if possibility][0]
+    #     return self.__class__._vectorClass_(part, np.array(self.valueOrdered)[self.space.columnsFor(space)])
 
     def applyTo(self, entity):
         # TODO: can only be applied to one entity abstraction, needs to be extended
-        if not self.abstract:
-            return self
-        parts = [self._findSpaceEntity(s, entity)
-                 for s in self.space.flatColsWithMultiRows]
+        # if not self.abstract:
+        #     return self
+        parts = [part.applyTo(entity) for part in self]
         return self.__class__._vectorClass_(*parts)
 
     # Changing data
@@ -315,8 +328,8 @@ class SingleData(Data):
 
     def __add__(self, other):
         if other.space is None:
-            raise ValueError('Spaces should be the same for both data')
-        if not self.space.matches(other.space, kindSensitive=False):
+            raise ValueError('Cannot add data with none data')
+        if not self.space.matches(other.space, kindSensitive=False, rowMatching=True):
             raise ValueError(f'Spaces (or native spaces) should be the same for both data (first is in {self.space.name} and second is in {other.space.name})')
         d = self.__class__(
             self.space, [v1 + v2 for v1, v2 in zip(self.value, other.value)])
@@ -325,8 +338,8 @@ class SingleData(Data):
 
     def __sub__(self, other):
         if other.space is None:
-            raise ValueError('Spaces should be the same for both data')
-        if not self.space.matches(other.space, kindSensitive=False):
+            raise ValueError('Cannot add data with none data')
+        if not self.space.matches(other.space, kindSensitive=False, rowMatching=True):
             raise ValueError(f'Spaces (or native spaces) should be the same for both data (first is in {self.space.name} and second is in {other.space.name})')
         d = self.__class__(
             self.space, [v1 - v2 for v1, v2 in zip(self.value, other.value)])
@@ -374,6 +387,14 @@ class SingleData(Data):
         spaceManager = spaceManager if spaceManager else self.space.spaceManager
         return self.__class__(spaceManager.convertSpace(self.space, kind=kind, toData=toData),
                               self.value).setRelative(self.relative)
+    
+    def applyTo(self, entity):
+        if not entity:
+            return self
+        row = self.space.applyTo(entity)
+        if not row:
+            return self
+        return self.__class__(row, self.value).setRelative(self.relative)
 
     def toStr(self, short=False):
         ls = ', '.join(["{: .3f}".format(v) for v in self.value])

@@ -306,7 +306,7 @@ class Planner(Module):
                 # space.goal([random.uniform(minrand, maxrand) for x in range(space.dim)])
 
                 if lastInvalids:
-                    while True:
+                    for _ in range(50):
                         invalids = np.array(lastInvalids)
                         dists = np.sum((invalids - subgoaldistant.npPlain()) ** 2, axis=1) ** 0.5
                         if not np.any(dists < invalidPointRatioLimit * space.maxDistance):

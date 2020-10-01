@@ -30,7 +30,7 @@ class Model(Serializable):
     ALMOST_ZERO_FACTOR = 0.002
 
     def __init__(self, dataset, actionSpace, outcomeSpace, contextSpace=[], restrictionIds=None, model=None,
-                 register=True):
+                 register=True, metaData={}):
         self.id = Model.number
         Model.number += 1
 
@@ -45,6 +45,8 @@ class Model(Serializable):
         self.evaluations = {}
         self.attemptedContextSpaces = {}
 
+        self.restrictionIds = restrictionIds
+
         # self.amt = AMT()
         self.actionSpace = dataset.multiColSpace(actionSpace)
         self.outcomeSpace = dataset.multiColSpace(outcomeSpace)
@@ -55,9 +57,6 @@ class Model(Serializable):
             [self.actionSpace, self.contextSpace], weight=0.5)
         self.outcomeContextSpace = dataset.multiColSpace(
             [self.outcomeSpace, self.contextSpace], weight=0.5)
-
-        self.restrictionIds = restrictionIds
-        # self.savedRestrictionIds = None
 
         self.contextSpacialization = None
         if self.contextSpace:
@@ -70,7 +69,7 @@ class Model(Serializable):
 
     def __repr__(self):
         disabled = '❌' if not self.enabled else ''
-        return f'{disabled}Model({self.actionSpace} | {self.contextSpace} => {self.outcomeSpace})'
+        return f'{disabled}Model{self.__class__.__name__}({self.actionSpace} | {self.contextSpace} => {self.outcomeSpace})'
 
     def _serialize(self, serializer):
         dict_ = {}
@@ -151,6 +150,9 @@ class Model(Serializable):
 
         # previousModel.spacesHistory.extend(self.spacesHistory)
         # self.spacesHistory = previousModel.spacesHistory
+    
+    def metaData(self):
+        return None
 
     def matches(self, model, ignoreContext=False):
         return (self.actionSpace == model.actionSpace and
@@ -213,23 +215,23 @@ class Model(Serializable):
     def nonControllableContext(self):
         return self.dataset.nonControllableSpaces(self.contextSpace, merge=True)
 
-    def forward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False):
-        value, error = self.npForward(action, context, contextColumns=contextColumns, ignoreFirst=ignoreFirst)
+    def forward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False, entity=None):
+        value, error = self.npForward(action, context, contextColumns=contextColumns, ignoreFirst=ignoreFirst, entity=entity)
         if value is None or np.isnan(np.sum(value)):
             return None, 1
-        return Data(self.outcomeSpace, value.tolist()), error
+        return Data(self.outcomeSpace.applyTo(entity), value.tolist()), error
 
     def computeCompetence(self, error, distanceGoal=0):
         distanceGoal = min(distanceGoal, 1.)
         return max(0, min(1, (1. - distanceGoal - error) / np.exp((error * 4.15) ** 3)))
 
-    def npForward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False):
+    def npForward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False, entity=None):
         raise NotImplementedError()
 
-    def inverse(self, goal: Goal, context: Observation = None, contextColumns=None):
+    def inverse(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None):
         raise NotImplementedError()
 
-    def bestLocality(self, goal: Goal, context: Observation = None, contextColumns=None):
+    def bestLocality(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None):
         raise NotImplementedError()
 
     def goalCompetenceError(self, goal: Goal, context: Observation = None, contextColumns=None):
@@ -322,6 +324,7 @@ class Model(Serializable):
                 data=data, context=context, precise=precise, contextColumns=contextColumns)
         # (('Forward', errors[:, 0]), ('Inverse', errors[:, 1]))
         errorsList = (('Forward', errors),)
+        print(len(errors))
         # for name, errors in errorsList:
         #     print(name)
         #     print('85th percentile: {}'.format(np.percentile(errors, 85)))
@@ -431,10 +434,10 @@ class Model(Serializable):
 
         errorOutcome = min(errorOutcome, 1.)
 
-        # if errorOutcome > 0.1:
-        #     if context:
-        #         context = context.plain()
-        #     print(f'Failed {errorOutcome:.2f} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
+        if errorOutcome > 0.1:
+            if context:
+                context = context.plain()
+            print(f'Failed {errorOutcome:.2f} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
         #     print('--- ERROR ---')
         #     print(outcome)
         #     print(outcomeEstimated)

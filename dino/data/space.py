@@ -93,40 +93,60 @@ class Space(Serializable):
         # dict_ = Serializer.serialize(self, ['id', 'kind', 'options', 'native'], options=options)
         return dict_
 
-    @classmethod
-    def _deserialize(cls, dict_, spaceManager, options=None, obj=None):
-        # Setting gamma
-        # deprecated
-        options = dict_.get('options', {})
-        if 'gamma' in options.keys():
-            cls.gamma = options['gamma']
+    # @classmethod
+    # def _deserialize(cls, dict_, spaceManager, options=None, obj=None):
+    #     # Setting gamma
+    #     # deprecated
+    #     options = dict_.get('options', {})
+    #     if 'gamma' in options.keys():
+    #         cls.gamma = options['gamma']
 
-        # Creating object
-        spaces = None
-        obj = obj if obj else cls(spaceManager, dict_.get('dimension', 1), dict_.get('options', {}),
-                                  native=dict_.get('native'), kind=dict_.get('kind', SpaceKind.BASIC),
-                                  spaces=spaces)
+    #     # Creating object
+    #     spaces = None
+    #     obj = obj if obj else cls(spaceManager, dict_.get('dimension', 1), dict_.get('options', {}),
+    #                               native=dict_.get('native'), kind=dict_.get('kind', SpaceKind.BASIC),
+    #                               spaces=spaces)
 
-        # Operations
-        # Loading results
-        # if options.get('loadResults') and dict_.get('_number', -1) >= 0:
-        #     obj.id = dict_.get('id', -1)  # TODO check for id collision id:21
-        #     obj._number = dict_.get('_number', 0)
-        #     obj.actions = dict_.get('actions', obj.actions)
-        #     obj.data = dict_.get('data', obj.data)
-        #     obj.costs = dict_.get('costs', obj.costs)
-        #     obj.ids = dict_.get('ids', obj.ids)
-        #     obj.lids = dict_.get('lids', obj.lids)
-        return obj
+    #     # Operations
+    #     # Loading results
+    #     # if options.get('loadResults') and dict_.get('_number', -1) >= 0:
+    #     #     obj.id = dict_.get('id', -1)  # TODO check for id collision id:21
+    #     #     obj._number = dict_.get('_number', 0)
+    #     #     obj.actions = dict_.get('actions', obj.actions)
+    #     #     obj.data = dict_.get('data', obj.data)
+    #     #     obj.costs = dict_.get('costs', obj.costs)
+    #     #     obj.ids = dict_.get('ids', obj.ids)
+    #     #     obj.lids = dict_.get('lids', obj.lids)
+    #     return obj
 
-    def boundedProperty(self):
+    # Properties
+    def nativeRoot(self):
+        if self.native == self:
+            return self
+        return self.native.nativeRoot()
+    
+    @property
+    def boundProperty(self):
         if self._property:
-            return f"→{self._property}"
-        elif self.boundProperty:
-            return f"↝{self.boundProperty}"
-        else:
-            return "↛"
+            return self._property
+        return self.nativeRoot()._property
+    
+    def observable(self):
+        if self.boundProperty is None or self.null():
+            return False
+        return self.boundProperty.observable()
 
+    def controllable(self):
+        return True
+
+    def primitive(self):
+        if self.boundProperty is None or self.null():
+            return False
+        return self.boundProperty.controllable()
+    
+    def canStoreData(self):
+        return False
+    
     @property
     def learnable(self):
         prop = self.boundProperty
@@ -135,33 +155,20 @@ class Space(Serializable):
         return False
 
     @property
-    def name(self):
-        return self.boundProperty.absoluteName if self.boundProperty else None
+    def relative(self):
+        return self.nativeRoot()._relative
 
-    def icon(self):
-        return '@'
+    @property
+    def modulo(self):
+        return self.nativeRoot()._modulo
 
-    def colStr(self):
-        return self.boundedProperty()
+    def null(self):
+        return not self.spaces
+    
+    def __bool__(self):
+        return not self.null()
 
-    def toStr(self, short=False):
-        if not self.spaces:
-            return '@NullSpace'
-        absName = f'#{self.name}' if self.name else ''
-        suffix = '' if self.kind == SpaceKind.BASIC else f':{self.kind.value.upper()}'
-        if short == 2:
-            return f"{self.boundedProperty()}"
-        if short:
-            return f"#{self.id}{absName}{self.colStr()}{suffix}↕{self.dim} {self.icon()}"
-        return f"{self.icon()}#{self.id}{absName}{self.colStr()}{suffix}↕{self.dim}"
-
-    def __repr__(self):
-        return self.toStr()
-
-    def convertTo(self, spaceManager=None, kind=None, toData=None):
-        spaceManager = parameter(spaceManager, self.spaceManager)
-        return spaceManager.convertSpace(self, kind=kind, toData=toData)
-
+    # Attributes
     @property
     def cols(self):
         return self.spaces
@@ -171,20 +178,20 @@ class Space(Serializable):
         return [self]
 
     @property
-    def colsType(self):
+    def baseCols(self):
         return self.spaces
 
     @property
-    def rowsType(self):
+    def baseRows(self):
         return [self.spaces[0]]
 
     @property
-    def flatCols(self):
+    def flatColsWithoutMultiRows(self):
         # if not self.spaces:
         #     return []
         if not self.aggregation:
-            return self.cols
-        return [colSpace for space in self.colsType for colSpace in space.flatCols]
+            return self.baseCols
+        return [colSpace for space in self.baseCols for colSpace in space.flatColsWithoutMultiRows]
 
     @property
     def flatColsWithMultiRows(self):
@@ -202,7 +209,7 @@ class Space(Serializable):
     def groupedCols(self):
         if not self.aggregation:
             return [([self],)]
-        return [colSpace for space in self.colsType for colSpace in space.groupedCols]
+        return [colSpace for space in self.baseCols for colSpace in space.groupedCols]
 
     # @property
     # # List all col-stacked (Vertical Stack) spaces in the current space
@@ -234,65 +241,44 @@ class Space(Serializable):
                 colIds += range(pos, pos + s.dim)
             pos += s.dim
         return colIds
+    
+    def findMatchingSpaceRows(self, other, kindSensitive=True, idSensitive=False, entity=None):
+        # print(self.flatColsWithMultiRows)
+        # print(self.flatColsWithoutMultiRows)
+        # print(other.flatColsWithMultiRows)
+        # print(other.flatColsWithoutMultiRows)
+        for row in self.rows:
+            for otherRow in other.rows:
+                if row.matches(otherRow, kindSensitive=kindSensitive, idSensitive=idSensitive, entity=entity):
+                    return (row, otherRow)
+        return None
 
-    def nativeRoot(self):
-        if self.native == self:
-            return self
-        return self.native.nativeRoot()
-
-    def matches(self, other, kindSensitive=True, dataSensitive=False):
-        if kindSensitive and self.kind != other.kind:
+    def matches(self, other, kindSensitive=True, dataSensitive=False, idSensitive=False, rowMatching=False, entity=None):
+        if entity and (not self.matchesEntity(entity) or not other.matchesEntity(entity)):
+            return False
+        if kindSensitive and self.kind.value != other.kind.value:
             return False
         if dataSensitive and self.canStoreData != other.canStoreData:
             return False
+        if idSensitive and self != other:
+            return False
+        if rowMatching and self.findMatchingSpaceRows(other, kindSensitive=kindSensitive, idSensitive=idSensitive):
+            return True
         return self.nativeRoot() == other.nativeRoot()
-
-    def canStoreData(self):
-        return False
-
-    @property
-    def boundProperty(self):
-        if self._property:
-            return self._property
-        return self.nativeRoot()._property
-
-    @property
-    def relative(self):
-        return self.nativeRoot()._relative
-
-    @property
-    def modulo(self):
-        return self.nativeRoot()._modulo
-
-    def null(self):
-        return not self.spaces
-
-    def observable(self):
-        if self.boundProperty is None or self.null():
-            return False
-        return self.boundProperty.observable()
-
-    def controllable(self):
-        return True
-
-    def primitive(self):
-        if self.boundProperty is None or self.null():
-            return False
-        return self.boundProperty.controllable()
 
     def linkedTo(self, otherSpace):
         return self.nativeRoot() == otherSpace.nativeRoot()
+    
+    def intersects(self, space):
+        if isinstance(space, list):
+            space = set([sp for s in space for sp in s.flatSpaces])
+        else:
+            space = set(space.flatSpaces)
+        return set(self.flatSpaces).intersection(space)
 
     # Multi
     def __iter__(self):
-        return self.colsType.__iter__()
-
-    # Deprecated
-    def iterate(self):
-        return self.colsType
-
-    def __bool__(self):
-        return len(self.spaces) > 0
+        return self.baseCols.__iter__()
 
     # Points
     def point(self, value, relative=None):
@@ -320,13 +306,6 @@ class Space(Serializable):
         self._validate()
         return np.array([0.] * self.dim)
 
-    def intersects(self, space):
-        if isinstance(space, list):
-            space = set([sp for s in space for sp in s.flatSpaces])
-        else:
-            space = set(space.flatSpaces)
-        return set(self.flatSpaces).intersection(space)
-
     def plainRandomPoint(self):
         return np.array([random.uniform(minb, maxb) for minb, maxb in self.bounds])
 
@@ -352,6 +331,14 @@ class Space(Serializable):
             data = data - settings['modulo'] * self.modulo
 
         return data
+    
+    def matchesEntity(self, entity):
+        if not entity:
+            return True
+        return self.boundProperty.entity == entity
+    
+    def applyTo(self, entity):
+        return self
 
     # Data
     @property
@@ -359,14 +346,22 @@ class Space(Serializable):
         self._validate()
         return copy.deepcopy(self._bounds)
 
+    @staticmethod
+    def infiniteBounds(dim):
+        return [[-math.inf, math.inf] for i in range(dim)]
+    
+    def convertTo(self, spaceManager=None, kind=None, toData=None):
+        spaceManager = parameter(spaceManager, self.spaceManager)
+        return spaceManager.convertSpace(self, kind=kind, toData=toData)
+
     def createLinkedSpace(self, spaceManager=None, kind=None):
-        kind = kind if kind else self.kind
+        kind = parameter(kind, self.kind)
         spaceManager = spaceManager if spaceManager else self.spaceManager
         return Space(spaceManager, self.dim, native=self.native, kind=kind)
 
     def createDataSpace(self, spaceManager=None, kind=None):
         from .dataspace import DataSpace
-        kind = kind if kind else self.kind
+        kind = parameter(kind, self.kind)
         spaceManager = spaceManager if spaceManager else self.spaceManager
         return DataSpace(spaceManager, self.dim, native=self.native, kind=kind)
 
@@ -393,7 +388,40 @@ class Space(Serializable):
 
     def _postValidate(self):
         self.invalid = False
+    
+    # Representation
+    @property
+    def name(self):
+        return self.boundProperty.absoluteName if self.boundProperty else None
 
-    @staticmethod
-    def infiniteBounds(dim):
-        return [[-math.inf, math.inf] for i in range(dim)]
+    def icon(self):
+        return '@'
+
+    def colStr(self):
+        return self.boundedProperty()
+    
+    def boundedProperty(self):
+        if self._property:
+            return f"→{self._property}"
+        elif self.boundProperty:
+            return f"↝{self.boundProperty}"
+        else:
+            return "↛"
+
+    def toStr(self, short=False):
+        if not self.spaces:
+            return '@NullSpace'
+        absName = f'#{self.name}' if self.name else ''
+        suffix = '' if self.kind.value == SpaceKind.BASIC.value else f':{self.kind.value.upper()}'
+        if short == 2:
+            return f"{self.boundedProperty()}"
+        if short:
+            return f"#{self.id}{absName}{self.colStr()}{suffix}↕{self.dim} {self.icon()}"
+        return f"{self.icon()}#{self.id}{absName}{self.colStr()}{suffix}↕{self.dim}"
+
+    def __repr__(self):
+        return self.toStr()
+    
+    # Deprecated
+    def iterate(self):
+        return self.baseCols
