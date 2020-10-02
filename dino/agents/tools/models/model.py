@@ -12,7 +12,10 @@ from scipy.spatial.distance import euclidean
 # from ..utils.io import getVisual, plotData, visualize, concat
 # from ..utils.serializer import Serializable, Serializer
 # from ..utils.maths import multivariateRegression, multivariateRegressionError, multivariateRegression_vector, popn
+from exlab.utils.io import parameter
 from exlab.interface.serializer import Serializable
+
+
 from dino.data.data import *
 from dino.data.space import SpaceKind
 # from ..data.abstract import *
@@ -99,8 +102,44 @@ class Model(Serializable):
     #         return self.actionSpace
     #     return self.actionContextSpace
 
+    @classmethod
+    def adaptiveEpisode(cls, adaptiveModelManager, events):
+        pass
+
+    def justCreated(self):
+        pass
+
+    @property
+    def duration(self):
+        if self.createdSince == -1:
+            return 0
+        return self.dataset.learner.iteration - self.createdSince
+    
+    def matches(self, model, ignoreContext=False):
+        return (self.actionSpace == model.actionSpace and
+                self.outcomeSpace == model.outcomeSpace and
+                (ignoreContext or self.contextSpace == model.contextSpace or (not self.contextSpace and not model.contextSpace)))
+
     def update(self):
         pass
+
+    def metaData(self):
+        return None
+
+    def continueFrom(self, previousModel):
+        self.id = previousModel.id
+        previousModel.id = -1
+
+        self.createdSince = previousModel.createdSince
+        self.lowCompetenceSince = previousModel.lowCompetenceSince
+        self.evaluations = previousModel.evaluations
+
+        # if self.contextSpacialization and previousModel.contextSpacialization:
+        #     self.contextSpacialization[0].continueFrom(
+        #         previousModel.contextSpacialization[0])
+
+        # previousModel.spacesHistory.extend(self.spacesHistory)
+        # self.spacesHistory = previousModel.spacesHistory
 
     def pointAdded(self, event, progress):
         if self.contextSpacialization:
@@ -109,15 +148,8 @@ class Model(Serializable):
 
             # context = event.context.projection(self.contextSpace)
             # self.contextSpacialization[1].addPoint(context)
-
-    # def saveRestrictionIds(self, newIds=None):
-    #     self.savedRestrictionIds = self.restrictionIds
-    #     if newIds is not None:
-    #         self.restrictionIds = newIds
     
-    # def restore(self):
-    #     self.restrictionIds = self.savedRestrictionIds
-    
+    # Context
     def hasContext(self, contextSpace, contextColumns):
         return contextSpace and (contextColumns is None or np.any(contextColumns))
 
@@ -136,34 +168,230 @@ class Model(Serializable):
         cols[indices] = contextColumns
         return cols
 
-    def continueFrom(self, previousModel):
-        self.id = previousModel.id
-        previousModel.id = -1
+    # Operations
+    def forward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False, entity=None):
+        value, error = self.npForward(action, context, contextColumns=contextColumns, ignoreFirst=ignoreFirst, entity=entity)
+        if value is None or np.isnan(np.sum(value)):
+            return None, 1
+        return Data(self.outcomeSpace.applyTo(entity), value.tolist()), error
 
-        self.createdSince = previousModel.createdSince
-        self.lowCompetenceSince = previousModel.lowCompetenceSince
-        self.evaluations = previousModel.evaluations
+    def npForward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False, entity=None):
+        raise NotImplementedError()
 
-        # if self.contextSpacialization and previousModel.contextSpacialization:
-        #     self.contextSpacialization[0].continueFrom(
-        #         previousModel.contextSpacialization[0])
+    def inverse(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None):
+        raise NotImplementedError()
 
-        # previousModel.spacesHistory.extend(self.spacesHistory)
-        # self.spacesHistory = previousModel.spacesHistory
+    def bestLocality(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None):
+        raise NotImplementedError()
+
+    # Deprecated
+    # def goalCompetenceError(self, goal: Goal, context: Observation = None, contextColumns=None):
+    #     try:
+    #         competence, error, distance = self.inverse(goal, context, contextColumns=contextColumns)[3:6]
+    #         return competence, error, distance
+    #     except ActionNotFound:
+    #         return -1, -1, -1
+
+    # Deprecated
+    # def goalCompetence(self, goal: Goal, context: Observation = None, contextColumns=None):
+    #     return self.goalCompetenceError(goal, context, contextColumns=contextColumns)[0]
     
-    def metaData(self):
-        return None
+    def computeCompetence(self, error, distanceGoal=0):
+        distanceGoal = min(distanceGoal, 1.)
+        return max(0, min(1, (1. - distanceGoal - error) / np.exp((error * 4.15) ** 3)))
 
-    def matches(self, model, ignoreContext=False):
-        return (self.actionSpace == model.actionSpace and
-                self.outcomeSpace == model.outcomeSpace and
-                (ignoreContext or self.contextSpace == model.contextSpace or (not self.contextSpace and not model.contextSpace)))
+    def getIds(self):
+        # ids = self.outcomeSpace.getIds(self.restrictionIds)
+        # ids = np.intersect1d(ids, self.actionSpace.getIds(self.restrictionIds))
+        # if self.contextSpace:
+        #     ids = np.intersect1d(
+        #         ids, self.contextSpace.getIds(self.restrictionIds))
+        return self.findSharedIds(self.outcomeSpace, self.actionSpace, self.contextSpace, restrictionIds=self.restrictionIds)
+    
+    @staticmethod
+    def findSharedIds(self, *spaces, restrictionIds):
+        assert(len(spaces) > 0, 'At least 1 space is required!')
 
+        spaces = list(spaces)
+        ids = spaces.pop(0).getIds()
+        if restrictionIds:
+            ids = np.intersect1d(ids, restrictionIds)
+        for space in spaces:
+            ids = np.intersect1d(ids, space.getIds())
+        return ids
+
+    def competence(self, precise=False, onlyIds=None, contextColumns=None):
+        if onlyIds is None and contextColumns is None:
+            if self._lastCompetencePrecise:
+                return self._lastCompetencePrecise
+            elif not precise and self._lastCompetence:
+                return self._lastCompetence
+
+        c = self.computeCompetence(self.std(precise=precise, onlyIds=onlyIds, contextColumns=contextColumns))
+
+        if onlyIds is None and contextColumns is None:
+            if precise:
+                self._lastCompetencePrecise = c
+            else:
+                self._lastCompetence = c
+        return c
+
+    def competenceData(self, actions, outcomes, contexts=None, precise=False, contextColumns=None):
+        return self.computeCompetence(self.stdData(actions, outcomes, contexts, precise=precise, contextColumns=contextColumns))
+
+    def invalidateCompetences(self):
+        self._lastCompetence = None
+        self._lastCompetencePrecise = None
+    
+    def performant(self, competence, duration):
+        return self.competence(precise=True) >= competence and self.duration >= duration
+
+    # data=None, context: Observation = None,
+    def std(self, precise=False, onlyIds=None, contextColumns=None):
+        errors = self._errorForwardAll(
+            precise=precise, onlyIds=onlyIds, contextColumns=contextColumns)
+        return np.mean(errors)# + 0.08 * np.std(errors)
+    
+    def stdData(self, actions, outcomes, contexts=None, precise=False, onlyIds=None, contextColumns=None):
+        errors = self._errorForwardDataAll(
+            actions, outcomes, contexts, precise=precise, contextColumns=contextColumns)
+        return np.mean(errors)
+    
+    # def variance(self, data=None, context: Observation = None, precise=False, contextColumns=None):
+    #     return self.std(data=data, context=context, precise=precise, contextColumns=contextColumns) ** 2
+
+    # def domainVariance(self, data=None, precise=False):
+    #     data = data if data else self.outcomeSpace.getData(self.restrictionIds)
+    #     if not precise:
+    #         number = 100
+    #         ids = np.arange(len(data))
+    #         np.random.shuffle(ids)
+    #         data = data[ids[:number]]
+
+    #     return np.std(data)
+    
+    def _errorForward(self, eventId, contextColumns=None):
+        action = self.actionSpace.getPoint(eventId)[0]
+        outcome = self.outcomeSpace.getPoint(eventId)[0]
+        context = self.contextSpace.getPoint(eventId)[0] if self.contextSpace else None
+        
+        return self._errorForwardData(action, outcome, context, contextColumns=contextColumns, eventId=eventId)
+    
+    def _errorForwardData(self, action, outcome, context=None, contextColumns=None, eventId=None):
+        if not self.contextSpace:
+            context = None
+        # print(f'{self.actionSpace.getPoint(eventId)[0]} + {self.contextSpace.getPoint(eventId)[0]} -> {self.outcomeSpace.getPoint(eventId)[0]}')
+
+        contextColumns = self.contextColumns(contextColumns, outcome, context)
+
+        context = context if self.hasContext(
+            self.contextSpace, contextColumns) else None
+
+        if context is None:
+            contextColumns = None
+
+        # print(contextColumns)
+        outcomeEstimated = self.forward(
+            action, context, contextColumns=contextColumns, ignoreFirst=True)[0]
+        if not outcomeEstimated:
+            return 1.
+
+        # print(outcome)
+        # print(outcomeEstimated)
+        # zeroError = (outcome.length() < 0.00001) != (
+        #     outcomeEstimated.length() < 0.00001)
+        errorOutcome = outcomeEstimated.distanceTo(
+            outcome) / (outcome.space.maxDistance if outcome.space.maxDistance != 0 else 1.)# + zeroError*0.0
+
+        errorOutcome = min(errorOutcome, 1.)
+
+        # if errorOutcome > 0.1:
+        #     if context:
+        #         context = context.plain()
+        #     print(
+        #         f'Failed {errorOutcome:.2f} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
+        #     print('--- ERROR ---')
+        #     print(outcome)
+        #     print(outcomeEstimated)
+        #     print(errorOutcome)
+        #     print(context)
+        #     print(action)
+        #     print('---       ---')
+        return errorOutcome
+
+    def _errorForwardAll(self, precise=False, exceptAlmostZero=False, onlyIds=None, contextColumns=None):
+        ids = parameter(onlyIds, self.getIds())
+        if exceptAlmostZero:
+            data = self.outcomeSpace.getData(ids)
+            indices = np.sum(np.abs(data), axis=1) > self.outcomeSpace.maxDistance * self.ALMOST_ZERO_FACTOR
+            if np.sum(indices) > 0:
+                ids = ids[indices]
+        if not precise:
+            number = 100
+            ids_ = np.arange(len(ids))
+            np.random.shuffle(ids_)
+            ids = ids[ids_[:number]]
+        errors = np.array([self._errorForward(id_, contextColumns=contextColumns) for id_ in ids])
+        return errors
+
+    def _errorForwardDataAll(self, actions, outcomes, contexts=None, precise=False, exceptAlmostZero=False, contextColumns=None):
+        # data = np.hstack((actions, outcomes, contexts) if contexts is not None else (actions, outcomes))
+        ids = np.arange(len(actions))
+        if exceptAlmostZero:
+            indices = np.sum(
+                np.abs(outcomes), axis=1) > self.outcomeSpace.maxDistance * self.ALMOST_ZERO_FACTOR
+            if np.sum(indices) > 0:
+                ids = ids[indices]
+        if not precise:
+            number = 100
+            ids_ = np.arange(len(ids))
+            np.random.shuffle(ids_)
+            ids = ids[ids_[:number]]
+        if contexts is not None:
+            errors = np.array(
+                [self._errorForwardData(*data, contextColumns=contextColumns) for data in zip(actions, outcomes, contexts)])
+        else:
+            errors = np.array(
+                [self._errorForwardData(*data, contextColumns=contextColumns) for data in zip(actions, outcomes)])
+        return errors
+
+    # Deprecated
+    # def _errorInverseAll(self, data=None, context: Observation = None, precise=False, exceptAlmostZero=True, contextColumns=None):
+    #     data = data if data else self.outcomeSpace.getData(self.restrictionIds)
+    #     if self.hasContext(self.contextSpace, contextColumns):
+    #         context = context if context else self.contextSpace.getData(
+    #             self.restrictionIds)
+    #     else:
+    #         context = None
+    #     if exceptAlmostZero:
+    #         indices = np.sum(
+    #             np.abs(data), axis=1) > self.outcomeSpace.maxDistance * self.ALMOST_ZERO_FACTOR
+    #         if np.sum(indices) > 0:
+    #             data = data[indices]
+    #             if context is not None:
+    #                 context = context[indices]
+    #     if not precise:
+    #         number = 100
+    #         ids = np.arange(len(data))
+    #         np.random.shuffle(ids)
+    #         data = data[ids[:number]]
+    #         if context is not None:
+    #             context = context[ids[:number]]
+
+    #     if context is not None:
+    #         errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist(
+    #         )), self.contextSpace.point(c.tolist()), contextColumns=contextColumns)[1] for d, c in zip(data, context)]
+    #     else:
+    #         errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist()))[
+    #             1] for d in data]
+
+    #     return errors
+
+    # Space coverage
     def reachesSpaces(self, spaces):
         spaces = self.dataset.convertSpaces(spaces)
         return self.outcomeSpace.intersects(spaces)
 
-    # Space coverage
     def __spaceCoverage(self, spaces, selfSpaces, covers=0):
         selfSpaces = set(selfSpaces.flatSpaces)
         if not isinstance(spaces, list):
@@ -214,251 +442,6 @@ class Model(Serializable):
 
     def nonControllableContext(self):
         return self.dataset.nonControllableSpaces(self.contextSpace, merge=True)
-
-    def forward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False, entity=None):
-        value, error = self.npForward(action, context, contextColumns=contextColumns, ignoreFirst=ignoreFirst, entity=entity)
-        if value is None or np.isnan(np.sum(value)):
-            return None, 1
-        return Data(self.outcomeSpace.applyTo(entity), value.tolist()), error
-
-    def computeCompetence(self, error, distanceGoal=0):
-        distanceGoal = min(distanceGoal, 1.)
-        return max(0, min(1, (1. - distanceGoal - error) / np.exp((error * 4.15) ** 3)))
-
-    def npForward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False, entity=None):
-        raise NotImplementedError()
-
-    def inverse(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None):
-        raise NotImplementedError()
-
-    def bestLocality(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None):
-        raise NotImplementedError()
-
-    def goalCompetenceError(self, goal: Goal, context: Observation = None, contextColumns=None):
-        try:
-            competence, error, distance = self.inverse(goal, context, contextColumns=contextColumns)[3:6]
-            return competence, error, distance
-        except ActionNotFound:
-            return -1, -1, -1
-
-    def goalCompetence(self, goal: Goal, context: Observation = None, contextColumns=None):
-        return self.goalCompetenceError(goal, context, contextColumns=contextColumns)[0]
-
-    def getIds(self):
-        ids = self.outcomeSpace.getIds(self.restrictionIds)
-        ids = np.intersect1d(ids, self.actionSpace.getIds(self.restrictionIds))
-        if self.contextSpace:
-            ids = np.intersect1d(
-                ids, self.contextSpace.getIds(self.restrictionIds))
-        return ids
-
-    def competence(self, precise=False, onlyIds=None, contextColumns=None):
-        if onlyIds is None and contextColumns is None:
-            if self._lastCompetencePrecise:
-                return self._lastCompetencePrecise
-            elif not precise and self._lastCompetence:
-                return self._lastCompetence
-
-        c = self.computeCompetence(self.std(precise=precise, onlyIds=onlyIds, contextColumns=contextColumns))
-
-        if onlyIds is None and contextColumns is None:
-            if precise:
-                self._lastCompetencePrecise = c
-            else:
-                self._lastCompetence = c
-        return c
-    
-    def invalidateCompetences(self):
-        self._lastCompetence = None
-        self._lastCompetencePrecise = None
-    
-    # @property
-    # def lastCompetence(self):
-    #     if self._lastCompetence is None:
-    #         self._lastCompetence = self.competence(precise=True)
-    #     return self._lastCompetence
-    
-    @property
-    def duration(self):
-        if self.createdSince == -1:
-            return 0
-        return self.dataset.learner.iteration - self.createdSince
-    
-    def performant(self, competence, duration):
-        return self.competence(precise=True) >= competence and self.duration >= duration
-
-    # def eventError(self, eventId, contextColumns=None):
-    #     action = self.actionSpace.getPoint(eventId)[0]
-    #     outcome = self.outcomeSpace.getPoint(eventId)[0]
-    #     context = self.contextSpace.getPoint(
-    #         eventId)[0] if self.contextSpace else None
-
-    #     actionEstimated = self.inverse(outcome, context, contextColumns=contextColumns)[0]
-    #     actionOutcomeEstimated = self.forward(actionEstimated, context, contextColumns=contextColumns)[0]
-    #     outcomeEstimated = self.forward(action, context, contextColumns=contextColumns)[0]
-
-    #     errorAction = actionEstimated.distanceTo(
-    #         action) / action.space.maxDistance
-    #     errorActionOutcome = actionOutcomeEstimated.distanceTo(
-    #         outcome) / outcome.space.maxDistance
-    #     errorAction = min(errorAction, errorActionOutcome)
-    #     errorOutcome = outcomeEstimated.distanceTo(
-    #         outcome) / outcome.space.maxDistance
-    #     # print(actionEstimated)
-    #     # print(action)
-    #     # print(outcomeEstimated)
-    #     # print(outcome)
-    #     # print(errorAction)
-    #     # print(errorOutcome)
-    #     # print(action.space.maxDistance)
-    #     # print(outcome.space.maxDistance)
-    #     return errorOutcome, errorAction
-
-    def std(self, data=None, context: Observation = None, precise=False, onlyIds=None, contextColumns=None):
-        # print("Variance")
-        if data is None and context is None:
-            errors = self._errorEvents(
-                precise=precise, onlyIds=onlyIds, contextColumns=contextColumns)
-        else:
-            errors = self._errorEstimations(
-                data=data, context=context, precise=precise, contextColumns=contextColumns)
-        # (('Forward', errors[:, 0]), ('Inverse', errors[:, 1]))
-        errorsList = (('Forward', errors),)
-        print(len(errors))
-        # for name, errors in errorsList:
-        #     print(name)
-        #     print('85th percentile: {}'.format(np.percentile(errors, 85)))
-        #     print('85th competence: {}'.format(self.computeCompetence(np.percentile(errors, 85))))
-        #     print('median: {}'.format(np.median(errors)))
-        #     print('median competence: {}'.format(self.computeCompetence(np.median(errors))))
-        #     print('mean: {}'.format(np.mean(errors)))
-        #     print('mean competence: {}'.format(self.computeCompetence(np.mean(errors))))
-        #     print('std: {}'.format(np.std(errors)))
-        #     print(np.sort(errors)[-10:])
-        #     ids = np.argsort(errors)[-10:]
-        #     print(ids)
-        #     print()
-        '''for d, c in zip(data, context):
-            std = self.goalCompetenceError(d, c)[1]
-            stds.append(std)'''
-        # error = np.median(errors)
-        # errors = errors[errors < np.percentile(errors, 99)]
-        # print(np.mean(errors))
-        # print(np.sort(errors)[-10:])
-        return np.mean(errors)# + 0.08 * np.std(errors)
-
-    def _errorEvents(self, precise=False, exceptAlmostZero=True, onlyIds=None, contextColumns=None):
-        ids = self.getIds()
-        if onlyIds is not None:
-            ids = onlyIds
-        if exceptAlmostZero:
-            data = self.outcomeSpace.getData(ids)
-            indices = np.sum(
-                np.abs(data), axis=1) > self.outcomeSpace.maxDistance * self.ALMOST_ZERO_FACTOR
-            if np.sum(indices) > 0:
-                data = data[indices]
-        if not precise:
-            number = 100
-            ids_ = np.arange(len(ids))
-            np.random.shuffle(ids_)
-            ids = ids[ids_[:number]]
-        errors = np.array([self.eventForwardError(id_, contextColumns=contextColumns) for id_ in ids])
-        # print(errors)
-        # if not precise:
-        #     print(self.outcomeSpace.getIds(self.restrictionIds)[ids_[np.argsort(errors)[-50:]]])
-        # else:
-        #     print(self.outcomeSpace.getIds(self.restrictionIds)[np.argsort(errors)[-50:]])
-        # print(np.sort(errors)[-50:])
-        return errors
-        # return np.mean(errors, axis=1)
-
-    def _errorEstimations(self, data=None, context: Observation = None, precise=False, exceptAlmostZero=True, contextColumns=None):
-        data = data if data else self.outcomeSpace.getData(self.restrictionIds)
-        if self.hasContext(self.contextSpace, contextColumns):
-            context = context if context else self.contextSpace.getData(
-                self.restrictionIds)
-        else:
-            context = None
-        if exceptAlmostZero:
-            indices = np.sum(
-                np.abs(data), axis=1) > self.outcomeSpace.maxDistance * self.ALMOST_ZERO_FACTOR
-            if np.sum(indices) > 0:
-                data = data[indices]
-                if context is not None:
-                    context = context[indices]
-        if not precise:
-            number = 100
-            ids = np.arange(len(data))
-            np.random.shuffle(ids)
-            data = data[ids[:number]]
-            if context is not None:
-                context = context[ids[:number]]
-
-        if context is not None:
-            errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist(
-            )), self.contextSpace.point(c.tolist()), contextColumns=contextColumns)[1] for d, c in zip(data, context)]
-        else:
-            errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist()))[
-                1] for d in data]
-
-        return errors
-    
-    def eventForwardError(self, eventId, contextColumns=None):
-        action = self.actionSpace.getPoint(eventId)[0]
-        outcome = self.outcomeSpace.getPoint(eventId)[0]
-        if self.contextSpace:
-            context = self.contextSpace.getPoint(eventId)[0]
-        else:
-            context = None
-        # print(f'{self.actionSpace.getPoint(eventId)[0]} + {self.contextSpace.getPoint(eventId)[0]} -> {self.outcomeSpace.getPoint(eventId)[0]}')
-
-        contextColumns = self.contextColumns(contextColumns, outcome, context)
-
-        context = context if self.hasContext(self.contextSpace, contextColumns) else None
-
-        if context is None:
-            contextColumns = None
-
-        # print(contextColumns)
-        outcomeEstimated = self.forward(
-            action, context, contextColumns=contextColumns, ignoreFirst=True)[0]
-        if not outcomeEstimated:
-            return 1.
-
-        # print(outcome)
-        # print(outcomeEstimated)
-        zeroError = (outcome.length() < 0.00001) != (
-            outcomeEstimated.length() < 0.00001)
-        errorOutcome = outcomeEstimated.distanceTo(
-            outcome) / (outcome.space.maxDistance if outcome.space.maxDistance != 0 else 1.) + zeroError*0.0
-
-        errorOutcome = min(errorOutcome, 1.)
-
-        if errorOutcome > 0.1:
-            if context:
-                context = context.plain()
-            print(f'Failed {errorOutcome:.2f} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
-        #     print('--- ERROR ---')
-        #     print(outcome)
-        #     print(outcomeEstimated)
-        #     print(errorOutcome)
-        #     print(context)
-        #     print(action)
-        #     print('---       ---')
-        return errorOutcome
-
-    def variance(self, data=None, context: Observation = None, precise=False, contextColumns=None):
-        return self.std(data=data, context=context, precise=precise, contextColumns=contextColumns) ** 2
-
-    def domainVariance(self, data=None, precise=False):
-        data = data if data else self.outcomeSpace.getData(self.restrictionIds)
-        if not precise:
-            number = 100
-            ids = np.arange(len(data))
-            np.random.shuffle(ids)
-            data = data[ids[:number]]
-
-        return np.std(data)
     
     # Visual
 

@@ -98,6 +98,9 @@ class Data(Serializable):
 
     def norm(self):
         return np.linalg.norm(self.value)
+    
+    def norm1(self):
+        return np.sum(np.abs(self.value))
 
     def length(self):
         return np.linalg.norm(self.value)

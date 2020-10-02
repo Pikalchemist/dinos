@@ -281,8 +281,8 @@ class Space(Serializable):
         return self.baseCols.__iter__()
 
     # Points
-    def point(self, value, relative=None):
-        d = Data(self, value)
+    def point(self, value, relative=None, toSpace=None):
+        d = Data(toSpace if toSpace is not None else self, value)
         d.setRelative(relative)
         return d
 

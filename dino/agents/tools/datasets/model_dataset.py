@@ -237,17 +237,13 @@ class ModelDataset(Dataset):
                 return couple[1]
         return -1'''
 
-    def goalCompetence(self, y):
-        """Compute competence to reach a specific outcome as the distance to nearest neighbour."""
-        model = self.findModelByOutcomeSpace(y.space)
-        if not model:
-            return 0.
-        return model.goalCompetence(y)
-        '''space = y.get_space()
-        _, dist = space.nearestDistance(y, n=1)
-        if len(dist) == 0:
-            return space.options['out_dist']/space.options['max_dist']
-        return dist[0]'''
+    # Deprecated
+    # def goalCompetence(self, y):
+    #     """Compute competence to reach a specific outcome as the distance to nearest neighbour."""
+    #     model = self.findModelByOutcomeSpace(y.space)
+    #     if not model:
+    #         return 0.
+    #     return model.goalCompetence(y)
 
     '''def get_competence_std_paths(self, paths):
         competence = 1

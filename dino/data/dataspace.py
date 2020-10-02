@@ -107,11 +107,11 @@ class DataSpace(Space):
         self._validate()
         return self.data[self.getLid(ids)]
 
-    def getPoint(self, ids):
+    def getPoint(self, ids, toSpace=None):
         self._validate()
         a = self.lids[ids]
         data = self.data[a[a >= 0]].tolist()
-        return [self.point(d) for d in data]
+        return [self.point(d, toSpace=toSpace) for d in data]
 
     def getNpPlainPoint(self, ids):
         self._validate()
@@ -331,10 +331,10 @@ class DataSpace(Space):
         self.maxNNDistance = self.maxDistance
         Space._postValidate(self)
 
-    @classmethod
-    def getCost(cls, n):
-        """Return cost of an action space based on its _number of primitives."""
-        return cls.gamma ** n
+    # @classmethod
+    # def getCost(cls, n):
+    #     """Return cost of an action space based on its _number of primitives."""
+    #     return cls.gamma ** n
 
     # Visual
     def visualizeData(self, options={}):

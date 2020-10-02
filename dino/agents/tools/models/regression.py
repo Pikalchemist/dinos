@@ -91,48 +91,6 @@ class RegressionModel(Model):
     def npForward(self, action: Action, context: Observation = None, bestContext=True, contextColumns=None,
                   ignoreFirst=False, entity=None, debug=False):
         assert(action is not None)
-        # contextColumns = self.contextColumns(contextColumns, )
-        # import pylab as plt
-
-        # action = action.projection(self.actionSpace)
-        # actionPlain = Data.npPlainData(action, self.actionSpace)
-        # space = self.actionContextSpace if context else self.actionSpace
-        # context = context.convertTo(kind=SpaceKind.PRE).projection(self.contextSpace) if context else None
-        # actionContext = action.extends(context)
-        # actionContextPlain = Data.npPlainData(actionContext, space)
-        #
-        # restrictionIds = self.restrictionIds
-        # if context:
-        #     contextPlain = Data.npPlainData(context, self.contextSpace)
-        #     restrictionIds, dists = self.contextSpace.nearestDistance(contextPlain, n=100, restrictionIds=restrictionIds, otherSpace=self.outcomeSpace)
-        #     # print(actionContextPlain)
-        #     # print(action)
-        #     # print(context)
-        #     # print('?')
-        #     # restrictionIds, dists = self.actionContextSpace.nearestDistance(actionContextPlain,
-        #     #                                                                 n=self.NN_CONTEXT,
-        #     #                                                                 restrictionIds=self.restrictionIds,
-        #     #                                                                 otherSpace=self.outcomeSpace)
-        #     #
-        #     # print(dists)
-        #     # print(self.actionContextSpace.getPlainPoint(restrictionIds)[:10])
-        #
-        #     if debug:
-        #         print("Context {}".format(contextPlain))
-        #         print("Selecting 1 {}".format(restrictionIds))
-        #         print("Distances 1 {}".format([action.distanceTo(self.actionSpace.getPoint(id_)[0]) for id_ in restrictionIds]))
-        #         print("Distances 2 {}".format([context.distanceTo(self.contextSpace.getPoint(id_)[0]) for id_ in restrictionIds]))
-        #
-        # if context:
-        #     ids, dists = self.actionContextSpace.nearestDistance(actionContextPlain,
-        #                                                          n=self.NN_LOCALITY,
-        #                                                          restrictionIds=restrictionIds,
-        #                                                          otherSpace=self.outcomeSpace)
-        # else:
-        #     ids, dists = self.actionSpace.nearestDistance(actionPlain,
-        #                                                   n=self.NN_LOCALITY,
-        #                                                   restrictionIds=restrictionIds,
-        #                                                   otherSpace=self.outcomeContextSpace)
 
         results = self._nearestData(
             action, context, self.NN_LOCALITY, bestContext, outcome=False, contextColumns=contextColumns,
@@ -155,9 +113,6 @@ class RegressionModel(Model):
 
         x = space.getNpPlainPoint(ids)
         y = self.outcomeSpace.getNpPlainPoint(ids)
-        # if debug:
-        #     print(y)
-        #     print(multivariateRegressionError(x, y, actionContextPlain))
 
         return multivariateRegressionError(x, y, actionContextPlain, columns=self.multiContextColumns(contextColumns, space))
 
@@ -539,8 +494,8 @@ class RegressionModel(Model):
                     np.sum((aPlain - actionCenter) ** 2, axis=1) ** .5)
                 actionDistance = np.mean(
                     np.sum((aPlain - a0Plain) ** 2, axis=1) ** .5)
-                proximityScore = (
-                    actionDistance / (actionCenterDistance if actionCenterDistance != 0 else 1.) - 1.) / 20.
+                # proximityScore = (
+                #     actionDistance / (actionCenterDistance if actionCenterDistance != 0 else 1.) - 1.) / 20.
 
                 # if context:
                 #     a0 = self.actionSpace.action(a0Plain)

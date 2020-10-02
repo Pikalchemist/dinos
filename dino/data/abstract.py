@@ -1,4 +1,6 @@
+import copy
 from enum import Enum
+from contextlib import contextmanager
 
 from .space import SpaceKind
 
@@ -16,7 +18,7 @@ class AMTBase(object):
     def __init__(self, context, parent=None, element=None):
         self.context = context
         self.element = element
-        self.parents = set()
+        # self.parents = set()
         self.children = set()
         # self.addParent(parent)
 
@@ -24,10 +26,17 @@ class AMTBase(object):
     def abstract(self):
         return True
 
-    def copy(self):
+    def copy(self, context=None):
         obj = self.__class__.__new__(self.__class__)
         obj.__dict__.update(self.__dict__)
-        obj.children = [child.copy() for child in obj.children]
+        # if not context:
+        #     if self.context == self:
+        #         context = obj
+        #     else:
+        #         context = self.context.copy()
+        if obj.element:
+            obj.element = copy.copy(obj.element)
+        obj.children = [child.copy(context) for child in obj.children]
         return obj
 
     def addChild(self, child):
@@ -76,10 +85,10 @@ class AMTBase(object):
                 elements[entity] = elements.get(entity, set()) | childElements
         return elements
 
-    def assign(self, element, value):
-        tree = self.copy()
-        tree.assignInplace(element, value)
-        return tree
+    # def assign(self, element, value):
+    #     tree = self.copy()
+    #     tree.assignInplace(element, value)
+    #     return tree
 
     def assignInplace(self, element, value):
         if self.element == element:
@@ -276,9 +285,12 @@ class AMTProperty(AMTElementLinked):
 
         if self.context.sameRowsSpaces:
             allAssignables = self.context.assignableElements()
-            if len(list(allAssignables.keys())) != 1:
+            rows = 1
+            if len(allAssignables) > 1:
                 raise Exception(
                     'Only one assignable may vary with \'sameRowsSpaces\' enabled')
+            if len(allAssignables) == 1:
+                rows = len(list(allAssignables.values())[0])
 
         properties = []
         for propertyName in list(self.element.assignables):
@@ -292,7 +304,7 @@ class AMTProperty(AMTElementLinked):
             property=property, kind=self.kind) for property in properties]
 
         if self.context.sameRowsSpaces and len(spaces) == 1:
-            spaces = [spaces[0]] * len(list(allAssignables.values())[0])
+            spaces = [spaces[0]] * rows
 
         return spaceManager.multiRowSpace(spaces)
 
@@ -311,7 +323,7 @@ class AMTElement(object):
         #     name = repr(assigned)
         self.context = context
         self.cls = cls
-        self.assignables = set()
+        self._assignables = set()
         self.unassignables = set()
         self.assigned = assigned
         if self.assigned:
@@ -342,17 +354,31 @@ class AMTElement(object):
         return self.assigned is None
 
     def assignable(self, obj):
-        self.assignables.add(obj)
-        print('hello')
+        self._assignables.add(obj)
         if obj in self.unassignables:
             self.unassignables.remove(obj)
-        if len(self.assignables) > 1:
+        if len(self._assignables) > 1:
             self.assigned = None
 
     def unassignable(self, obj):
         self.unassignables.add(obj)
-        if obj in self.assignables:
-            self.assignables.remove(obj)
+        if obj in self._assignables:
+            self._assignables.remove(obj)
+
+    @property
+    def assignables(self):
+        if self.assigned:
+            return [self.assigned]
+        return self._assignables
+
+    @contextmanager
+    def assign(self, assigned):
+        previously = self.assigned
+        try:
+            self.assigned = assigned
+            yield self
+        finally:
+            self.assigned = previously
 
     def __repr__(self):
         return f'{self.cls.NAME} {self.name()}'

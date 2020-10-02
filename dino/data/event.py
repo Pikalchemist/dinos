@@ -24,8 +24,6 @@ class InteractionEvent(Serializable):
         self.outcomesRegister = []
         self.contextRegister = []
 
-        self.id = -1
-
         # Check if action is also present in the outcomes
         actions = self.actions.flat()
         outcomes = self.outcomes.flat()
