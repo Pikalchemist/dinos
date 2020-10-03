@@ -23,7 +23,7 @@ class Property(Serializable):
     An abstract class corresponding to features and effectors
     """
 
-    def __init__(self, entity, name, dim=None, absoluteName=None):
+    def __init__(self, entity, name, dim=None, absoluteName=None, visual=False):
         self.name = name
         self.absoluteName = absoluteName
         if self.absoluteName and entity.findAbsoluteName(self.absoluteName):
@@ -38,6 +38,7 @@ class Property(Serializable):
         self.actions = {}
 
         self.learnable = True
+        self.visual = visual
 
         if entity.activated:
             self._activate()
@@ -164,8 +165,9 @@ class Observable(Property):
     A readable property
     """
 
-    def __init__(self, entity, name, absoluteName=None, discretization=1.):
-        Property.__init__(self, entity, name, absoluteName=absoluteName)
+    def __init__(self, entity, name, absoluteName=None, discretization=1., visual=False):
+        Property.__init__(self, entity, name,
+                          absoluteName=absoluteName, visual=visual)
         self.converter = None
         self.visualizer = None
         self.saver = "save"
@@ -236,10 +238,10 @@ class MethodObservable(Observable):
     A property provided by a given method
     """
 
-    def __init__(self, entity, name, method, absoluteName=None, discretization=None):
+    def __init__(self, entity, name, method, absoluteName=None, discretization=None, visual=False):
         self.method = method
         Observable.__init__(
-            self, entity, name, absoluteName=absoluteName, discretization=discretization)
+            self, entity, name, absoluteName=absoluteName, discretization=discretization, visual=visual)
 
     def _observePlain(self):
         return self.method(property=self)
@@ -250,10 +252,10 @@ class FunctionObservable(Observable):
     A property provided by a given function
     """
 
-    def __init__(self, entity, name, function, absoluteName=None, discretization=None):
+    def __init__(self, entity, name, function, absoluteName=None, discretization=None, visual=False):
         self.function = function
         Observable.__init__(
-            self, entity, name, absoluteName=absoluteName, discretization=discretization)
+            self, entity, name, absoluteName=absoluteName, discretization=discretization, visual=visual)
 
     def _observePlain(self):
         return self.function(entity=self.entity, property=self)
@@ -264,10 +266,10 @@ class AttributeObservable(Observable):
     A property directly read from an object attribute
     """
 
-    def __init__(self, entity, name, attributeName, absoluteName=None, discretization=None):
+    def __init__(self, entity, name, attributeName, absoluteName=None, discretization=None, visual=False):
         self.attributeName = attributeName
         Observable.__init__(
-            self, entity, name, absoluteName=absoluteName, discretization=discretization)
+            self, entity, name, absoluteName=absoluteName, discretization=discretization, visual=visual)
 
     def _observePlain(self):
         return getattr(self.entity, self.attributeName)

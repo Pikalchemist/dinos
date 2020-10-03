@@ -234,7 +234,7 @@ class MultiRowDataSpace(DataSpace):
 
     @property
     def rows(self):
-        return self.spaces
+        return self.spaces + [row for row in self.allowedSimilarRows if row not in self]
 
     @property
     def baseCols(self):

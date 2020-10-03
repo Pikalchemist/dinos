@@ -539,8 +539,8 @@ class RegressionModel(Model):
             raise ActionNotFound(
                 "Not enough points to compute action")
 
-        y0 = self.outcomeSpace.asTemplate(minY0Plain)
-        a0 = self.actionSpace.asTemplate(minA0Plain)
+        y0 = self.outcomeSpace.asTemplate(minY0Plain, entity=entity)
+        a0 = self.actionSpace.asTemplate(minA0Plain, entity=entity)
         # if a0.length() > 1000:
         #     raise Exception()
         goalDistanceNormalized = minDistance / self.outcomeSpace.maxDistance

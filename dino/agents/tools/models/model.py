@@ -119,6 +119,11 @@ class Model(Serializable):
         return (self.actionSpace == model.actionSpace and
                 self.outcomeSpace == model.outcomeSpace and
                 (ignoreContext or self.contextSpace == model.contextSpace or (not self.contextSpace and not model.contextSpace)))
+    
+    def includes(self, model, ignoreContext=False):
+        return (self.actionSpace.includes(model.actionSpace) and
+                self.outcomeSpace.includes(model.outcomeSpace) and
+                (ignoreContext or (not self.contextSpace and not model.contextSpace) or self.contextSpace.includes(model.contextSpace)))
 
     def update(self):
         pass
@@ -158,7 +163,7 @@ class Model(Serializable):
             return contextColumns
         if not self.contextSpacialization:
             return None
-        return self.contextSpacialization[0].columns(goal)# & self.contextSpacialization[1].columns(context)
+        return self.contextSpacialization[0].columns(goal, self.outcomeSpace)# & self.contextSpacialization[1].columns(context)
 
     def multiContextColumns(self, contextColumns, space):
         if contextColumns is None or not np.any(contextColumns):
@@ -167,6 +172,9 @@ class Model(Serializable):
         cols = np.full(space.dim, True)
         cols[indices] = contextColumns
         return cols
+    
+    def retrieveContext(self, context, entity=None):
+        return context.convertTo(self.dataset, kind=SpaceKind.PRE).projection(self.contextSpace, entity=entity)
 
     # Operations
     def forward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False, entity=None):

@@ -52,6 +52,8 @@ class Space(Serializable):
         self.rowAggregation = False
         self.childrenSpaces = []
 
+        self.allowedSimilarRows = []
+
         self.native = native if native else self
         self.kind = kind
         self._property = property
@@ -175,7 +177,7 @@ class Space(Serializable):
 
     @property
     def rows(self):
-        return [self]
+        return [self] + [row for row in self.allowedSimilarRows if row not in self]
 
     @property
     def baseCols(self):
@@ -275,6 +277,9 @@ class Space(Serializable):
         else:
             space = set(space.flatSpaces)
         return set(self.flatSpaces).intersection(space)
+    
+    def includes(self, space):
+        return space in self.rows
 
     # Multi
     def __iter__(self):
@@ -309,11 +314,17 @@ class Space(Serializable):
     def plainRandomPoint(self):
         return np.array([random.uniform(minb, maxb) for minb, maxb in self.bounds])
 
-    def asTemplate(self, data, type_item=SingleData, type_vector=Data):
+    def asTemplate(self, data, type_item=SingleData, type_vector=Data, entity=None):
         data = list(data)
         if len(data) != self.dim:
             logging.critical(f"Template dimension mismatch: space {self.name} is {self.dim}d and data is {len(data)}d")
-        parts = [type_item(s, popn(data, s.dim)) for s in self]
+        if entity and len(list(self)) == 1:
+            parts = [type_item(s, data)
+                     for s in self.rows if s.matchesEntity(entity)]
+            if not parts:
+                parts = [type_item(s, data) for s in self]
+        else:
+            parts = [type_item(s, popn(data, s.dim)) for s in self]
         return type_vector(*parts)
 
     def formatData(self, data, formatParameters=None):
@@ -338,7 +349,9 @@ class Space(Serializable):
         return self.boundProperty.entity == entity
     
     def applyTo(self, entity):
-        return self
+        if not entity or len(self.rows) == 1:
+            return self
+        return next(iter([row for row in self.rows if row.matchesEntity(entity)]), self)
 
     # Data
     @property

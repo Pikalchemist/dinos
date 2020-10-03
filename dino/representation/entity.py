@@ -192,36 +192,59 @@ class Entity(Serializable):
     def property(self, filter_=None):
         return (self.properties(filter_) + [None])[0]
 
-    def properties(self, filter_=None):
+    def properties(self, filter_=None, visual=None):
         if not filter_:
-            return list(self._proxifiedProperties.values())
-
-        # Omit first dot
-        if filter_[0] == '.':
-            filter_ = filter_[1:]
-        if filter_[0] == '#':
-            def filtered(property):
-                return property.absoluteName == filter_[1:]
+            properties = list(self._proxifiedProperties.values())
         else:
-            def filtered(property):
-                return property.name == filter_
+            # Omit first dot
+            if filter_[0] == '.':
+                filter_ = filter_[1:]
+            if filter_[0] == '#':
+                def filtered(property):
+                    return property.absoluteName == filter_[1:]
+            else:
+                def filtered(property):
+                    return property.name == filter_
 
-        return list(filter(filtered, self._proxifiedProperties.values()))
+            properties = list(filter(filtered, self._proxifiedProperties.values()))
+        if visual is not None:
+            properties = [prop for prop in properties if prop.visual == visual]
+        return properties
 
-    def cascadingProperties(self, filter_=None):
+    def cascadingProperties(self, filter_=None, visual=None):
         filterChildren, filterProperties = None, None
         if filter_:
             filterChildren, filterProperties = (
                 filter_.split('.') + [None])[:2]
         properties = []
         if not filterChildren or self._filterChild(filterChildren)(self):
-            properties = self.properties(filterProperties)
+            properties = self.properties(filterProperties, visual=visual)
         return properties + \
             [property for entity in self.children(
-                filterChildren) for property in entity.cascadingProperties(filter_)]
+                filterChildren) for property in entity.cascadingProperties(filter_, visual=visual)]
 
     def cascadingProperty(self, filter_=None):
         return (self.cascadingProperties(filter_) + [None])[0]
+    
+    def visualProperties(self):
+        return self.properties(visual=True)
+
+    def cascadingVisualProperties(self):
+        return self.cascadingProperties(visual=True)
+    
+    def visualPropertyNames(self):
+        properties = self.root.cascadingVisualProperties()
+        return set([(prop.name, prop.dim) for prop in properties])
+
+    def observeVisualProperties(self):
+        values = []
+        for name, dim in self.visualPropertyNames():
+            prop = self.property(f'.{name}')
+            if prop:
+                values += prop.observePlain().tolist()
+            else:
+                values += [0] * dim
+        return values
     
     # Routines
     def activate(self):

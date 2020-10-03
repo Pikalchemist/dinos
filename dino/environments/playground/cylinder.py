@@ -27,11 +27,13 @@ class Cylinder(PhysicalEntity):
 
         MethodObservable(self, 'position', self.absolutePosition,
                          discretization=xydiscretization)
-        MethodObservable(self, "positionToAgent", self.positionToAgent,
+        MethodObservable(self, 'positionToAgent', self.positionToAgent,
                          discretization=xydiscretization)  # .learnable = False
-        # AttributeObservable(self, "color", 'color', discretization=128)
-        # AttributeObservable(self, "radius", 'radius', discretization=10)
-        # AttributeObservable(self, "mass", 'mass', discretization=100)
+        
+        # Visual properties have to be the same for all entities!
+        AttributeObservable(self, 'color', 'color', discretization=128, visual=True)
+        # AttributeObservable(self, 'radius', 'radius', discretization=10)
+        # AttributeObservable(self, 'mass', 'mass', discretization=100)
 
     # def relativePosition(self, property=None):
     #     # - self.env.agents[0].shape.body.position

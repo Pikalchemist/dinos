@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
 from exlab.interface.graph import Graph
+from exlab.utils.io import parameter
 
 from . import operations
 
@@ -56,15 +57,15 @@ class ContextSpatialization(object):
         self.resetAreas()
         self._addArea(ContextArea(self, self.space.zero(), np.full(self.evaluatedSpace.dim, True)))
 
-    def findArea(self, point):
+    def findArea(self, point, space=None):
         if not self.areas:
             return None
-        point = point.projection(self.space)
+        point = point.projection(parameter(space, self.space))
         nearest, _ = operations._nearestFromData(self.centers[:len(self.areas)], point.npPlain())
         return self.areas[nearest[0]]
     
-    def columns(self, goal):
-        area = self.findArea(goal)
+    def columns(self, goal, space=None):
+        area = self.findArea(goal, space)
         # print(area)
         if not area:
             return np.full(self.evaluatedSpace.dim, False)
