@@ -8,6 +8,7 @@ from dino.evaluation.tests import UniformGridTest
 
 from .environment import PlaygroundEnvironment
 from .cylinder import Cylinder
+from .button import Button
 from .agent import Agent
 from .wall import Wall
 
@@ -25,7 +26,15 @@ class EmptyRoomScene(SceneSetup):
 
         # Add cylinders
         self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
-        self.world.addChild(Cylinder((500, 300), name='Cylinder2', color=(128, 224, 0)))
+        self.world.addChild(Cylinder((500, 300), name='Cylinder2'))
+        self.world.addChild(Cylinder((500, 100), name='Cylinder3', color=(240, 0, 0), movable=False))
+        self.world.addChild(Cylinder((300, 500), name='Cylinder4', color=(240, 0, 0), movable=False))
+
+        self.world.addChild(Button((100, 100), name='Button1'))
+        self.world.addChild(Button((500, 500), name='Button2'))
+
+        # self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
+        # self.world.addChild(Cylinder((500, 300), name='Cylinder2', color=(128, 224, 0)))
     
 
         # self.agent = Agent((200, 400), radius=30, name='agent',
@@ -46,8 +55,8 @@ class EmptyRoomScene(SceneSetup):
         #     self.world.addChild(wall)
 
     def _setupTests(self):
-        boundaries = [(100, 500), (100, 500)]
-        self.addTest(UniformGridTest(self.world.cascadingProperty('Agent.position').space, boundaries, numberByAxis=2))
+        boundaries = [(200, 400), (200, 400)]
+        self.addTest(UniformGridTest(self.world.cascadingProperty('Agent.position').space, boundaries, numberByAxis=2, relative=False))
     
     def setupEpisode(self, config):
         self.iterationReset += 1
