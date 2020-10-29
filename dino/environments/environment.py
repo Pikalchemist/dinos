@@ -245,12 +245,11 @@ class Environment(SpaceManager):
                         f'{p.space} is not bound to an effector!')
                 effector.perform(p)
         
-            if self.threading:
-                self.scheduledActionCounter += 1
+            self.scheduledActionCounter += 1
         if sync and self.threading:
             self.waitNextIteration(agent)
         else:
-            self.run()
+            self.run(evaluating=config.evaluating if config else False)
 
         return self.reward(action)
     
@@ -292,6 +291,11 @@ class Environment(SpaceManager):
 
     def done(self):
         return False
+    
+    def runScheduled(self, evaluating=False):
+        if self.scheduledActionCounter == 0:
+            return
+        self.run(evaluating=evaluating)
 
     def run(self, evaluating=False):
         # Will run as long as actions are scheduled
@@ -314,8 +318,7 @@ class Environment(SpaceManager):
                     for host in self.world.hosts():
                         host.scheduledAction = False
 
-                    if self.threading:
-                        self.scheduledActionCounter = 0
+                    self.scheduledActionCounter = 0
                     if not evaluating:
                         manage(self).counter.next_iteration()
                     if self.threading:

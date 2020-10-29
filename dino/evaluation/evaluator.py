@@ -47,7 +47,7 @@ class Evaluation(Serializable):
     #     return obj
 
     def __repr__(self):
-        return f'Evaluation @t={self.iteration} µ={self.meanError} σ={self.meanStd} ({len(self.results)} test(s))'
+        return f'Evaluation @t={self.iteration} µ={self.meanError:.3f} σ={self.meanStd:.3f} ({len(self.results)} test(s))'
 
 
 class Evaluator(Serializable):
@@ -256,14 +256,16 @@ class Evaluator(Serializable):
 
             print('@@@')
             print(absoluteGoal)
-            print(self.environment.state())
+            # print(point)
+            # print(self.environment.state())
+
             self.agent.reach(MoveConfig(
-                goal=point, allowReplanning=False, evaluating=True))
-            self.environment.run(evaluating=True)
+                goal=point, evaluating=True))
+            self.environment.runScheduled(evaluating=True)
 
             self.environment.world.discretizeStates = False
             difference = absoluteGoal.relativeData(self.environment.state())
-            print(self.environment.state())
+            # print(self.environment.state())
             self.environment.world.discretizeStates = discrete
 
             reached = absoluteGoal - difference

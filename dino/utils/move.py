@@ -100,7 +100,10 @@ class MoveConfig(object):
         return f'{valid}: {score} ({txt})'
 
     def __repr__(self):
-        if self.exploitation:
+        if self.evaluating:
+            prefix = "Evaluation"
+            attrs = ['model', 'goal', 'depth']
+        elif self.exploitation:
             prefix = "Exploit"
             attrs = ['model', 'goal', 'depth']
         elif self.goal:

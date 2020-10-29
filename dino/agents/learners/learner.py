@@ -73,6 +73,8 @@ class Learner(Agent):
         return True
 
     def train(self, iterations=None, untilIteration=None, episodes=None, untilEpisode=None):
+        self.syncCounter()
+        self.iterationType[self.iteration] = 'train'
         self.schedule(self._trainSchedule, iterations=iterations,
                       untilIteration=untilIteration, episodes=episodes, untilEpisode=untilEpisode)
     
@@ -87,6 +89,7 @@ class Learner(Agent):
             self.syncCounter()
             self._train()
             self.syncCounter()
+        self.iterationType[self.iteration] = 'end'
 
     def _train(self):
         self.trainEpisode()

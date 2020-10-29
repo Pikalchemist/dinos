@@ -201,7 +201,7 @@ class Planner(Module):
                 move, context=context, n=5, nearestUseContext=False)
             # ids, dists = model.outcomeContextSpace.nearestDistance(moveContext, n=5, restrictionIds=ids)
             if len(ids) == 0:
-                return None, None, 0
+                return None, None
             nearestMove = model.outcomeSpace.getPoint(ids)[0]
 
             # print('----', j)

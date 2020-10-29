@@ -4,7 +4,7 @@ from pymunk import Vec2d
 import random
 
 from dino.environments.scene import SceneSetup
-from dino.evaluation.tests import UniformGridTest
+from dino.evaluation.tests import UniformGridTest, PointsTest
 
 from .environment import PlaygroundEnvironment
 from .cylinder import Cylinder
@@ -26,12 +26,12 @@ class EmptyRoomScene(SceneSetup):
 
         # Add cylinders
         self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
-        self.world.addChild(Cylinder((500, 300), name='Cylinder2'))
+        # self.world.addChild(Cylinder((500, 300), name='Cylinder2'))
         self.world.addChild(Cylinder((500, 100), name='Cylinder3', color=(240, 0, 0), movable=False))
-        self.world.addChild(Cylinder((300, 500), name='Cylinder4', color=(240, 0, 0), movable=False))
+        # self.world.addChild(Cylinder((300, 500), name='Cylinder4', color=(240, 0, 0), movable=False))
 
         self.world.addChild(Button((100, 100), name='Button1'))
-        self.world.addChild(Button((500, 500), name='Button2'))
+        # self.world.addChild(Button((500, 500), name='Button2'))
 
         # self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
         # self.world.addChild(Cylinder((500, 300), name='Cylinder2', color=(128, 224, 0)))
@@ -56,8 +56,12 @@ class EmptyRoomScene(SceneSetup):
 
     def _setupTests(self):
         boundaries = [(200, 400), (200, 400)]
-        self.addTest(UniformGridTest(self.world.cascadingProperty('Agent.position').space, boundaries, numberByAxis=2, relative=False))
-    
+        self.addTest(UniformGridTest(self.world.cascadingProperty(
+            'Agent.position').space, boundaries, numberByAxis=2, relative=False))
+
+        self.addTest(PointsTest(self.world.cascadingProperty(
+            '#Cylinder1.position').space, [[-50, 0], [50, 0], [0, 50], [0, -50]], relative=True))
+
     def setupEpisode(self, config):
         self.iterationReset += 1
         if self.iterationReset >= self.RESET_ITERATIONS:

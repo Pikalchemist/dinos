@@ -296,8 +296,8 @@ class FunctionEffector(Effector):
 
     def __init__(self, entity, name, function, dim, absoluteName=None, actions={}):
         self.function = function
-        Observable.__init__(self, entity, name, dim=dim,
-                            absoluteName=absoluteName, actions=actions)
+        Effector.__init__(self, entity, name, dim=dim,
+                          absoluteName=absoluteName, actions=actions)
 
     def _performPlain(self, parameters):
         return self.function(parameters, entity=self.entity, property=self)

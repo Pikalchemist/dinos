@@ -66,6 +66,7 @@ class Agent(Module):
         # self.iteration = 0
         self.episode = 0
         self.iterationByEpisode = []
+        self.iterationType = {}
 
         self.lastIterationEpisode = 0
 
@@ -181,10 +182,15 @@ class Agent(Module):
 
         self.logger.debug2(f'Testing {config}')
 
+        self.syncCounter()
+        self.iterationType[self.iteration] = 'evaluation' if config.evaluating else 'test'
         self.schedule(self._test, config)
 
     def _test(self, config):
+        self.syncCounter()
         memory = self.testStrategies.sample().run(config)
+        self.syncCounter()
+        self.iterationType[self.iteration] = 'end'
 
         self._postTest(memory, config)
     
@@ -209,6 +215,16 @@ class Agent(Module):
         if self.dataset:
             space = space.convertTo(spaceManager=self.dataset, kind=kind)
         return space
+    
+    def getIterationType(self, iteration):
+        last = None
+        for i in self.iterationType:
+            if i > iteration:
+                if last is None or self.iterationType[last] == 'end':
+                    return ''
+                return self.iterationType[last]
+            last = i
+        return ''
 
     # def addReachStrategy(self, strategy):
     #     """Add a Strategy designed to perform a task in a certain way.

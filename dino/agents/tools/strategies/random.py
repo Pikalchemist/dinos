@@ -34,7 +34,7 @@ class RandomStrategy(Strategy):
 
     def _runIteration(self, config):
         # Test a random action
-        self.testRandomAction()
+        self.testRandomAction(config)
 
     # test modifications on both simple and complex agents
     def testRandomAction(self, config=MoveConfig(), actionSpaces=None, zero=False):

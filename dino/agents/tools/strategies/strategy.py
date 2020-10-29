@@ -146,7 +146,7 @@ class Strategy(Module):
 
     def testPath(self, path, config=MoveConfig()):
         """Test a specific complex action and store consequences in memory."""
-        results = self.performer.perform(path)
+        results = self.performer.perform(path, config)
         # self.n += InteractionEvent.incrementList(results, self.n)
         self.memory += results
 
