@@ -27,10 +27,10 @@ class EmptyRoomScene(SceneSetup):
         # Add cylinders
         self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
         # self.world.addChild(Cylinder((500, 300), name='Cylinder2'))
-        self.world.addChild(Cylinder((500, 100), name='Cylinder3', color=(240, 0, 0), movable=False))
+        self.world.addChild(Cylinder((400, 500), name='Cylinder3', color=(240, 0, 0), movable=False))
         # self.world.addChild(Cylinder((300, 500), name='Cylinder4', color=(240, 0, 0), movable=False))
 
-        self.world.addChild(Button((100, 100), name='Button1'))
+        self.world.addChild(Button((200, 200), name='Button1'))
         # self.world.addChild(Button((500, 500), name='Button2'))
 
         # self.world.addChild(Cylinder((200, 300), name='Cylinder1'))

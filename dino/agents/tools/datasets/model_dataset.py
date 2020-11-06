@@ -59,8 +59,7 @@ class ModelDataset(Dataset):
 
     def _postDeserialize(self, dict_, serializer):
         super()._postDeserialize(dict_, serializer)
-        for model in dict_.get('models', []):
-            serializer.deserialize(model)
+        serializer.deserialize(dict_.get('models', []))
     
     # @classmethod
     # def _deserialize(cls, dict_, serializer, obj=None):

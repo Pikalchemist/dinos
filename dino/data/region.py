@@ -111,7 +111,7 @@ class SpaceRegion(Serializable):
 
     def _postDeserialize(self, dict_, serializer):
         super()._postDeserialize(dict_, serializer)
-        serializer = serializer.clone({
+        serializer = serializer.clone(values={
             '.region.parent': self,
             '.region.manager': self.manager,
         })

@@ -157,7 +157,7 @@ class Agent(Module):
 
     def save(self, name):
         serializer = Serializer()
-        data = {'agent': self.serialize(serializer)}
+        data = {'agent': self.serialize(serializer), 'evaluator': self.environment.evaluator(self).serialize(serializer)}
         db = Database.from_data(self.currentConfig(name), data)
         db.save()
         return db
@@ -169,6 +169,8 @@ class Agent(Module):
         if self.dataset:
             d.deserialize(db.data.get('agent', {}).get('dataset', {}), obj=self.dataset)
         self._postDeserialize(db.data.get('agent', {}), d)
+
+        d.deserialize(db.data.get('evaluator', {}), obj=self.environment.evaluator(self, create=True))
     
     @classmethod
     def loadAgent(self, environment, path):
@@ -176,6 +178,7 @@ class Agent(Module):
         db.load()
         d = environment.deserializer()
         agent = d.deserialize(db.data.get('agent', {}))
+        d.deserialize(db.data.get('evaluator', {}), obj=environment.evaluator(agent, create=True))
         return agent
 
     @property

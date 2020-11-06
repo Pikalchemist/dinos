@@ -105,6 +105,7 @@ class Environment(SpaceManager):
         d.set('environment', self, category='spaceManager')
         d.attach_finder('entity', self.findEntity)
         d.attach_finder('property', self.findProperty)
+        d.attach_finder('test', self.findTest)
         return d
 
     def findEntity(self, name):
@@ -112,6 +113,9 @@ class Environment(SpaceManager):
 
     def findProperty(self, name):
         return self.world.cascadingProperty(name)
+    
+    def findTest(self, name):
+        return next(iter([test for test in self.tests if test.name == name]), None)
 
     @property
     def counter(self):

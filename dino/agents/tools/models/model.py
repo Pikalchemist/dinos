@@ -80,9 +80,6 @@ class Model(Serializable):
     
     @classmethod
     def _deserialize(cls, dict_, serializer, obj=None):
-        print(dict_.get('dataset'))
-        print(serializer.categoryValues)
-        print(serializer.deserialize(dict_.get('dataset')))
         if obj is None:
             obj = cls(serializer.deserialize(dict_.get('dataset')),
                       serializer.deserialize(dict_.get('actionSpace')),

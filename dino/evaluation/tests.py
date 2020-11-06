@@ -70,7 +70,7 @@ class TestResult(Serializable):
     @classmethod
     def _deserialize(cls, dict_, serializer, obj=None):
         if obj is None:
-            obj = cls(serializer.find(dict_.get('test')),
+            obj = cls(serializer.deserialize(dict_.get('test')),
                       dict_.get('iteration'),
                       dict_.get('results'),
                       dict_.get('method', ''))

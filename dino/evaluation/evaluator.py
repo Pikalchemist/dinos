@@ -38,10 +38,8 @@ class Evaluation(Serializable):
     @classmethod
     def _deserialize(cls, dict_, serializer, obj=None):
         if obj is None:
-            obj = serializer.get('environment').propertySpace(serializer.get(dict_.get('boundProperty')['__id__']),
-                                                              SpaceKind(
-                                                                  dict_.get('kind')),
-                                                              serializer.get('dataset'))
+            obj = cls(dict_.get('iteration'),
+                      serializer.deserialize(dict_.get('results', [])))
         return super()._deserialize(dict_, serializer, obj)
 
     # @classmethod
@@ -81,6 +79,23 @@ class Evaluator(Serializable):
         dict_ = serializer.serialize(
             self, ['options', 'method', 'evaluations'], exportPathType=True)
         return dict_
+    
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = cls(serializer.get('agent'),
+                      serializer.get('environment'),
+                      options=dict_.get('options', {}),
+                      method=dict_.get('method'))
+
+        return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        self.evaluations = serializer.deserialize(dict_.get('evaluations'), default={})
+        # for evaluation in dict_.get('evaluations', []):
+        #     obj = serializer.deserialize(evaluation)
+        #     self.evaluations[obj.iteration] = obj
 
     # @classmethod
     # def _deserialize(cls, dict_, agent, environment, options={}, obj=None):

@@ -62,8 +62,7 @@ class SpaceManager(Module, Serializable):
 
     def _postDeserialize(self, dict_, serializer):
         serializer.set('spaceManager', self)
-        for spaceData in dict_.get('spaces', []):
-            serializer.deserialize(spaceData)
+        serializer.deserialize(dict_.get('spaces', []))
         super()._postDeserialize(dict_, serializer)
 
     def __repr__(self):
