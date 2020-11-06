@@ -27,6 +27,32 @@ class MultiColSpace(Space):
         rowAggregations = [space.rowAggregation for space in self.spaces]
         self.incoherentRowsAlignement = np.sum(
             rowAggregations) != 0 and np.sum(rowAggregations) < len(rowAggregations)
+    
+    def _sid(self, serializer):
+        dict_ = serializer.serialize(
+            self, ['options'], foreigns=['spaces', 'spaceManager'])
+        return dict_
+        
+    def _serialize(self, serializer):
+        dict_ = serializer.serialize(
+            self, ['spaces', 'options'], foreigns=['spaceManager'])
+        return dict_
+
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            spaces = [serializer.deserialize(spaceData) for spaceData in dict_.get('spaces', [])]
+            obj = serializer.deserialize(dict_.get('spaceManager')).multiColSpace(spaces)
+
+        # Operations
+        # for spaceData in dict_.get('spaces', []):
+        #     # existing = [s for s in obj.spaces]
+        #     space = serializer.deserialize(spaceData)
+
+        return super()._deserialize(dict_, serializer, obj)
+
+    # def _postDeserialize(self, dict_, serializer):
+    #     super()._postDeserialize(dict_, serializer)
 
     @staticmethod
     def create(spaces, spaceManager=None):
@@ -72,6 +98,22 @@ class MultiColSpace(Space):
 class MultiColDataSpace(MultiColSpace, DataSpace):
     def __init__(self, spaceManager, spaces):
         MultiColSpace.__init__(self, spaceManager, spaces, parent=DataSpace)
+    
+    def _sid(self, serializer):
+        return MultiColSpace._sid(self, serializer)
+
+    def _serialize(self, serializer):
+        dict_ = MultiColSpace._serialize(self, serializer)
+        # dict_ = serializer.serialize(
+        #     self, ['spaces', 'options'])
+        return dict_
+
+    # @classmethod
+    # def _deserialize(cls, dict_, serializer, obj=None):
+    #     return super()._deserialize(dict_, serializer, obj)
+
+    # def _postDeserialize(self, dict_, serializer):
+    #     super()._postDeserialize(dict_, serializer)
 
     def addPoint(self, point, idx, cost=None, action=False):
         """Add a point in the space and if valid return id."""
@@ -190,6 +232,22 @@ class MultiRowDataSpace(DataSpace):
         # Hook when spaces are modified and this one has to be recomputed
         for space in self.spaces:
             space.childrenSpaces.append(self)
+    
+    def _sid(self, serializer):
+        return MultiColSpace._sid(self, serializer)
+    
+    def _serialize(self, serializer):
+        dict_ = MultiColSpace._serialize(self, serializer)
+        # dict_ = serializer.serialize(
+        #     self, ['spaces', 'options'])
+        return dict_
+
+    # @classmethod
+    # def _deserialize(cls, dict_, serializer, obj=None):
+    #     return super()._deserialize(dict_, serializer, obj)
+
+    # def _postDeserialize(self, dict_, serializer):
+    #     super()._postDeserialize(dict_, serializer)
 
     @staticmethod
     def create(spaces):

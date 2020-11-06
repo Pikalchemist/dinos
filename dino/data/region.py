@@ -8,6 +8,7 @@ import pickle
 
 from exlab.utils.text import strtab
 from exlab.interface.graph import Graph
+from exlab.interface.serializer import Serializable
 
 from .space import Space, SpaceKind
 from .dataspace import DataSpace
@@ -17,7 +18,7 @@ from .dataspace import DataSpace
 from .data import Data
 
 
-class SpaceRegion(object):
+class SpaceRegion(Serializable):
     """Implements an evaluation region."""
 
     def __init__(self, targetSpace, options, bounds=None, parent=None, manager=None, tag='',
@@ -84,15 +85,42 @@ class SpaceRegion(object):
             self.root().childrenNumber += 1
 
     def __repr__(self):
-        cut = strtab(f'{self.splitDim}d {self.splitValue:.4f} #{len(self.points[0])}')
+        dim = len(self.points[0]) if self.points else '?'
+        cut = strtab(f'{self.splitDim}d {self.splitValue:.4f} #{dim}')
         return f'Region {self.space}\n    Left: {strtab(self.leftChild)}\n    <Cut {cut}>\n    Right: {strtab(self.rightChild)}'
 
-    def _serialize(self, options):
-        # serialize(self, ['name', 'description', 'effector', 'property', 'options'])
-        dict_ = {}
-        dict_['bounds'] = self.bounds
-        dict_['id'] = self.lid
+    def _serialize(self, serializer):
+        dict_ = serializer.serialize(
+            self, ['targetSpace', 'contextSpace', 'bounds', 'points', 'pointValues', 'progresses', 'evaluation',
+                   'leftChild', 'rightChild', 'splitValue', 'splitDim', 'tag'])
         return dict_
+
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            # leftChild = serializer.deserialize(dict_.get('leftChild'))
+            # rightChild = serializer.deserialize(dict_.get('rightChild'))
+            obj = cls(serializer.deserialize(dict_.get('targetSpace')),
+                      options=dict_.get('options', {}),
+                      bounds=dict_.get('bounds'),
+                      parent=serializer.get('.region.parent'),
+                      manager=serializer.get('.region.manager'),
+                      tag=dict_.get('tag', ''),
+                      contextSpace=serializer.deserialize(dict_.get('contextSpace')))
+        return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        serializer = serializer.clone({
+            '.region.parent': self,
+            '.region.manager': self.manager,
+        })
+
+        for attr in ['points', 'pointValues', 'progresses', 'evaluation', 'splitValue', 'splitDim']:
+            setattr(self, attr, dict_.get(attr))
+
+        self.leftChild = serializer.deserialize(dict_.get('leftChild'))
+        self.rightChild = serializer.deserialize(dict_.get('rightChild'))
 
     def root(self):
         root = self

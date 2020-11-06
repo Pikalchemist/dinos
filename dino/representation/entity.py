@@ -62,6 +62,16 @@ class Entity(Serializable):
 
         self.filterObservables = None
 
+    def _sid(self, serializer, raw=False):
+        if self.absoluteName:
+            sid = f'#{self.absoluteName}'
+        else:
+            sid = f'{self.kind}:{self.indexKind}'
+        if raw:
+            return sid
+        else:
+            return serializer.uid('entity', sid)
+
     def _serialize(self, serializer):
         dict_ = serializer.serialize(
             self, ['kind', 'absoluteName', 'index', 'indexKind', 'parent', '_children', '_properties'])
@@ -152,6 +162,10 @@ class Entity(Serializable):
         if filter_[0] == '#':
             def filtered(child):
                 return child.absoluteName == filter_[1:]
+        elif ':' in filter_:
+            kind, index = filter_.split(':')
+            def filtered(child):
+                return child.kind == kind and child.indexKind == index
         else:
             def filtered(child):
                 return child.kind == filter_

@@ -1,6 +1,8 @@
+import bz2
 import sys
 import copy
 import math
+import pickle
 import random
 import numpy as np
 
@@ -40,6 +42,39 @@ class DataSpace(Space):
 
         self.continuous = True  # ids == lids
         self.incoherentRowsAlignement = False
+    
+    def _serialize(self, serializer):
+        dict_ = super()._serialize(serializer)
+        dict_.update(serializer.serialize(
+            self, ['_number', 'continuous', 'incoherentRowsAlignement']))
+        for attr in ['costs', 'data', 'ids']:
+            dict_[attr] = bz2.compress(pickle.dumps(getattr(self, attr)[:self._number]))
+        a = np.argwhere([self.lids != -1])
+        if len(a) == 0:
+            n = 0
+        else:
+            n = np.max(a[:, 1])
+        dict_['lids'] = bz2.compress(pickle.dumps(self.lids[:n+1]))
+        return dict_
+    
+    # @classmethod
+    # def _deserialize(cls, dict_, serializer, obj=None):
+    #     if obj is None:
+    #         obj = serializer.get('environment').propertySpace(serializer.get(dict_.get('boundProperty')['__id__']),
+    #                                                           SpaceKind(dict_.get('kind')),
+    #                                                           serializer.get('dataset'))
+    #     return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        self._number = dict_.get('number')
+        self.continuous = dict_.get('continuous')
+        self.incoherentRowsAlignement = dict_.get('incoherentRowsAlignement')
+
+        for attr in ['costs', 'data', 'ids', 'lids']:
+            if attr in dict_:
+                d = pickle.loads(bz2.decompress(dict_.get(attr)))
+                getattr(self, attr)[:len(d)] = d
 
     def icon(self):
         return '@☰'

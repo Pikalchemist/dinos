@@ -48,8 +48,31 @@ class ModelDataset(Dataset):
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
         dict_.update(serializer.serialize(
-            self, ['models', 'iterationIds', 'iteration']))
+            self, ['models', 'modelClass']))
         return dict_
+    
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = cls(serializer.deserialize(dict_.get('modelClass')), dict_.get('options', {}))
+        return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        for model in dict_.get('models', []):
+            serializer.deserialize(model)
+    
+    # @classmethod
+    # def _deserialize(cls, dict_, serializer, obj=None):
+    #     if obj is None:
+    #         obj = cls(dict_.get('storesData'),
+    #                   options=dict_.get('options', {}))
+    #     return obj
+
+    # def _postDeserialize(self, dict_, serializer):
+    #     serializer.set('spaceManager', self)
+    #     for spaceData in dict_.get('spaces', []):
+    #         serializer.deserialize(spaceData)
 
     # @classmethod
     # def _deserialize(cls, dict_, modelClass=Model, options=None, obj=None):

@@ -50,7 +50,6 @@ class Model(Serializable):
 
         self.restrictionIds = restrictionIds
 
-        # self.amt = AMT()
         self.actionSpace = dataset.multiColSpace(actionSpace)
         self.outcomeSpace = dataset.multiColSpace(outcomeSpace)
         self.contextSpace = dataset.multiColSpace(contextSpace)
@@ -75,11 +74,28 @@ class Model(Serializable):
         return f'{disabled}Model{self.__class__.__name__}({self.actionSpace} | {self.contextSpace} => {self.outcomeSpace})'
 
     def _serialize(self, serializer):
-        dict_ = {}
-        dict_['actions'] = [s.id for s in self.actionSpace]
-        dict_['outcomes'] = [s.id for s in self.outcomeSpace]
-        dict_['context'] = [s.id for s in self.contextSpace]
+        dict_ = serializer.serialize(
+            self, ['enabled', 'createdSince', 'lowCompetenceSince'], foreigns=['dataset', 'actionSpace', 'outcomeSpace', 'contextSpace'])
         return dict_
+    
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        print(dict_.get('dataset'))
+        print(serializer.categoryValues)
+        print(serializer.deserialize(dict_.get('dataset')))
+        if obj is None:
+            obj = cls(serializer.deserialize(dict_.get('dataset')),
+                      serializer.deserialize(dict_.get('actionSpace')),
+                      serializer.deserialize(dict_.get('outcomeSpace')),
+                      serializer.deserialize(dict_.get('contextSpace')),
+                      dict_.get('storesData'),
+                      metaData=dict_.get('metaData', {}))
+        return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        for attr in ['enabled', 'createdSince', 'lowCompetenceSince']:
+            setattr(self, attr, dict_.get(attr))
 
     # @classmethod
     # def _deserialize(cls, dict_, dataset, spaces, loadResults=True, options={}, obj=None):

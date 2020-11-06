@@ -34,6 +34,15 @@ class Evaluation(Serializable):
         dict_ = serializer.serialize(self, ['iteration', 'meanError', 'meanStd', 'results', 'models'],
                                      exportPathType=True)
         return dict_
+    
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = serializer.get('environment').propertySpace(serializer.get(dict_.get('boundProperty')['__id__']),
+                                                              SpaceKind(
+                                                                  dict_.get('kind')),
+                                                              serializer.get('dataset'))
+        return super()._deserialize(dict_, serializer, obj)
 
     # @classmethod
     # def _deserialize(cls, dict_, options={}, obj=None):

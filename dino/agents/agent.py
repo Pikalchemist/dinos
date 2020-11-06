@@ -5,11 +5,13 @@ import math
 import time
 import threading
 
-from exlab.modular.module import Module, manage
 from exlab.lab.counter import AsyncCounter
+from exlab.modular.module import Module, manage
+from exlab.interface.serializer import Serializer
 
 from exlab.utils.io import parameter
 from dino.utils.move import MoveConfig
+from dino.utils.database import Database
 
 from dino.agents.tools.planners.planner import Planner
 from dino.agents.tools.performers.performer import Performer
@@ -93,8 +95,36 @@ class Agent(Module):
         """
         dict_ = super()._serialize(serializer)
         dict_.update(serializer.serialize(
-            self, ['options', 'testStrategies'], exportPathType=True))
+            self, ['options', 'testStrategies', 'iteration'], foreigns=['host'], exportPathType=True))
         return dict_
+    
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = cls(serializer.find(dict_.get('host')),
+                      serializer.deserialize(dict_.get('dataset')),
+                      options=dict_.get('options', {}))
+        
+        return super()._deserialize(dict_, serializer, obj)
+    
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        env = serializer.get('environment')
+        if env.iteration < dict_.get('iteration', 0):
+            env.counter.iteration = dict_.get('iteration')
+        self.syncCounter()
+    
+    def deserializer(self):
+        d = self.environment.deserializer()
+        d.set('agent', self)
+        if self.dataset:
+            d.set('dataset', self.dataset)
+            d.set('dataset', self.dataset, category='spaceManager')
+        d.attach_finder('strategy', self.findStrategy)
+        return d
+
+    def findStrategy(self, name):
+        return None
 
     # @classmethod
     # def _deserialize(cls, dict_, environment, options={}, obj=None):
@@ -116,6 +146,37 @@ class Agent(Module):
     #         obj.testStrategies.add(DataManager.loadType(strategy['path'], strategy['type'])
     #                                .deserialize(strategy, obj, options=options))
     #     return obj
+
+    def currentConfig(self, name=''):
+        d = {
+            'environment': self.environment.__class__.__name__,
+            'learner': self.__class__.__name__,
+            'name': name,
+        }
+        return d
+
+    def save(self, name):
+        serializer = Serializer()
+        data = {'agent': self.serialize(serializer)}
+        db = Database.from_data(self.currentConfig(name), data)
+        db.save()
+        return db
+    
+    def load(self, path):
+        db = Database.from_file(Database.databasedir / path)
+        db.load()
+        d = self.deserializer()
+        if self.dataset:
+            d.deserialize(db.data.get('agent', {}).get('dataset', {}), obj=self.dataset)
+        self._postDeserialize(db.data.get('agent', {}), d)
+    
+    @classmethod
+    def loadAgent(self, environment, path):
+        db = Database.from_file(Database.databasedir / path / Database.FILENAME)
+        db.load()
+        d = environment.deserializer()
+        agent = d.deserialize(db.data.get('agent', {}))
+        return agent
 
     @property
     def iteration(self):
@@ -211,10 +272,7 @@ class Agent(Module):
         return result
     
     def propertySpace(self, filter_=None, kind=None):
-        space = self.environment.world.cascadingProperty(filter_).space
-        if self.dataset:
-            space = space.convertTo(spaceManager=self.dataset, kind=kind)
-        return space
+        return self.environment.propertySpace(filter_, kind=kind, dataset=self.dataset)
     
     def getIterationType(self, iteration):
         last = None

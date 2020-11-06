@@ -44,6 +44,9 @@ class Strategy(Module):
 
     def __repr__(self):
         return f'Strategy {self.name}'
+    
+    def _sid(self, serializer):
+        return serializer.uid('strategy', self.name)
 
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)

@@ -26,12 +26,13 @@ from .multispace import MultiColSpace, MultiColDataSpace, MultiRowDataSpace
 
 
 class SpaceManager(Module, Serializable):
-    def __init__(self, storesData=False, options={}, entityCls=Entity, parent=None):
+    def __init__(self, storesData=False, options={}, entityCls=Entity, parent=None, name=''):
         Module.__init__(self, parent=parent)
         Serializable.__init__(self)
         self.spaces = []
         self.storesData = storesData
         self.options = options
+        self.name = name
 
         self.world = entityCls('root', spaceManager=self)
         self.conserveRoot = False
@@ -42,6 +43,9 @@ class SpaceManager(Module, Serializable):
         self.events = {}
 
         self.computeSpaces()
+    
+    def _sid(self, serializer):
+        return serializer.uid('spaceManager', self.name)
 
     def _serialize(self, serializer):
         dict_ = {}
@@ -51,13 +55,17 @@ class SpaceManager(Module, Serializable):
 
     @classmethod
     def _deserialize(cls, dict_, serializer, obj=None):
-        obj = obj if obj else cls(
-            dict_.get('storesData'), options=dict_.get('options', {}))
-        # Operations
-        # spaces = [Space.deserialize(space, obj, options=options)
-        #           for space in dict_.get('spaces', [])]
-        return obj
-    
+        if obj is None:
+            obj = cls(dict_.get('storesData'),
+                      options=dict_.get('options', {}))
+        return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        serializer.set('spaceManager', self)
+        for spaceData in dict_.get('spaces', []):
+            serializer.deserialize(spaceData)
+        super()._postDeserialize(dict_, serializer)
+
     def __repr__(self):
         return f'SpaceManager({len(self.spaces)} spaces and {len(self.world.cascadingChildren()) + 1} entities)'
     
@@ -102,6 +110,14 @@ class SpaceManager(Module, Serializable):
 
     def convertData(self, data, kind=None, toData=None):
         return data.convertTo(self, kind=kind, toData=toData)
+    
+    def propertySpace(self, filterOrProperty=None, kind=None, dataset=None):
+        if isinstance(filterOrProperty, str):
+            filterOrProperty = self.world.cascadingProperty(filterOrProperty)
+        space = filterOrProperty.space
+        if dataset:
+            space = space.convertTo(spaceManager=dataset, kind=kind)
+        return space
 
     # Multi Spaces
     def _multiSpace(self, spaces, list_, type_, orderWise=False):

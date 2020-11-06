@@ -14,6 +14,7 @@ import threading
 from exlab.lab.counter import IterationCounter
 from exlab.modular.module import manage
 from exlab.interface.graph import Graph
+from exlab.interface.serializer import Serializer
 
 from dino.utils.move import MoveConfig
 from dino.data.space import Space
@@ -57,8 +58,9 @@ class Environment(SpaceManager):
     def __init__(self, sceneCls=None, options={}):
         """
         """
-        SpaceManager.__init__(self, storesData=False, entityCls=LiveEntity)
+        SpaceManager.__init__(self, storesData=False, entityCls=LiveEntity, name='environment')
         # self.name = options.get('name', 'Environment')
+        self.experiment = None
 
         assert(self.__class__.ENGINE is not None)
         self.engine = self.__class__.ENGINE(self, options.get('engine', {}))
@@ -74,7 +76,7 @@ class Environment(SpaceManager):
         self.options = options
         # self.discrete = options.get('discrete', False)
 
-        self.threading = True
+        self.threading = False
         self.timestep = options.get('timestep', 3.0)  # 2 seconds per action
         # self.unitWindow = options.get("window", 5)  # number of unit
 
@@ -97,6 +99,20 @@ class Environment(SpaceManager):
         if self.defaultScene:
             self.setupScene(self.defaultScene)
     
+    def deserializer(self):
+        d = Serializer()
+        d.set('environment', self)
+        d.set('environment', self, category='spaceManager')
+        d.attach_finder('entity', self.findEntity)
+        d.attach_finder('property', self.findProperty)
+        return d
+
+    def findEntity(self, name):
+        return self.world.cascadingChild(name)
+
+    def findProperty(self, name):
+        return self.world.cascadingProperty(name)
+
     @property
     def counter(self):
         return manage(self).counter
@@ -118,7 +134,7 @@ class Environment(SpaceManager):
     #             self.dataset.convertSpace(space)
 
     @property
-    def name(self):
+    def envname(self):
         name = self.__class__.__name__
         if name.endswith(self.CLASS_ENDNAME):
             name = name[:-len(self.CLASS_ENDNAME)]

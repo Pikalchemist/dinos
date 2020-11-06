@@ -54,8 +54,10 @@ class Property(Serializable):
         self.space = Space(self.entity.spaceManager, self._dim)
         self.space._property = self
 
-    # def gid(self):
-    #     return Serializer.make_gid(self, self.entity.gid(), self.name)
+    def _sid(self, serializer, raw=False):
+        if self.absoluteName:
+            return self.absoluteName
+        return serializer.uid('property', f'{self.entity._sid(serializer, raw=True)}.{self.name}')
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(

@@ -80,20 +80,25 @@ class Space(Serializable):
         # Register
         self.spaceManager = spaceManager
         self.spaceManager.registerSpace(self)
-
-    # def cid(self):
-    #     return self.id
-
-    # def gid(self):
-    #     if self.boundProperty:
-    #         return Serializer.make_gid(self, self.spaceManager.gid(), self.kind.value, self.boundProperty.gid())
-    #     return Serializer.make_gid(self, self.spaceManager.gid(), self.kind.value)
+    
+    def _sid(self, serializer):
+        return serializer.serialize(self, ['kind'], foreigns=['spaceManager', 'boundProperty'], exportPathType=False)
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(
-            self, ['id', '_property', 'kind', 'options', 'native'])
-        # dict_ = Serializer.serialize(self, ['id', 'kind', 'options', 'native'], options=options)
+            self, ['kind', 'options'], foreigns=['spaceManager', 'boundProperty'])
         return dict_
+    
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = serializer.get('environment').propertySpace(serializer.deserialize(dict_.get('boundProperty')),
+                                                              SpaceKind(dict_.get('kind')),
+                                                              serializer.deserialize(dict_.get('spaceManager')))
+        return super()._deserialize(dict_, serializer, obj)
+    
+    # def _postDeserialize(self, dict_, serializer):
+    #     super()._postDeserialize(dict_, serializer)
 
     # @classmethod
     # def _deserialize(cls, dict_, spaceManager, options=None, obj=None):

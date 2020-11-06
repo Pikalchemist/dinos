@@ -42,7 +42,7 @@ class EmptyRoomScene(SceneSetup):
         # self.world.addEntity(self.agent)
 
         # Walls
-        w = 5
+        # w = 5
         # self.world.addChild(Wall((270.0, 200.0), (270.0, 400.0), w))
         # self.walls = [Wall((50.0, 50.0), (550.0, 50.0), w),
         #               Wall((550.0, 50.0), (550.0, 500.0), w),
@@ -56,10 +56,10 @@ class EmptyRoomScene(SceneSetup):
 
     def _setupTests(self):
         boundaries = [(200, 400), (200, 400)]
-        self.addTest(UniformGridTest(self.world.cascadingProperty(
+        self.addTest(UniformGridTest('agent-moving', self.world.cascadingProperty(
             'Agent.position').space, boundaries, numberByAxis=2, relative=False))
 
-        self.addTest(PointsTest(self.world.cascadingProperty(
+        self.addTest(PointsTest('cylinder1-moving', self.world.cascadingProperty(
             '#Cylinder1.position').space, [[-50, 0], [50, 0], [0, 50], [0, -50]], relative=True))
 
     def setupEpisode(self, config):

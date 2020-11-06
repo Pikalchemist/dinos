@@ -5,12 +5,15 @@ from exlab.interface.serializer import Serializable
 
 
 class Test(Serializable):
-    def __init__(self, space, name='', id=None):
+    def __init__(self, name, space, id=None):
         self.space = space
         self.name = name
         self.id = id
         self.scene = None
         self.points = []
+    
+    def _sid(self, serializer):
+        return serializer.uid('test', self.name)
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(self, ['space', 'name', 'id', 'scene', 'points'],
@@ -48,7 +51,6 @@ class TestResult(Serializable):
     def __init__(self, test, iteration, results, method=''):
         self.test = test
         self.iteration = iteration
-        print(results)
         # [(error, goal, reached)]
         self.results = results
         self.method = method
@@ -61,9 +63,19 @@ class TestResult(Serializable):
         #     meanError, meanQuadError, std))
 
     def _serialize(self, serializer):
-        dict_ = serializer.serialize(self, ['test', 'iteration', 'meanError', 'meanQuadError', 'std', 'results',
-                                            'method'], exportPathType=True)
+        dict_ = serializer.serialize(self, ['iteration', 'meanError', 'meanQuadError', 'std', 'results', 'method'],
+                                     foreigns=['test'], exportPathType=True)
         return dict_
+    
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = cls(serializer.find(dict_.get('test')),
+                      dict_.get('iteration'),
+                      dict_.get('results'),
+                      dict_.get('method', ''))
+
+        return super()._deserialize(dict_, serializer, obj)
 
     # @classmethod
     # def _deserialize(cls, dict_, options={}, obj=None):
@@ -89,24 +101,24 @@ class TestResult(Serializable):
 
 
 class PointTest(Test):
-    def __init__(self, space, pointValue, relative=None, name=''):
-        super().__init__(space, name=name)
+    def __init__(self, name, space, pointValue, relative=None):
+        super().__init__(name, space)
         self.points.append(space.goal(pointValue).setRelative(relative))
 
 
 class PointsTest(Test):
-    def __init__(self, space, pointValueList, relative=None, name=''):
-        super().__init__(space, name=name)
+    def __init__(self, name, space, pointValueList, relative=None):
+        super().__init__(name, space)
         for value in pointValueList:
             self.points.append(space.goal(value).setRelative(relative))
 
 
 class UniformGridTest(PointsTest):
-    def __init__(self, space, boundaries, numberByAxis=4, relative=None, name=''):
+    def __init__(self, name, space, boundaries, numberByAxis=4, relative=None):
         vectors = [np.linspace(bound[0], bound[1], numberByAxis)
                    for bound in boundaries]
         mesh = np.meshgrid(*vectors)
         flatten = [axis.flatten() for axis in mesh]
         pointValueList = np.array(flatten).T
 
-        super().__init__(space, pointValueList=pointValueList, relative=relative, name=name)
+        super().__init__(name, space, pointValueList=pointValueList, relative=relative)

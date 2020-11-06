@@ -1,15 +1,16 @@
+from exlab.interface.serializer import Serializable
 import random
 
 
-class StrategySet(set):
+class StrategySet(set, Serializable):
     def __init__(self, strategies=[], agent=None):
         super().__init__()
         self.agent = agent
         for strategy in strategies:
             self.add(strategy)
 
-    def serialize(self, options={}):
-        return [item.serialize(options=options) for item in self]
+    def _serialize(self, serializer):
+        return [serializer.serialize(item) for item in self]
 
     def add(self, strategy):
         if strategy in self:

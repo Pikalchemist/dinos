@@ -39,8 +39,15 @@ class Data(Serializable):
             self.valueOrdered = self.plainOrdered()
 
     def _serialize(self, serializer):
-        dict_ = serializer.serialize(self, ['space', 'value', 'valueOrdered'], exportPathType=True)
+        dict_ = serializer.serialize(self, ['_parts'], exportPathType=True)
         return dict_
+
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = cls([serializer.deserialize(part) for part in dict_.get('parts', [])])
+
+        return super()._deserialize(dict_, serializer, obj)
 
     # @classmethod
     # def _deserialize(cls, dict_, options={}, obj=None):
@@ -302,10 +309,23 @@ class SingleData(Data):
             raise Exception(f"Size mismatch: space {self.space} is {self.space.dim}d and the data value {self.value} is {len(self.value)}d")
         self.relative = self.space.relative
         self.abstract = self.space.abstract
-
+    
     def _serialize(self, serializer):
-        dict_ = serializer.serialize(self, ['space', 'value', 'valueOrdered', 'relative'], exportPathType=True)
+        dict_ = serializer.serialize(self, ['value', 'relative'], foreigns=[
+                                     'space'], exportPathType=True)
         return dict_
+
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = cls(serializer.find(dict_.get('space')), dict_.get('value'))
+
+        return super()._deserialize(dict_, serializer, obj)
+    
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        if dict_.get('relative'):
+            self.setRelative(dict_.get('relative'))
 
     """
     Get the associated space (no CompositeSpace)
