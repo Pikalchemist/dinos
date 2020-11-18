@@ -45,7 +45,7 @@ class Data(Serializable):
     @classmethod
     def _deserialize(cls, dict_, serializer, obj=None):
         if obj is None:
-            obj = cls([serializer.deserialize(part) for part in dict_.get('parts', [])])
+            obj = cls(*[serializer.deserialize(part) for part in dict_.get('parts', [])])
 
         return super()._deserialize(dict_, serializer, obj)
 
@@ -96,7 +96,7 @@ class Data(Serializable):
     def difference(self, previous):
         result = []
         for point in self.flat():
-            if point.space.relative:
+            if point.space.relativeLearning:
                 result.append(
                     point - previous.singleSpaceComposante(point.space))
             else:
@@ -265,6 +265,9 @@ class Data(Serializable):
 
     def asTemplate(self, values):
         return self.__class__(self.space, values)
+    
+    def bounded(self, bounds=(-1, 1)):
+        return self.__class__(*[part.bounded(bounds) for part in self._parts])
 
     @staticmethod
     def plainData(obj, spaceOrder=None, assertSize=True, fill=False):
@@ -318,7 +321,7 @@ class SingleData(Data):
     @classmethod
     def _deserialize(cls, dict_, serializer, obj=None):
         if obj is None:
-            obj = cls(serializer.find(dict_.get('space')), dict_.get('value'))
+            obj = cls(serializer.deserialize(dict_.get('space')), dict_.get('value'))
 
         return super()._deserialize(dict_, serializer, obj)
     
@@ -418,6 +421,10 @@ class SingleData(Data):
         if not row:
             return self
         return self.__class__(row, self.value).setRelative(self.relative)
+    
+    def bounded(self, bounds=(-1, 1)):
+        value = [min(max(v, bounds[0]), bounds[1]) for v in self.value]
+        return self.__class__(self.space, value).setRelative(self.relative)
 
     def toStr(self, short=False):
         ls = ', '.join(["{: .3f}".format(v) for v in self.value])

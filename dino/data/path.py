@@ -219,7 +219,7 @@ class PathNode(object):
     def toStr(self, short=False):
         # paths = super().toStr(True) if self.paths else ''
         paths = ''
-        return f"{'' if short else 'Node'} {type(self.action)}({self.action.toStr(short=True) if self.action else ''} - to reach→ {self.goal.toStr(short=True) if self.goal else 'NoGoal'}){paths}"
+        return f"{'' if short else 'Node'} {self.action.__class__.__name__}({self.action.toStr(short=True) if self.action else ''} - to reach→ {self.goal.toStr(short=True) if self.goal else 'NoGoal'}){paths}"
         # return "Node: {} ({}, {}) {} [{}]".format(self.goal, self.action, self.model, paths, self.state)
 
     def __repr__(self):

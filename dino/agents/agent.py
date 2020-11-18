@@ -157,7 +157,10 @@ class Agent(Module):
 
     def save(self, name):
         serializer = Serializer()
-        data = {'agent': self.serialize(serializer), 'evaluator': self.environment.evaluator(self).serialize(serializer)}
+        data = {'agent': self.serialize(serializer)}
+        evaluator = self.environment.evaluator(self)
+        if evaluator:
+            data['evaluator'] = evaluator.serialize(serializer)
         db = Database.from_data(self.currentConfig(name), data)
         db.save()
         return db

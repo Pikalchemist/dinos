@@ -144,9 +144,13 @@ class LiveEntity(Entity):
 
     def observe(self, spaces=None, formatParameters=None):
         spaces = spaces.convertTo(
-            self.root, kind=SpaceKind.BASIC) if spaces else None
-        if self.filterObservables and not spaces:
-            spaces = [x.space for x in self.filterObservables]
+            self.spaceManager, kind=SpaceKind.BASIC) if spaces else None
+        if self.filterObservables:
+            obsSpaces = [x.space for x in self.filterObservables]
+            if not spaces:
+                spaces = obsSpaces
+            else:
+                spaces = [x for x in spaces if x in obsSpaces]
 
         ys = []
         # spaces = spaces if spaces else self.outcomeSpaces

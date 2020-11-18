@@ -3,12 +3,13 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
 from exlab.interface.graph import Graph
+from exlab.interface.serializer import Serializable
 from exlab.utils.io import parameter
 
 from . import operations
 
 
-class ContextSpatialization(object):
+class ContextSpatialization(Serializable):
     MAX_AREAS = 1000
     NN_NUMBER = 10
     MINIMUM_POINTS = 100
@@ -22,6 +23,26 @@ class ContextSpatialization(object):
         self.evaluatedSpace = self.model.contextSpace
         self.boolean = boolean
         self.resetAreas()
+
+    def _serialize(self, serializer):
+        dict_ = serializer.serialize(
+            self, ['areas', 'stability'])
+        return dict_
+
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            raise Exception('No full deserializer is available for this class')
+        return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        serializer = serializer.clone(values={'.area.manager': self})
+
+        self.stability = dict_.get('stability', 0)
+        for areaDict in dict_.get('areas', []):
+            area = serializer.deserialize(areaDict)
+            self._addArea(area)
     
     @property
     def dataset(self):
@@ -207,13 +228,30 @@ class ContextSpatialization(object):
         return g
 
 
-class ContextArea(object):
+class ContextArea(Serializable):
     def __init__(self, manager, center, columns):
         self.manager = manager
         self.center = center
         self.columns = columns
         self.ids = np.array([])
         self.stability = 0
+    
+    def _serialize(self, serializer):
+        dict_ = serializer.serialize(
+            self, ['center', 'columns', 'stability'])
+        return dict_
+
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = cls(serializer.get('.area.manager'),
+                      serializer.deserialize(dict_.get('center')),
+                      np.array(serializer.deserialize(dict_.get('columns'))))
+        return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        self.stability = dict_.get('stability', 0)
     
     # def cloneTo(self, manager):
     #     columns = np.full(manager.evaluatedSpace.dim, False)
@@ -246,4 +284,6 @@ class ContextArea(object):
 
 
     def __repr__(self):
+        if self not in self.manager.areas:
+            return f'Area centered on {self.center}'
         return f'Area {self.manager.areas.index(self)} centered on {self.center}'

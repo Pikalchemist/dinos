@@ -62,7 +62,7 @@ class Model(Serializable):
 
         self.contextSpacialization = None
         if self.contextSpace:
-            self.contextSpacialization = (ContextSpatialization(self, self.outcomeSpace), ContextSpatialization(self, self.contextSpace))
+            self.contextSpacialization = [ContextSpatialization(self, self.outcomeSpace)] #, ContextSpatialization(self, self.contextSpace)]
 
         # self.spacesHistory = DataEventHistory()
 
@@ -75,9 +75,9 @@ class Model(Serializable):
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(
-            self, ['enabled', 'createdSince', 'lowCompetenceSince'], foreigns=['dataset', 'actionSpace', 'outcomeSpace', 'contextSpace'])
+            self, ['enabled', 'createdSince', 'lowCompetenceSince', 'contextSpacialization'], foreigns=['dataset', 'actionSpace', 'outcomeSpace', 'contextSpace'])
         return dict_
-    
+
     @classmethod
     def _deserialize(cls, dict_, serializer, obj=None):
         if obj is None:
@@ -93,6 +93,9 @@ class Model(Serializable):
         super()._postDeserialize(dict_, serializer)
         for attr in ['enabled', 'createdSince', 'lowCompetenceSince']:
             setattr(self, attr, dict_.get(attr))
+        for i, csd in enumerate(dict_.get('contextSpacialization', [])):
+            if i < len(self.contextSpacialization):
+                serializer.deserialize(csd, obj=self.contextSpacialization[i])
 
     # @classmethod
     # def _deserialize(cls, dict_, dataset, spaces, loadResults=True, options={}, obj=None):
