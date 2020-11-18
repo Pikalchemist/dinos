@@ -61,7 +61,8 @@ class Space(Serializable):
         self.dim = dim
         self.options = options
         # self.delegateto = options.get('delegateto', None)
-        self._relative = options.get('relative', True)
+        self._relative = options.get('relative', False)
+        self._relativeLearning = options.get('relativeLearning', True)
         self._modulo = options.get('modulo', None)
         self.noaction = options.get('noaction', False)
 
@@ -164,6 +165,10 @@ class Space(Serializable):
     @property
     def relative(self):
         return self.nativeRoot()._relative
+    
+    @property
+    def relativeLearning(self):
+        return self.nativeRoot()._relativeLearning
 
     @property
     def modulo(self):

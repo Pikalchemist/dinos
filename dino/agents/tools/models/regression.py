@@ -541,6 +541,8 @@ class RegressionModel(Model):
 
         y0 = self.outcomeSpace.asTemplate(minY0Plain, entity=entity)
         a0 = self.actionSpace.asTemplate(minA0Plain, entity=entity)
+        if self.actionSpace.primitive():
+            a0 = a0.bounded()
         # if a0.length() > 1000:
         #     raise Exception()
         goalDistanceNormalized = minDistance / self.outcomeSpace.maxDistance
