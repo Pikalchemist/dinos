@@ -341,6 +341,8 @@ class Environment(SpaceManager):
                     self.scheduledActionCounter = 0
                     if not evaluating:
                         manage(self).counter.next_iteration()
+                        if self.iteration % 10 == 0:
+                            self.logger.info(f'{self.iteration}...')
                     if self.threading:
                         for agent in self.agents():
                             agent.iterationEvent.set()

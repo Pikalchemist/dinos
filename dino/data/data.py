@@ -431,8 +431,7 @@ class SingleData(Data):
         return f"{self.space.toStr(True)}{'±' if self.relative else ''}{ls}"
 
     def __repr__(self):
-        ls = ["{: .3f}".format(v) for v in self.value]
-        return f"{self.__class__.__name__}({self.space.toStr(True)}{ls})"
+        return f"{self.__class__.__name__}({self.toStr(True)})"
 
 
 class DataSequence(Serializable):

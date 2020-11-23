@@ -31,6 +31,8 @@ from dino.data.contextarea import ContextSpatialization
 class Model(Serializable):
     number = 0
     ALMOST_ZERO_FACTOR = 0.002
+    PRECISION_LEARNING_RATE = 0.01
+    PRECISION_MULTIPLIER = 2.
 
     def __init__(self, dataset, actionSpace, outcomeSpace, contextSpace=[], restrictionIds=None, model=None,
                  register=True, metaData={}):
@@ -47,6 +49,7 @@ class Model(Serializable):
         self.lowCompetenceSince = -1
         self.evaluations = {}
         self.attemptedContextSpaces = {}
+        self.precision = -1.
 
         self.restrictionIds = restrictionIds
 
@@ -75,7 +78,7 @@ class Model(Serializable):
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(
-            self, ['enabled', 'createdSince', 'lowCompetenceSince', 'contextSpacialization'], foreigns=['dataset', 'actionSpace', 'outcomeSpace', 'contextSpace'])
+            self, ['enabled', 'createdSince', 'lowCompetenceSince', 'contextSpacialization', 'precision'], foreigns=['dataset', 'actionSpace', 'outcomeSpace', 'contextSpace'])
         return dict_
 
     @classmethod
@@ -91,7 +94,7 @@ class Model(Serializable):
 
     def _postDeserialize(self, dict_, serializer):
         super()._postDeserialize(dict_, serializer)
-        for attr in ['enabled', 'createdSince', 'lowCompetenceSince']:
+        for attr in ['enabled', 'createdSince', 'lowCompetenceSince', 'precision']:
             setattr(self, attr, dict_.get(attr))
         for i, csd in enumerate(dict_.get('contextSpacialization', [])):
             if i < len(self.contextSpacialization):
@@ -169,7 +172,16 @@ class Model(Serializable):
 
             # context = event.context.projection(self.contextSpace)
             # self.contextSpacialization[1].addPoint(context)
-    
+
+    def updatePrecision(self, success, distanceToGoal):
+        # oldp = self.precision
+        precision = min(distanceToGoal * self.PRECISION_MULTIPLIER, self.outcomeSpace.maxDistance * 0.1)
+        if self.precision < 0:
+            self.precision = self.outcomeSpace.maxDistance * 0.05
+        self.precision = self.precision * (1 - self.PRECISION_LEARNING_RATE) + (precision - self.precision) * self.PRECISION_LEARNING_RATE
+        self.precision = min(max(self.precision, self.outcomeSpace.maxDistance * 0.005), self.outcomeSpace.maxDistance * 0.1)
+        # print(f'from {oldp} to {self.precision} // {distanceToGoal} // {self}')
+
     # Context
     def hasContext(self, contextSpace, contextColumns):
         return contextSpace and (contextColumns is None or np.any(contextColumns))
@@ -197,7 +209,7 @@ class Model(Serializable):
         value, error = self.npForward(action, context, contextColumns=contextColumns, ignoreFirst=ignoreFirst, entity=entity)
         if value is None or np.isnan(np.sum(value)):
             return None, 1
-        return Data(self.outcomeSpace.applyTo(entity), value.tolist()), error
+        return Data(self.outcomeSpace.applyTo(entity), value.tolist()).setRelative(True), error
 
     def npForward(self, action: Action, context: Observation = None, contextColumns=None, ignoreFirst=False, entity=None):
         raise NotImplementedError()
@@ -207,18 +219,6 @@ class Model(Serializable):
 
     def bestLocality(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None):
         raise NotImplementedError()
-
-    # Deprecated
-    # def goalCompetenceError(self, goal: Goal, context: Observation = None, contextColumns=None):
-    #     try:
-    #         competence, error, distance = self.inverse(goal, context, contextColumns=contextColumns)[3:6]
-    #         return competence, error, distance
-    #     except ActionNotFound:
-    #         return -1, -1, -1
-
-    # Deprecated
-    # def goalCompetence(self, goal: Goal, context: Observation = None, contextColumns=None):
-    #     return self.goalCompetenceError(goal, context, contextColumns=contextColumns)[0]
     
     def computeCompetence(self, error, distanceGoal=0):
         distanceGoal = min(distanceGoal, 1.)

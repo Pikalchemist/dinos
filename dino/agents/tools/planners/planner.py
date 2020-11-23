@@ -13,6 +13,7 @@ from dino.data.data import Data, Goal, SingleAction, Action, ActionList
 from dino.data.path import ActionNotFound, Path, PathNode
 from dino.data.space import SpaceKind
 # from dino.models.model import Model
+from dino.utils.result import Result
 
 from collections import namedtuple
 
@@ -37,19 +38,25 @@ class PlannerModelMap(object):
 
 
 class PlanSettings(object):
-    def __init__(self, compute_actions=True):
-        self.compute_actions = compute_actions
+    def __init__(self, computeActions=True, performing=False):
+        self.computeActions = computeActions
         self.length = 0
         self.depth = -1
+        self.context = False
 
         self.controlledSpaces = []
         self.dontMoveSpaces = []
 
         self.allowContextPlanning = True
         self.forceContextPlanning = False
+        self.tryContextPlanning = True
         self.mayUseContext = False
         self.hierarchical = None
         self.maxIterations = None
+
+        self.performing = performing
+
+        self.result = Result(None)
 
     def freeSpace(self, space):
         for s in self.controlledSpaces:
@@ -57,10 +64,12 @@ class PlanSettings(object):
                 return False
         return True
 
-    def clone(self):
+    def clone(self, **kwargs):
         obj = copy.copy(self)
         obj.controlledSpaces = list(self.controlledSpaces)
         obj.dontMoveSpaces = list(self.dontMoveSpaces)
+        for key, value in kwargs.items():
+            setattr(obj, key, value)
         return obj
 
 
@@ -174,472 +183,10 @@ class Planner(Module):
             nodes.append(node)
         # print('----')
         return Path(nodes)
-    
-    def generateRandomPoint(self, goal, space):
-        origin = random.uniform(0., 1.) * goal.npPlain()
-        # point = [random.uniform(0., 1.) for _ in range(space.dim)]
-        # point = point * goal
-        width = 0.7 * min(0.05 * space.maxDistance + goal.norm(), space.maxDistance)
-        point = origin + width * np.array([random.uniform(-1., 1.)
-                                   for _ in range(space.dim)])
-        return space.goal(point)
-    
-    def findClosestMove(self, subgoal, nearestNode, model, context):
-        lastVariance = -1.
-        # We are looking for a valid point in the outcome space
-        for j in range(10):
-            if j == 0:
-                move = subgoal - nearestNode.pos
-            else:
-                # subgoal = subgoaldistant
-                move *= distancesToNode / move.norm()
-            # self.logger.debug2(
-            #     f'(d{settings.depth}) Iter {i} {j}: {move}')
-
-            # moveContext = move.extends(context)
-            ids, _, _ = model.nearestOutcome(
-                move, context=context, n=5, nearestUseContext=False)
-            # ids, dists = model.outcomeContextSpace.nearestDistance(moveContext, n=5, restrictionIds=ids)
-            if len(ids) == 0:
-                return None, None
-            nearestMove = model.outcomeSpace.getPoint(ids)[0]
-
-            # print('----', j)
-            # print(move)
-            # print(nearestMove)
-            # print(model.outcomeSpace.variance(ids))
-            # print(model.outcomeSpace.denseEnough(ids))
-            # print(model.outcomeSpace.maxDistance * 0.1)
-
-            distancesToNode = 0.9 * np.mean(np.sum(np.array(
-                model.outcomeSpace.getPlainPoint(ids)) ** 2, axis=1) ** .5)
-            distancesToMove = np.mean(np.sum(np.array(
-                model.outcomeSpace.getPlainPoint(ids) - move.npPlain()) ** 2, axis=1) ** .5)
-            # self.logger.debug2(
-            #     f'(d{settings.depth}) Iter {i} {j}: {model.outcomeSpace.getPlainPoint(ids)}')
-
-            # self.logger.debug2(
-            #     f'(d{settings.depth}) Iter {i} {j}: {nearestMove} {distancesToMove} {distancesToNode}')
-            # print('!', distancesToMove)
-            # print(model.outcomeSpace.getPlainPoint(ids) - move.npPlain())
-            # if j == 0:
-            #     distancesToNode = 10.
-
-            variance = model.outcomeSpace.variance(ids)
-            if abs(lastVariance - variance) <= 0.05 * variance:
-                break
-            lastVariance = variance
-
-            # model.outcomeSpace.denseEnough(ids, threshold=0.1) or
-            if distancesToMove <= model.outcomeSpace.maxDistance * 0.25:
-                break
-        return move, nearestMove
-    
-    def findClosestMoveWithoutContext(self, subgoal, nearestNode, model):
-        move = subgoal - nearestNode.pos
-        ids, _, _ = model.nearestOutcome(move, n=1)
-        return move, model.outcomeSpace.getPoint(ids)[0], ids[0]
 
     def __plan(self, model, goal, state=None, settings=PlanSettings()):
-        self.logger.debug(f'=== New planning (d{settings.depth}) === -> {goal} using {model} with context {state}')
-
-        # Checking if space already planned
-        if not settings.freeSpace(goal.space):
-            error = f'Failed to create a path to reach {goal}. Space {goal.space} trying to be controlled twice! (controlled spaces: {settings.controlledSpaces})'
-            self.logger.debug(error)
-            raise ActionNotFound(error, None)
-        settings.controlledSpaces += model.outcomeSpace
-        # print(goal.space)
-        # print(settings.controlledSpaces)
-
-        # Settings
-        # hierarchical = parameter(settings.hierarchical, self.hierarchical)
-        space = model.outcomeSpace
-        # if self.environment:
-
-        state = state if state else self.environment.state(self.dataset)
-        goal = goal.projection(space)
-        goal = goal.relativeData(state)
-        startPos = state.context().projection(space)
-
-        self.logger.debug(f'== Relative goal is {goal} (starting pos {startPos})')
-
-        attemptedUnreachable = []
-        attemptedBreakConstraint = []
-        lastInvalids = []
-
-        # parameters
-        maxIter = parameter(settings.maxIterations, 20)
-        if settings.dontMoveSpaces:
-            maxIter *= 10
-        maxIterNoNodes = 20
-
-        # init variables
-        maxdist = 2 + 0.02 * goal.norm()
-        maxdistIncomplete = 5 + 0.1 * goal.norm()
-
-        mindist = math.inf
-        minnode = None
-
-        zero = space.zero()
-        nodes = [PathNode(pos=zero, absPos=startPos, state=state)]
-        # nodePositions = np.zeros((maxIter + 1, space.dim))
-
-        path = Path()
-        dist = 0
-        directGoal = True
-        # previousMove = None
-        # print('GOAL: {}'.format(goal))
-        # print('================')
-        lastPos = None
-
-        invalidPointRatioLimit = 0.05
-        ignoreConstraintDistanceLimit = 0.05 * space.maxDistance
-
-        # Main loop
-        for i in range(maxIter):
-            # Finding a subgoal
-            if random.uniform(0, 1) <= self.GOAL_SAMPLE_RATE or directGoal:
-                subgoaldistant = goal
-            else:
-                subgoaldistant = self.generateRandomPoint(goal, space)
-                # space.goal([random.uniform(minrand, maxrand) for x in range(space.dim)])
-
-                if lastInvalids:
-                    for _ in range(50):
-                        invalids = np.array(lastInvalids)
-                        dists = np.sum((invalids - subgoaldistant.npPlain()) ** 2, axis=1) ** 0.5
-                        if not np.any(dists < invalidPointRatioLimit * space.maxDistance):
-                            break
-                        subgoaldistant = self.generateRandomPoint(goal, space)
-                        # self.logger.debug2(f'(d{settings.depth}) Iter {i}: Too close to invalid point, retrying...')
-            
-            if len(nodes) <= 3 and i > maxIterNoNodes:
-                self.logger.warning(f'Not enough nodes, aborting...')
-                break
-
-            # dlist = [euclidean(node.pos.plain(), subgoalPlain) for node in nodes]
-            # nearestNode = nodes[dlist.index(min(dlist))]
-
-            # print('---')
-            # print(subgoal)
-            # print(nearestNode.pos)
-            # if move == previousMove and len(nodes) > 1:
-            #     # index = np.random.randint(1, min(4, len(nodes)))
-            #     # print(index)
-            #     # nearestNode = nodes[np.argsort(dlist)[index]]
-            #     # subgoalPlain = nodes[-1]
-            #     # move = subgoal - nearestNode.pos
-            #     print('same')
-            # else:
-            #     previousMove = move
-
-            subgoal = subgoaldistant
-
-            # Nearest Node
-            subgoalPlain = subgoal.plain()
-            dlist = np.sum(
-                (np.array([node.pos.plain() for node in nodes]) - subgoalPlain) ** 2, axis=1) ** 0.5 * np.array([node.penalty() for node in nodes])
-            nearestNode = nodes[np.argmin(dlist)]
-
-            contextState = None
-            state = nearestNode.state
-            self.logger.debug2(
-                f'(d{settings.depth}) Iter {i}: current state is {state}')
-            context = state.context()
-            if self.semmap:
-                context = self.semmap.context(context)
-            
-            self.logger.debug2(
-                f'(d{settings.depth}) Iter {i}: chosen subgoal is {subgoal}(->{subgoaldistant}) (direct={directGoal}) (final goal {goal}) with context {state}')
-
-            move, nearestMove = self.findClosestMove(
-                subgoal, nearestNode, model, context)
-
-            if move is None:
-                print(f'!!!!!!!! {model} {goal} {context}')
-                continue
-
-            self.logger.debug2(
-                f'(d{settings.depth}) Iter {i}: corresponding chosen move is {move}')
-
-            # print('-->>> ', c0)
-            # if c0:
-            #     context = c0
-            #     self.logger.debug2(
-            #         f'(d{settings.depth}) Iter {i}: changing context to {context}')
-
-            # Use whether nearest move, or directly the chosen move according to the nearest move distance
-            # print('===')
-            # moveDistance = (move - nearestMove).length()
-            # limitDistance = model.outcomeSpace.maxDistance / 1
-            # print(moveDistance)
-            # if moveDistance < limitDistance and move.length() < limitDistance:
-            #     # print('use')
-            #     # print(moveDistance)
-            #     # print(move.length())
-            #     # print(nearestMove)
-            #     tryDirectMove = True
-            #     attemptMove = move
-            #     # print('Direct?')
-            # else:
-            #     tryDirectMove = False
-            #     attemptMove = nearestMove
-
-            contextPath = None
-            if not settings.forceContextPlanning:
-                attemptMove = move
-                tryDirectMove = True
-
-                # Trying move
-                reachable, y0, a0 = model.reachable(attemptMove, context=context)
-                # print('>', reachable, attemptMove, y0, a0)
-                # model.npForward(a0, context, debug=True)
-                # print(move)
-                # print(nearestMove)
-                # print(y0)
-                # print(euclidean((nearestNode.pos + y0).plain(), goal.plain()))
-                # print(reachable)
-
-                if reachable:
-                    newPos = nearestNode.pos + y0
-                    absPos = startPos + newPos
-                    dist = euclidean(newPos.plain(), subgoal.plain())
-                if not reachable or dist > mindist:
-                    # Attempt nearest move
-                    if dist > mindist:
-                        reachable = False
-                        self.logger.debug2(
-                            f'(d{settings.depth}) Iter {i}: we are way too far from subgoal! Using {nearestMove} instead ({dist} > {mindist})')
-                    else:
-                        self.logger.debug2(
-                            f'(d{settings.depth}) Iter {i}: move {attemptMove} not reachable, our nearest move is {nearestMove}')
-
-                    # print('invalid')
-                    if tryDirectMove:
-                        attemptMove = nearestMove
-                        reachable, y0, a0 = model.reachable(
-                            attemptMove, context=context)
-                        # print('REACHAAAAABLE?', reachable, y0, a0)
-                        # print('>>', reachable, nearestMove, y0, a0)
-
-                if not reachable:
-                    # Attempt 1/2 nearest move
-                    attemptMove = nearestMove * 0.5
-                    reachable, y0, a0 = model.reachable(
-                        attemptMove, context=context)
-                    # print('REACHAAAAABLE?', reachable, y0, a0)
-                    # print('>>>', reachable, nearestMoveHalf, y0, a0)
-                
-                if reachable and subgoal.norm() > 0.01:
-                    if y0.norm() < 0.02:
-                        reachable = False
-                    else:
-                        # diff = (subgoal - y0).norm() / subgoal.norm()
-                        orientation = 1. - subgoal.npPlain().dot(y0.npPlain()) / (subgoal.norm() * y0.norm())
-                        if orientation > 0.4 or y0.norm() < 0.2 * goal.norm() or y0.norm() > 5.0 * goal.norm():
-                            reachable = False
-                            self.logger.debug2(
-                                f'(d{settings.depth}) Iter {i}: we\'re way too far from goal!')
-
-            if (settings.forceContextPlanning or not reachable) and model.contextSpace:
-                attemptMove, nearestMove, nearestMoveId = self.findClosestMoveWithoutContext(
-                    subgoal, nearestNode, model)
-
-                c0 = model.contextSpace.getPoint(nearestMoveId)[0]
-                if settings.forceContextPlanning:
-                    self.logger.debug2(
-                        f'(d{settings.depth}) Iter {i}: trying to reach context {c0} first')
-                else:
-                    self.logger.debug2(
-                        f'(d{settings.depth}) Iter {i}: move still not reachable, trying to use a different context {c0}')
-
-                reachable, y0, a0 = model.reachable(
-                    attemptMove, context=c0)
-
-                if not reachable:
-                    attemptMove = nearestMove
-                    reachable, y0, a0 = model.reachable(
-                        attemptMove, context=c0)
-
-                if not reachable:
-                    attemptMove = nearestMove * 0.5
-                    reachable, y0, a0 = model.reachable(
-                        attemptMove, context=c0)
-
-                # print('===')
-                # print(reachable, y0, a0)
-                
-                if reachable:
-                    self.logger.debug2(
-                        f'(d{settings.depth}) Iter {i}: move reachable with new context, is the context reachable?')
-
-                    
-                    newSettings = settings.clone()
-                    if i == 0:
-                        newSettings.dontMoveSpaces.append(goal.space)
-                    # First context planning
-                    # if i == 0:
-                    #     newSettings.maxIterations = 100
-                    try:
-                        contextPath, contextState = self.plan(c0.setRelative(False), nearestNode.state, settings=newSettings)
-                    except ActionNotFound:
-                        contextPath = None
-                    
-                    # Try without dontMoveSpaces constraint
-                    if not contextPath:
-                        newSettings.dontMoveSpaces = []
-                        try:
-                            contextPath, contextState = self.plan(c0.setRelative(False), nearestNode.state, settings=newSettings)
-                        except ActionNotFound:
-                            contextPath = None
-
-                    if contextPath:
-                        c0 = contextState.context()
-                        attemptMove = nearestMove
-                        reachable, y0, a0 = model.reachable(
-                            attemptMove, context=c0)
-
-                        if not reachable:
-                            attemptMove = nearestMove * 0.5
-                            reachable, y0, a0 = model.reachable(
-                                attemptMove, context=c0)
-
-                    if not reachable:
-                        self.logger.debug(
-                            f'(d{settings.depth}) Iter {i}: context {c0} is not reachable')
-
-            if not reachable:
-                directGoal = False
-                self.logger.debug2(
-                    f'(d{settings.depth}) Iter {i}: not reachable!!')
-                nearestNode.failures += 1
-                attemptedUnreachable.append(subgoalPlain + nearestNode.pos.plain())
-                lastInvalids.append(subgoalPlain)
-                continue
-            # print('valid')
-            # print(a0)
-            # print(y0)
-
-            # # print('dist', dist)
-            # if dist > mindist:
-            #     # print('BOEZJPOIDVJPDVS *****')
-            #     self.logger.debug2(
-            #         f'(d{settings.depth}) Iter {i}: we are way too far from subgoal! {dist} > {mindist}')
-            #     reachable, y0b, a0b = model.reachable(
-            #         nearestMove, context=context)
-            #     # print('>>', reachable, nearestMove, y0)
-            #     if reachable:
-            #         y0 = y0b
-            #         a0b = a0b
-
-            newPos = nearestNode.pos + y0
-            absPos = startPos + newPos
-            dist = euclidean(newPos.plain(), goal.plain())
-
-            # Creating a new node
-            if contextState:
-                state = contextState.copy()
-            else:
-                state = state.copy()
-            newState = state.apply(a0, self.dataset)
-            if settings.dontMoveSpaces and dist > ignoreConstraintDistanceLimit:
-                difference = newState.difference(nearestNode.state)
-                dmChanged = False
-                for dmSpace in settings.dontMoveSpaces:
-                    dmDiff = difference.projection(dmSpace)
-                    if dmDiff.norm() > self.MAX_MOVE_UNCHANGED_SPACES:
-                        # self.logger.warning(f'{newState.context().projection(dmSpace)} vs {state.context().projection(dmSpace)} by doing {a0}')
-                        dmChanged = True
-                        break
-                if dmChanged:
-                    directGoal = False
-                    self.logger.debug2(
-                        f'(d{settings.depth}) Iter {i}: move {attemptMove} is reachable but it affects {dmSpace}: {dmDiff} that shouldnt be changed')
-                    nearestNode.failures += 1
-                    attemptedBreakConstraint.append(subgoalPlain + nearestNode.pos.plain())
-                    lastInvalids.append(subgoalPlain)
-                    continue
-
-            self.logger.debug2(
-                f'(d{settings.depth}) Iter {i}: move {attemptMove} is usable ({a0}->{y0}), future state: {newState} ({absPos})')
-            
-            lastInvalids = []
-            # if len(lastInvalids) > 5:
-            #     lastInvalids = lastInvalids[-5:]
-            # if lastInvalids:
-            #     lastInvalids = lastInvalids[1:]
-
-            newNode = PathNode(pos=newPos, absPos=absPos, action=a0, goal=y0, model=model, parent=nearestNode,
-                               state=newState)
-            newNode.context = contextPath
-            # nodePositions[len(nodes)] = newPos.npPlain()
-            nodes.append(newNode)
-            self.logger.debug2(
-                f'(d{settings.depth}) Iter {i}: node {newNode} attached to {nearestNode}')
-
-            # Distance
-            dist = euclidean(newPos.plain(), goal.plain())
-            if dist > mindist:
-                directGoal = False
-            if dist < mindist:
-                mindist = dist
-                if dist < maxdistIncomplete:
-                    minnode = newNode
-
-            # print(dist)
-            self.logger.debug2(
-                f'(d{settings.depth}) Iter {i}: distance from goal {dist:.3f} (max {maxdist:.3f})')
-            if dist < maxdist:
-                self.logger.debug2(
-                    f'(d{settings.depth}) Iter {i}: close enough to the goal {dist:.3f} (max {maxdist:.3f})')
-
-                # print('FOUND')
-                path = newNode.createPath(goal)
-                break
-        
-            newPos = nearestNode.pos + y0
-            # if lastPos and np.sum(np.abs(newPos.npPlain() - lastPos)) < 1.:
-            #     self.logger.debug2(
-            #         f'(d{settings.depth}) Iter {i}: deadlock, we are not moving enough! Stopping here')
-            #     break
-            lastPos = newPos.plain()
-
-        if minnode and not path:
-            path = minnode.createPath(goal)
-
-        # self._plotNodes(nodes, goal, space, attemptedUnreachable, attemptedBreakConstraint)
-
-        self.logger.debug(
-            f"(d{settings.depth}) Planning {'generated' if path else 'failed'} for goal {goal} in {i+1} step(s)")
-
-        # if hierarchical:
-        #     self.logger.debug2(
-        #         f"(d{settings.depth}) Planning sub level actions...")
-        #     anyNonPrimitive = False
-        #     for node in path:
-        #         if not node.action.space.primitive():
-        #             anyNonPrimitive = True
-        #             # print('NODDE?')
-        #             node.execution = self.plan(
-        #                 node.action, state=state)
-        #     if anyNonPrimitive:
-        #         self.logger.debug2(
-        #             f"(d{settings.depth}) Planning sub level actions... [Finished]")
-        #     else:
-        #         self.logger.debug2(
-        #             f"(d{settings.depth}) ...not needed, all actions are primitives")
-        # print('Miaou==')
-
-        # if settings.depth == 0:
-        #     print('OVEERRRRR')
-        #     print(path)
-
-        # print(path)
-
-        finalState = path[-1].state if path else None
-
-        return path, finalState, max(0, mindist)
+        planning = Planning(self, model, goal, state, settings)
+        return planning.execute()
 
     # def _contextPlanning(self, model, goal, state=None, settings=PlanSettings()):
     #     settings = settings.clone()
@@ -663,20 +210,553 @@ class Planner(Module):
 
     #     return c0, cpath, cdistance
 
-        # model.inverse()
+
+class Planning(object):
+    def __init__(self, planner, model, goal, state, settings):
+        self.planner = planner
+        self.settings = settings
+
+        self.logger.debug(
+            f'=== New planning {self.logTag()} === -> {goal} using {model}')# with context {state}
+
+        self.model = model
+        self.space = model.outcomeSpace
+
+        self.startState = parameter(state, self.planner.environment.state(self.planner.dataset))
+        self.startPosition = self.startState.context().projection(self.space)
+        self.goal = goal.projection(self.space).relativeData(self.startState)
+        self.checkSpaceIsControllable(self.goal, self.space)
+
+        self.logger.debug(
+            f'== Relative goal is {self.goal} (starting pos {self.startPosition})')
+
+        self.initParameters()
+        self.initVariables()
     
+    def logTag(self):
+        return f'(d{self.settings.depth})'
+
+    @property
+    def logger(self):
+        return self.planner.logger
+
+    def initParameters(self):
+        self.maxIter = parameter(self.settings.maxIterations, 20)
+        if self.settings.dontMoveSpaces:
+            self.maxIter *= 5
+        self.maxIterNoNodes = 10
+
+        precision = 0.01
+        self.maxDistanceBest = precision * self.goal.space.maxDistance
+        self.maxDistance = self.maxDistanceBest * 2 + 0.02 * self.goal.norm()
+        self.maxDistanceIncomplete = self.maxDistanceBest * 5 + 0.1 * self.goal.norm()
+    
+    def initVariables(self):
+        self.minDistanceReached = math.inf
+        self.closestNodeToGoal = None
+
+        self.nodes = [PathNode(pos=self.space.zero(), absPos=self.startPosition, state=self.startState)]
+        # nodePositions = np.zeros((maxIter + 1, space.dim))
+
+        self.path = Path()
+        # self.dist = 0
+        self.directGoal = True
+        # previousMove = None
+        # print('GOAL: {}'.format(goal))
+        # print('================')
+        self.lastPosition = None
+
+        # 
+        self.invalidPointRatioLimit = 0.05
+        self.ignoreConstraintDistanceLimit = 0.05 * self.space.maxDistance
+
+        self.attemptedUnreachable = []
+        self.attemptedBreakConstraint = []
+        self.lastInvalids = []
+
+        # Attempt results
+        self.a0, self.y0, self.c0, self.distance0 = [None, None, None, None]
+    
+    def execute(self):
+        # Main loop
+        self.i = -1
+        while self.i < self.maxIter:
+            self.i += 1
+
+            if len(self.nodes) <= 3 and self.i > self.maxIterNoNodes:
+                self.logger.warning(f'Not enough nodes, aborting...')
+                break
+    
+            # Generating distant subgoals
+            self.subGoal = self.generateSubGoal()
+        
+            nearestNode = self.nearestNode(self.subGoal)
+            self.state = nearestNode.state
+            context = self.state.context()
+            if self.planner.semmap:
+                context = self.planner.semmap.context(context)
+            
+            self.logger.debug2(
+                f'{self.logTag()} Iter {self.i}: chosen subGoal is {self.subGoal} (direct={self.directGoal}, final goal {self.goal})\n    Nearest node is: {nearestNode.pos}')#\n    With context {self.state}
+
+            baseMove = self.subGoal - nearestNode.pos
+
+            reachable, move = self.searchWithCurrentContext(baseMove, context)
+            if reachable is None:
+                continue
+            reachable, contextPath = self.searchWithDifferentContext(baseMove, reachable)
+
+            # self.logger.info(f'{self.logTag()} Iter {self.i}: end {reachable}')
+            if not reachable:
+                self.directGoal = False
+                self.logger.debug2(
+                    f'{self.logTag()} Iter {self.i}: not reachable!!')
+                nearestNode.failures += 1
+                if move:
+                    self.attemptedUnreachable.append((nearestNode.pos + move).plain() + nearestNode.pos.plain())
+                    self.lastInvalids.append((nearestNode.pos + move).plain())
+                continue
+        
+            newNode = self.addNode(nearestNode, contextPath)
+            if not newNode:
+                continue
+
+            if self.checkDistance(newNode):
+                break
+        
+        if self.closestNodeToGoal and not self.path:
+            self.path = self.closestNodeToGoal.createPath(self.goal, self.pathSettings())
+
+        # self._plotNodes(self.nodes, self.goal, self.space, self.attemptedUnreachable, self.attemptedBreakConstraint)
+
+        self.logger.debug(
+            f"{self.logTag()} Planning {'generated' if self.path else 'failed'} for goal {self.goal} in {self.i+1} step(s)")
+        
+        # if self.path:
+            # self.path = self.simplifyPath(self.path)
+            # self._plotNodes(self.path.nodes, self.goal, self.space, self.attemptedUnreachable, self.attemptedBreakConstraint)
+        
+        if not self.settings.performing and not self.settings.context and self.settings.depth == 0:
+            self.settings.result.planningSuccess = self.path is not None
+            self.settings.result.planningSteps = self.i
+
+        finalState = self.path[-1].state if self.path else None
+        return self.path, finalState, max(0, self.minDistanceReached)
+
+    def searchWithCurrentContext(self, baseMove, context):
+        move, safeMove, nearestMove, _ = self.findBestMove(baseMove, context)
+
+        if move is None:
+            self.logger.error(
+                f'{self.logTag()} Iter {self.i}: failed to find a move!\n{self.model} {self.goal} {context}')
+            return None, None
+
+        if move.norm() < self.space.maxDistance * 0.001:
+            return False, None
+
+        self.logger.debug2(
+            f'{self.logTag()} Iter {self.i}: chosen move is {move}')
+
+        reachable = False
+        if not self.settings.forceContextPlanning:
+            reachable = self.attempt(move, context)
+            # if reachable:
+            #     newPosition = nearestNode.pos + y0
+            #     absPos = startPos + newPosition
+            #     dist = newPosition.distanceTo(attemptMove)
+
+            if not reachable and safeMove:
+                reachable = self.attempt(safeMove, context)
+            
+            if not reachable:
+                reachable = self.attempt(nearestMove, context)
+
+            if not reachable:
+                reachable = self.attempt(nearestMove * 0.5, context)
+            
+            # if reachable and baseMove.norm() > 0.01:
+            #     if self.y0.norm() < 0.01:
+            #         reachable = False
+            #     else:
+            #         # diff = (subGoal - y0).norm() / subGoal.norm()
+            #         orientation = 1. - baseMove.npPlain().dot(self.y0.npPlain()) / (baseMove.norm() * self.y0.norm())
+            #         if orientation > 0.4: # or y0.norm() < 0.2 * goal.norm() or y0.norm() > 5.0 * goal.norm():
+            #             reachable = False
+            #             self.logger.info(
+            #                 f'{self.logTag()} Iter {self.i}: Move orientation is off compared to baseMove!\nOrt: {orientation}, y0: {self.y0}, baseMove: {baseMove}, move: {move}')
+        # self.logger.info(f'{self.logTag()} Iter {self.i}: {reachable}')
+        return reachable, move
+    
+    def searchWithDifferentContext(self, baseMove, reachableWithContext):
+        reachable = reachableWithContext
+        contextPath = None
+        settingsTestContext = self.settings.forceContextPlanning or self.settings.tryContextPlanning
+        if (settingsTestContext or not reachableWithContext) and self.model.contextSpace:
+            # Save with context results
+            a0wc, y0wc, d0wc = [self.a0, self.y0, self.distance0]
+
+            move, safeMove, nearestMove, c0 = self.findBestMove(baseMove)
+
+            # c0 = self.model.contextSpace.getPoint(nearestMoveId)[0]
+            if settingsTestContext:
+                self.logger.debug2(f'{self.logTag()} Iter {self.i}: testing with context {c0}')
+            else:
+                self.logger.debug2(f'{self.logTag()} Iter {self.i}: move still not reachable, trying to use a different context {c0}')
+
+            reachable = self.attempt(move, c0)
+            # if reachable:
+            #     newPosition = nearestNode.pos + y0
+            #     absPos = startPos + newPosition
+            #     dist = newPosition.distanceTo(attemptMove)
+
+            if not reachable and safeMove:
+                reachable = self.attempt(safeMove, c0)
+
+            if not reachable:
+                reachable = self.attempt(nearestMove, c0)
+
+            if not reachable:
+                reachable = self.attempt(nearestMove * 0.5, c0)
+
+            # print('===')
+            # print(reachable, y0, a0)
+
+            switchBackWithContext = False
+            if reachableWithContext and (not reachable or d0wc <= self.distance0 + self.space.maxDistance * 0.01):
+                switchBackWithContext = True
+            elif reachable:
+                self.logger.debug(
+                    f'{self.logTag()} Iter {self.i}: choose to {"change" if reachableWithContext else "use"} context ({d0wc} > {self.distance0 + self.space.maxDistance * 0.01}), is the context reachable?')
+
+                newSettings = self.settings.clone(context=True)
+                # if self.i == 0:
+                newSettings.dontMoveSpaces.append(self.space)
+                # First context planning
+                # if i == 0:
+                #     newSettings.maxIterations = 100
+                contextPath, contextState = self.attemptPlanningContext(c0, self.state, newSettings)
+
+                # Try without dontMoveSpaces constraint
+                # if not contextPath:
+                #     newSettings.dontMoveSpaces = []
+                #     contextPath, contextState = self.attemptPlanningContext(c0, self.state, newSettings)
+
+                if contextPath:
+                    self.state = contextState
+                    c0 = self.state.context()
+                    reachable = self.attempt(nearestMove, c0)
+
+                    if not reachable:
+                        reachable = self.attempt(nearestMove * 0.5, c0)
+                else:
+                    reachable = False
+
+                if not reachable:
+                    switchBackWithContext = True
+                    self.logger.debug(
+                        f'{self.logTag()} Iter {self.i}: context {c0} is not reachable')
+                elif reachableWithContext and d0wc <= self.distance0 + self.space.maxDistance * 0.005 * len(contextPath):
+                    switchBackWithContext = True
+            
+            if switchBackWithContext and reachableWithContext:
+                self.logger.debug2(
+                    f'{self.logTag()} Iter {self.i}: switching back to not modifying the context')
+                reachable, self.a0, self.y0, self.distance0 = [True, a0wc, y0wc, d0wc]
+                contextPath = None
+
+            if contextPath:
+                self.logger.debug(
+                    f'{self.logTag()} Iter {self.i}: changing context to reach c0={c0} with a {len(contextPath)} step sub path')
+
+        return reachable, contextPath
+    
+    def addNode(self, nearestNode, contextPath):
+        newPosition = nearestNode.pos + self.y0
+        absPosition = self.startPosition + newPosition
+        goalDistance = euclidean(newPosition.plain(), self.goal.plain())
+
+        # Creating a new node
+        newState = self.nextState(nearestNode, goalDistance, self.state)
+        if newState is None:
+            return None
+
+        self.logger.debug2(
+            f'{self.logTag()} Iter {self.i}: move is usable ({self.a0}->{self.y0}), future state: {newState} ({absPosition})')
+        
+        self.lastInvalids = []
+        # if len(lastInvalids) > 5:
+        #     lastInvalids = lastInvalids[-5:]
+        # if lastInvalids:
+        #     lastInvalids = lastInvalids[1:]
+
+        newNode = PathNode(pos=newPosition, absPos=absPosition, action=self.a0, goal=self.y0, model=self.model, parent=nearestNode,
+                            state=newState)
+        newNode.context = contextPath
+        # nodePositions[len(nodes)] = newPosition.npPlain()
+        self.nodes.append(newNode)
+        self.logger.debug2(
+            f'{self.logTag()} Iter {self.i}: node {newNode} attached to {nearestNode}')
+        return newNode
+    
+    def nextState(self, nearestNode, goalDistance, state):
+        newState = state.copy().apply(self.a0, self.planner.dataset)
+        if self.settings.dontMoveSpaces and goalDistance > self.ignoreConstraintDistanceLimit:
+            if self.hasSpacesChanged(nearestNode, newState):
+                self.directGoal = False
+                nearestNode.failures += 1
+                self.attemptedBreakConstraint.append((nearestNode.pos + self.y0).plain() + nearestNode.pos.plain())
+                self.lastInvalids.append((nearestNode.pos + self.y0).plain())
+                return None
+        return newState
+
+    def checkDistance(self, newNode):
+        # Distance
+        distance = euclidean(newNode.pos.plain(), self.goal.plain())
+        self.logger.debug2(
+            f'{self.logTag()} Iter {self.i}: distance from goal {distance:.3f} (max {self.maxDistance:.3f})')
+
+        if distance > self.minDistanceReached:
+            self.directGoal = False
+            if self.minDistanceReached < self.maxDistance:
+                self.logger.debug(f'{self.logTag()} Iter {self.i}: close enough to the goal {distance:.3f} (max {self.maxDistance:.3f})')
+                self.path = self.closestNodeToGoal.createPath(self.goal, self.pathSettings())
+                if not self.settings.performing and not self.settings.context and self.settings.depth == 0:
+                    self.settings.result.planningDistance = (distance, self.maxDistance)
+                return True
+        else:
+            self.minDistanceReached = distance
+
+        # print(distance)
+        if distance < self.maxDistanceBest:
+            self.logger.debug(f'{self.logTag()} Iter {self.i}: close enough to the goal {distance:.3f} (max best {self.maxDistanceBest:.3f})')
+            self.path = newNode.createPath(self.goal, self.pathSettings())
+            if not self.settings.performing and not self.settings.context and self.settings.depth == 0:
+                self.settings.result.planningDistance = (distance, self.maxDistanceBest)
+            return True
+        elif distance < self.maxDistanceIncomplete:
+            self.closestNodeToGoal = newNode
+    
+        # newPosition = nearestNode.pos + y0
+        # if lastPos and np.sum(np.abs(newPosition.npPlain() - lastPos)) < 1.:
+        #     self.logger.debug2(
+        #         f'{self.logTag()} Iter {self.i}: deadlock, we are not moving enough! Stopping here')
+        #     break
+        self.lastPosition = newNode.pos.plain()
+        return False
+    
+    def simplifyPath(self, path):
+        self.i = 0
+        nodes = path.nodes
+        index = 0
+        maxJump = 4
+        while index < len(nodes) - 2:
+            node = path[index]
+            state = node.parent.state
+            self.logger.debug2(f'Simplify: trying a jump from {index}/{len(path)}')
+            for jump in range(maxJump, 0, -1):
+                if index + jump >= len(path) - 1:
+                    continue
+                # check if there is a context change
+                if any(path[index + i].context for i in range(jump + 2)):
+                    self.logger.debug2(f'Simplify: context!')
+                    continue
+
+                self.logger.debug2(f'Simplify: trying a jump +{jump} from {index}/{len(path)}')
+
+                # Pre move
+                preMove = node.goal
+                for i in range(1, jump + 1):
+                    preMove += path[index + i].goal
+                if not self.attempt(preMove, state.context()):
+                    continue
+            
+                newPosition = node.parent.pos + self.y0
+                absPosition = self.startPosition + newPosition
+                goalDistance = euclidean(newPosition.plain(), self.goal.plain())
+                newState = self.nextState(node.parent, goalDistance, state)
+                if newState is None:
+                    continue
+                newPreNode = PathNode(pos=newPosition, absPos=absPosition, action=self.a0, goal=self.y0, model=self.model, parent=node.parent,
+                                      state=newState)
+                
+                self.logger.debug2(f'Simplify: pre jump possible, reaching {newPosition} instead of {path[index + jump].pos} by doing {self.a0}=>{self.y0}')
+
+                # Post Move
+                # preA0 = self.a0
+                # preY0 = self.y0
+                postMove = path[index + jump + 1].goal + preMove - self.y0
+                if not self.attempt(postMove, state.context()):
+                    continue
+
+                newPosition = newPreNode.pos + self.y0
+                absPosition = self.startPosition + newPosition
+                goalDistance = euclidean(newPosition.plain(), self.goal.plain())
+                newState = self.nextState(newPreNode, goalDistance, newPreNode.state)
+                if newState is None:
+                    continue
+                newPostNode = PathNode(pos=newPosition, absPos=absPosition, action=self.a0, goal=self.y0, model=self.model, parent=newPreNode,
+                                       state=newState)
+                
+                self.logger.debug2(f'Simplify: post jump possible, reaching {newPosition} instead of {path[index + jump + 1].pos} by doing {self.a0}=>{self.y0} ({path[index + jump + 1].goal})')
+                self.logger.debug2(f'Simplify: compacting {jump+1}->2')
+
+                nodes = nodes[0:index] + [newPreNode, newPostNode] + nodes[index + jump + 1:]
+                break
+            index += 1
+
+        return path
+
+    def attempt(self, move, context):
+        precision = 0.05 + (self.i / self.maxIter) * 0.05
+        reachable, self.a0, self.y0, self.distance0 = self.model.reachable(
+            move, context=context, precision=precision, precisionOrientation=precision)
+        self.logger.debug2(f'{self.logTag()} Iter {self.i}: testing {move}: {"reachable" if reachable else "not reachable"}')
+        return reachable
+    
+    def attemptPlanningContext(self, context, state, settings):
+        try:
+            return self.planner.plan(context.setRelative(False), state, settings=settings)
+        except ActionNotFound:
+            return None, None
+    
+    def checkSpaceIsControllable(self, goal, space):
+        if not self.settings.freeSpace(space):
+            error = f'Failed to create a path to reach {goal}. Space {space} trying to be controlled twice! (controlled spaces: {self.settings.controlledSpaces})'
+            self.logger.debug(error)
+            raise ActionNotFound(error, None)
+        self.settings.controlledSpaces += space
+    
+    def pathSettings(self):
+        settings = self.settings.clone()
+        settings.controlledSpaces.remove(self.space)
+        return settings
+    
+    def hasSpacesChanged(self, nearestNode, newState):
+        difference = newState.difference(nearestNode.state)
+        for space in self.settings.dontMoveSpaces:
+            spaceDifference = difference.projection(space)
+            if spaceDifference.norm() > self.planner.MAX_MOVE_UNCHANGED_SPACES:
+                # self.logger.warning(f'{newState.context().projection(space)} vs {state.context().projection(dmSpace)} by doing {a0}')
+                self.logger.debug2(
+                    f'{self.logTag()} Iter {self.i}: move is reachable but it affects {space}: {spaceDifference} that shouldnt be changed')
+                return True
+        return False
+    
+    def generateSubGoal(self):
+        # Finding a subgoal
+        if random.uniform(0, 1) <= self.planner.GOAL_SAMPLE_RATE or self.directGoal:
+            subGoal = self.goal
+        else:
+            subGoal = self.generateRandomPoint()
+            # space.goal([random.uniform(minrand, maxrand) for x in range(space.dim)])
+
+            if self.lastInvalids:
+                for _ in range(50):
+                    invalids = np.array(self.lastInvalids)
+                    dists = np.sum((invalids - subGoal.npPlain()) ** 2, axis=1) ** 0.5
+                    if not np.any(dists < self.invalidPointRatioLimit * self.space.maxDistance):
+                        break
+                    subGoal = self.generateRandomPoint()
+                    # self.logger.debug2(f'(d{settings.depth}) Iter {i}: Too close to invalid point, retrying...')
+        return subGoal
+    
+    def generateRandomPoint(self):
+        origin = random.uniform(0., 1.) * self.goal.npPlain()
+        # point = [random.uniform(0., 1.) for _ in range(space.dim)]
+        # point = point * self.goal
+        width = 0.7 * min(0.05 * self.space.maxDistance + self.goal.norm(), self.space.maxDistance)
+        point = origin + width * np.array([random.uniform(-1., 1.)
+                                   for _ in range(self.space.dim)])
+        return self.space.goal(point)
+    
+    def nearestNode(self, point):
+        pointPlain = point.plain()
+        dlist = np.sum(
+            (np.array([node.pos.plain() for node in self.nodes]) - pointPlain) ** 2, axis=1) ** 0.5 * np.array([node.penalty() for node in self.nodes])
+        return self.nodes[np.argmin(dlist)]
+    
+    def findBestMove(self, baseMove, context=None):
+        # lastVariance = -1.
+        # We are looking for a valid point in the outcome space
+        # self.logger.debug2(f'=====================')
+        move = baseMove.clone()
+        c0 = None
+        c0safe = None
+        for j in range(10):
+            if j > 0:
+                move *= 1. * distanceToCenter / move.norm()
+            # self.logger.debug2(
+            #     f'(d{settings.depth}) Iter {i} {j}: {move}')
+
+            # moveContext = move.extends(context)
+            ids, _, _ = self.model.nearestOutcome(move, context=context, n=6, nearestUseContext=False)
+            # ids, dists = self.model.outcomeContextSpace.nearestDistance(moveContext, n=5, restrictionIds=ids)
+            if len(ids) == 0:
+                return None, None, None, None
+            nearestMoveId = ids[0]
+            nearestMove = self.space.getPoint(nearestMoveId)[0]
+
+            # print('----', j)
+            # print(move)
+            # print(nearestMove)
+            # print(self.model.outcomeSpace.variance(ids))
+            # print(self.model.outcomeSpace.denseEnough(ids))
+            # print(self.model.outcomeSpace.maxDistance * 0.1)
+
+            points = self.space.getNpPlainPoint(ids)
+            center = np.mean(points, axis=0)
+            distanceToCenter = np.sum(center ** 2) ** .5
+            # distanceToNode = np.mean(np.sum(points ** 2, axis=1) ** .5)
+            distanceMoveToCenter = np.mean(np.sum((center - move.npPlain()) ** 2) ** .5)
+            # distanceToMove = np.mean(np.sum((points - move.npPlain()) ** 2, axis=1) ** .5)
+            # self.logger.debug2(
+            #     f'(d{settings.depth}) Iter {i} {j}: {self.space.getPlainPoint(ids)}')
+
+            # self.logger.debug2(
+            #     f'(d{settings.depth}) Iter {i} {j}: {nearestMove} {distanceToMove} {distanceToNode}')
+            # print('!', distanceToMove)
+            # print(self.space.getPlainPoint(ids) - move.npPlain())
+            # if j == 0:
+            #     distanceToNode = 10.
+
+            # variance = self.space.variance(ids)
+            # if abs(lastVariance - variance) <= 0.05 * variance:
+            #     break
+            # lastVariance = variance
+
+            # if context is None:
+            #     cs = self.model.contextSpace.getNpPlainPoint(ids)
+            #     c0 = np.mean(cs, axis=0)
+            #     self.logger.info(f'{j}: {move} {distanceToCenter} {distanceMoveToCenter} {self.space.maxDistance * 0.05}\n    {points}\n{cs}\n{c0}')
+
+            # self.space.denseEnough(ids, threshold=0.1) or
+            if (j > 0 and distanceMoveToCenter <= self.space.maxDistance * 0.05) or distanceToCenter > move.norm():
+                break
+        
+        if context is None:
+            cs = self.model.contextSpace.getNpPlainPoint(ids)
+            c0 = self.model.contextSpace.asTemplate(np.mean(cs, axis=0))
+
+        safeMove = move
+        if (move - baseMove).norm() < move.norm() * 0.1:
+            move = baseMove
+        else:
+            move *= 0.9
+        # self.logger.debug2(f'---------------------')
+        return move, safeMove, nearestMove, c0  # , nearestMoveId
+
     def _plotNodes(self, nodes, goal, space, attemptedUnreachable, attemptedBreakConstraint):
         import matplotlib.pyplot as plt
         goalPlain = goal.plain()
         # plt.figure()
-        points = np.array([self.generateRandomPoint(goal, space).plain() for _ in range(1000)])
+        points = np.array([self.generateRandomPoint().plain() for _ in range(1000)])
         plt.scatter(points[:, 0], -points[:, 1], marker='.', color='gray')
         if attemptedUnreachable:
             # attemptedUnreachable = np.array(attemptedUnreachable)
             # plt.scatter(attemptedUnreachable[:, 0], -attemptedUnreachable[:, 1], marker='.', color='black')
             # for x, y, fx, fy in attemptedUnreachable:
             for x, y, fx, fy in attemptedUnreachable:
-                plt.plot([fx, x], [-fy, -y], 'g,--')
+                plt.plot([fx, x], [-fy, -y], 'm,--')
         if attemptedBreakConstraint:
             # attemptedBreakConstraint = np.array(attemptedBreakConstraint)
             # plt.scatter(attemptedBreakConstraint[:, 0], -attemptedBreakConstraint[:, 1], marker='o', color='purple')
@@ -696,3 +776,4 @@ class Planner(Module):
         #plt.scatter(goalPlain[0], goalPlain[1], 'x', color='purple')
         #plt.draw()
         plt.show()
+

@@ -106,9 +106,9 @@ class Strategy(Module):
             return True
 
         try:
-            path, _, _ = self.planner.planDistance(config.goalContext.setRelative(False), settings=config.plannerSettings)
+            path, _, _ = self.planner.planDistance(config.goalContext.setRelative(False), settings=config.plannerSettings.clone(context=True))
         except ActionNotFound:
-            config.reachedContext = 'planning failed'
+            config.result.reachedContext = 'planning failed'
             path = None
 
         if not path:
@@ -118,7 +118,7 @@ class Strategy(Module):
         
         self.testPath(path, config.clone(model=None))
 
-        config.reachedContext = self.agent.environment.state().context().projection(config.goalContext.space)
+        config.result.reachedContext = self.agent.environment.state().context().projection(config.goalContext.space)
         return True
 
         # config.goalContext = config.goalContext.convertTo(

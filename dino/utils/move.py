@@ -10,6 +10,8 @@ import random
 from exlab.utils.io import parameter
 from dino.agents.tools.planners.planner import PlanSettings
 
+from .result import Result
+
 
 """
 Misc objects
@@ -35,7 +37,7 @@ class MoveConfig(object):
     """
 
     def __init__(self, model=None, exploitation=False, depth=0, strategy=None, goal=None, goalContext=None,
-                 lastEvent=None, sampling="", iterations=1, iteration=-1, allowReplanning=True, evaluating=False,
+                 lastEvent=None, sampling='', iterations=1, iteration=-1, allowReplanning=True, evaluating=False,
                  plannerSettings=None):
         self.exploitation = exploitation
         self.evaluating = evaluating
@@ -45,72 +47,43 @@ class MoveConfig(object):
         self.model = model
         self.goal = goal
         self.goalContext = goalContext
-
-        self.reachedGoal = None
-        self.reachedContext = None
-
-        self.lastEvent = lastEvent
+        self.absoluteGoal = None
         self.sampling = sampling
+
+        self.allowReplanning = allowReplanning
+        self.plannerSettings = parameter(plannerSettings, PlanSettings())
 
         self.iterations = iterations
         self.iteration = iteration
-        self.allowReplanning = allowReplanning
 
-        self.plannerSettings = parameter(plannerSettings, PlanSettings())
+        self.result = Result(self)
+        self.plannerSettings.result = self.result
 
     def clone(self, **kwargs):
         new = copy.copy(self)
         for key, value in kwargs.items():
             setattr(new, key, value)
+        
+        new.result = new.result.clone(new)
         return new
 
     def nextdepth(self, **kwargs):
         kwargs['depth'] = self.depth + 1
         return self.clone(**kwargs)
-    
-    def results(self):
-        score = 0.
-        txt = ''
-
-        if self.goal:
-            txt += f'goal {self.goal} '
-            if not self.reachedGoal:
-                txt += f'not attempted'
-            elif isinstance(self.reachedGoal, str):
-                txt += f'{self.reachedGoal}'
-            else:
-                difference = (self.goal - self.reachedGoal).norm()
-                score += difference / self.goal.space.maxDistance * 5.
-                txt += f'and got {self.reachedGoal}, difference is {difference}'
-            txt += f'|   '
-        
-        if self.goalContext:
-            txt += f'context {self.goalContext} '
-            if not self.reachedContext:
-                txt += f'not attempted'
-            elif isinstance(self.reachedContext, str):
-                txt += f'{self.reachedContext}'
-            else:
-                difference = (self.goalContext - self.reachedContext).norm()
-                score += difference / self.goalContext.space.maxDistance * 5.
-                txt += f'and got {self.reachedContext}, difference is {difference}'
-            txt += f'|   '
-
-        valid = 'Ok' if score < 0.1 else 'Error'
-        return f'{valid}: {score} ({txt})'
 
     def __repr__(self):
         if self.evaluating:
             prefix = "Evaluation"
-            attrs = ['model', 'goal', 'depth']
+            attrs = ['model', 'goal', 'absoluteGoal', 'depth']
         elif self.exploitation:
             prefix = "Exploit"
-            attrs = ['model', 'goal', 'depth']
+            attrs = ['model', 'goal', 'absoluteGoal', 'depth']
         elif self.goal:
             prefix = "Goal exploration"
-            attrs = ['goal', 'goalContext', 'model', 'strategy', 'depth']
+            attrs = ['goal', 'absoluteGoal', 'goalContext',
+                     'model', 'strategy', 'depth', 'sampling']
         else:
             prefix = "Action exploration"
             attrs = ['strategy', 'depth']
-        params = ', '.join([k + ': ' + str(getattr(self, k)) for k in attrs])
-        return f'Config ({prefix}) [{params}]'
+        params = ', '.join([f'{k}: {getattr(self, k)}' for k in attrs])
+        return f'Config ({prefix}) [{params}] [{self.result}]'

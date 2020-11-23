@@ -44,6 +44,10 @@ def uniformSampling(probs):
     return np.random.choice(len(probs), 1, p=probs)[0]
 
 
+def linearValue(start, end, position):
+    return start + (end - start) * position
+
+
 def first(list_, default=None):
     if list_:
         return list_[0]
@@ -76,6 +80,7 @@ def sigmoid(x):
 
 
 def threshold(value, ratio):
+    # return (1 - value * (0.5 - ratio) * 2)
     return (ratio >= 0.5) * (1 - (1 - value) * (0.5 - ratio) * 2) + (ratio < 0.5) * (1 - value * (0.5 - ratio) * 2)
 
 

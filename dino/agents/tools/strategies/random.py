@@ -73,7 +73,9 @@ class RandomStrategy(Strategy):
             action = space.zero()
         else:
             action = SingleAction(space, [random.uniform(minb, maxb) for minb, maxb in space.bounds])
-        actions.append(action)
+        actions.append(action.setRelative(True))
 
         actions = ActionList(*actions)
+        config.result.action = action
+        # print(f'DOING {action} {action.relative}')
         self.testActions(actions, config)

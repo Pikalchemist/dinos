@@ -21,7 +21,7 @@ class Performer(Module):
     Executes Paths created by a planner
     """
 
-    MAX_DERIVE = 0.1
+    MAX_DERIVE = 0.04
 
     def __init__(self, agent, options={}):
         super().__init__('Performer', agent)
@@ -56,56 +56,57 @@ class Performer(Module):
         path = self.agent.planner.planActions(actionList)
         return self.__perform(path, config)
 
-    def __perform(self, path, config, i=0):
+    def __perform(self, path, config, i=0, depth=0):
         """
         Tests a specific action list and stores consequences in memory.
         """
         results = []
         # print('((START))')
-        # mem = []
 
+        # for node in list(path.nodes):
+        #     print(node)
+
+        absoluteGoal = None
         if path.goal:
             absoluteGoal = path.goal.absoluteData(self.environment.state())
-        else:
-            absoluteGoal = None
-        if not config.allowReplanning:
-            absoluteGoal = None
-            # print("======== GOAL ========", absoluteGoal)
+        if path.planSettings:
+            path.planSettings.performing = True
+        model = path.model
+        # print("======== GOAL ========", absoluteGoal)
 
-        # goal = None
-
+        # settings
         replanning = 0
         maxReplanning = 2
         maxDistance = 7.
+        if absoluteGoal:
+            maxDistance = absoluteGoal.space.maxDistance * 0.01
         nodes = list(path.nodes)
 
-        actionListExecuted = ActionList()
         formatParameters = FormatParameters()
-        plannerSettings = PlanSettings()
         observationsPrevious = None
-        # oStart = self.agent.observe(formatParameters=formatParameters)
-        while True:
-            if absoluteGoal and not nodes:
-                self.logger.debug2(
-                    f'Iter {i}: no more action to execute... trying to replan new ones')
+        distanceToGoal = None
+        currentPos = None
+        success = False
+        while not success:
+            if not nodes and absoluteGoal and config.allowReplanning:
                 replanning += 1
+                config.result.performerReplanning += 1
                 if replanning > maxReplanning:
-                    self.logger.warning(
-                        f'Iter {i}: out of replanning')
+                    self.logger.warning(f'Iter (d{depth}) {i}: out of replanning')
                     break
                 try:
-                    newPath, _ = self.agent.planner.plan(
-                        absoluteGoal, settings=plannerSettings)
+                    self.logger.warning(f'Iter (d{depth}) {i}: no more action to execute... trying to replan new ones')
+                    newPath, _ = self.agent.planner.plan(absoluteGoal, settings=path.planSettings)
                     nodes = newPath.nodes
                 except ActionNotFound:
-                    break
-            
+                    self.logger.warning(f'Iter (d{depth}) {i}: failed to plan new one')
+
             if not nodes:
                 break
 
             for node in nodes:
                 if node.context:
-                    results += self.__perform(node.context, config)
+                    results += self.__perform(node.context, config, depth=depth+1)
                     observationsPrevious = None
 
                 # print('=== HEY')
@@ -114,88 +115,76 @@ class Performer(Module):
                 # print(node.execution)
 
                 if not node.action.space.primitive() and not node.execution:
-                    state = None
-                    if node.parent:
-                        state = node.parent.state
                     try:
-                        node.execution, _ = self.agent.planner.plan(
-                            node.action, state=state)
+                        node.execution, _ = self.agent.planner.plan(node.action, settings=PlanSettings(performing=True))
                     except ActionNotFound:
                         pass
                     if not node.execution:
                         self.logger.warning(
-                            f'Iter {i}: failed to break down non primitive action')
+                            f'Iter (d{depth}) {i}: failed to break down non primitive action')
                         break
 
+                if node.absPos:
+                    currentPos, derive, currentState = self.checkStatus(node, node.parent.absPos)
+                    self.logger.debug(
+                        f'Iter (d{depth}) {i}: pre execution check: should be at {node.parent.absPos} and currently at {currentPos}, diff {derive:.4f}\n{currentState}')
+
                 if node.execution:
-                    results += self.__perform(node.execution, config)
-                    observationsPrevious = None
-
-                if not node.context and not node.execution:
-                    action = node.action
-                    # print("=========")
-                    # print(node.goal)
-                    # print(action)
-                    # print(node)
-                    # print("===")
-                    # print(actionList)
-                    actionExecuted = node.goal if node and node.goal else action
-                    primitiveActionExecuted = action
-                    actionListExecuted.append(actionExecuted)
-
-                    # print(actions[i])
-                    if observationsPrevious is None:
-                        observationsPrevious = self.agent.observe(formatParameters=formatParameters)
-                    self.agent._performAction(action, config=config)
-                    # print(action)
-                    # print("Tasks : " + str(spaces))
-                    # print(y_list)
-                    #real_actions += actions[i].tolist()
-                    # print("---")
+                    observationsPrevious = self.agent.observe(formatParameters=formatParameters)
+                    results += self.__perform(node.execution, config, depth=depth+1)
                     observations = self.agent.observe(formatParameters=formatParameters)
-                    y = observations.difference(observationsPrevious)
-                    results.append(InteractionEvent(self.environment.counter.last,
-                                                    actionExecuted,
-                                                    primitiveActionExecuted,
-                                                    y,
-                                                    observationsPrevious.convertTo(kind=SpaceKind.PRE)))
-                    observationsPrevious = observations
-                    # print(f'#### {results[-1]}')
+                    differences = observations.difference(observationsPrevious)
+                    observationsPrevious = None
+                else:
+                    event, differences, observationsPrevious = self.performAction(
+                        node, observationsPrevious, formatParameters, config)
+                    results.append(event)
+                
+                # self.logger.info(f'Iter (d{depth}) {i}: performing {node.action}')
+
+                currentState = self.environment.state()
+                # self.logger.warning(currentState)
+                if node.absPos:
+                    currentPos, derive, currentState = self.checkStatus(node, node.absPos, currentState)
+
+                    rdiff = differences.projection(node.absPos.space)  # if differences is not None else None
+                    rderive = (rdiff - node.goal).norm()  # if differences is not None else -1.
+                    self.logger.debug(
+                        f'Iter (d{depth}) {i}: wanting {node.absPos} and got {currentPos} \n     Diff {derive:.4f} doing {node.action} to get {node.goal} and got {rdiff} Diff {rderive:.4f}')
 
                 # Check Distance
-                # print('Miaou')
+                # print('======Miaou======', absoluteGoal)
                 if absoluteGoal:
-                    distance = absoluteGoal.relativeData(
-                        self.environment.state()).norm()
-                    relative = absoluteGoal.relativeData(self.environment.state())
-                    # print(absoluteGoal, distance)
-                    self.logger.debug2(
-                        f'Iter {i}: distance to goal {distance:.3f} (max {maxDistance:.3f}) ({relative})')
-                    if distance < maxDistance:
+                    relative = absoluteGoal.relativeData(currentState)
+                    distanceToGoal = relative.norm()
+                    if distanceToGoal < maxDistance and node == nodes[-1]:
                         self.logger.debug(
-                            f'Iter {i}: close enough to goal!')
-                        # print('((GOAL))')
-                        return results
+                            f'Iter (d{depth}) {i}: close enough to goal! {distanceToGoal:.3f} (max {maxDistance:.3f}) ({relative})')
+                        success = True
+                        break
+                    else:
+                        self.logger.debug(
+                            f'Iter (d{depth}) {i}: distance to goal {distanceToGoal:.3f} (max {maxDistance:.3f}) ({relative})')
                 
                 # print('===')
                 # print(node.absPos)
                 if node.absPos:
-                    derive = node.absPos.relativeData(
-                        self.environment.state(), ignoreRelative=True).norm()
+                    currentPos, derive, currentState = self.checkStatus(node, node.absPos, currentState)
                     maxDerive = self.MAX_DERIVE * node.absPos.space.maxDistance
                     # print(node.action)
                     # print(derive, maxDerive)
                     if derive > maxDerive:
                         self.logger.info(
-                            f'Iter {i}: max derive exceeded ({derive} > {maxDerive}) trying to reach {node.goal} by doing {node.action}')
-                        if replanning < maxReplanning:
-                            self.logger.info(
-                                f'Replanning...')
+                            f'Iter (d{depth}) {i}: max derive exceeded ({derive:.4f} > {maxDerive:.4f}) trying to reach {node.goal} by doing {node.action}')
+                        self.postPerforming(model, False, derive)
+                        if depth == 0:
+                            config.result.performerDerive.append((derive, maxDerive))
+                        if replanning <= maxReplanning:
+                            self.logger.info(f'Replanning...')
                             nodes = None
                             break
                         else:
-                            self.logger.warning(
-                                f'No replanning left!')
+                            self.logger.warning(f'No replanning left!')
                     # print(f'Derive is {derive} {node.absPos} {node.absPos.relativeData(self.environment.state(), ignoreRelative=True)}')
                     # print(self.environment.state().context())
                     # print(f'Max {self.MAX_DERIVE * node.absPos.space.maxDistance}')
@@ -206,7 +195,51 @@ class Performer(Module):
         #results.append(InteractionEvent(self.getIteration(), actionListExecuted, y))
 
         # print('((OVER))')
+
+        if distanceToGoal:
+            self.postPerforming(model, success, distanceToGoal)
+            if depth == 0:
+                config.result.performerDistance = (distanceToGoal, maxDistance)
+
         return results
+    
+    def performAction(self, node, observationsPrevious, formatParameters, config):
+        action = node.action
+        actionExecuted = (node.goal if node and node.goal else action).clone()
+        primitiveActionExecuted = action
+        # actionListExecuted.append(actionExecuted)
+
+        # print(actions[i])
+        if observationsPrevious is None:
+            observationsPrevious = self.agent.observe(formatParameters=formatParameters)
+        self.agent._performAction(action, config=config)
+        # print(action)
+        # print("Tasks : " + str(spaces))
+        # print(y_list)
+        #real_actions += actions[i].tolist()
+        # print("---")
+        observations = self.agent.observe(formatParameters=formatParameters)
+        differences = observations.difference(observationsPrevious)
+        event = InteractionEvent(self.environment.counter.last,
+                                 actionExecuted,
+                                 primitiveActionExecuted,
+                                 differences,
+                                 observationsPrevious.convertTo(kind=SpaceKind.PRE))
+        observationsPrevious = observations
+
+        return event, differences, observationsPrevious
+    
+    def checkStatus(self, node, goal, currentState=None):
+        if currentState is None:
+            currentState = self.environment.state()
+        derive = goal.relativeData(currentState, ignoreRelative=True)
+        currentPos = goal - derive
+        distanceDerive = derive.norm()
+        return currentPos, distanceDerive, currentState
+    
+    def postPerforming(self, model, success, distanceToGoal):
+        if model:
+            model.updatePrecision(success, distanceToGoal)
 
     def iterative(self):
         return range(self.iterations)

@@ -39,7 +39,7 @@ class RegressionModel(Model):
         error = min(error, 0.1)
         return max(0, min(1., (1. - distanceGoal - error ** 2) / np.exp((error * 20) ** 3)))
 
-    def reachable(self, goal: Goal, context: Observation = None, precision=0.05, inverse=True, contextColumns=None):
+    def reachable(self, goal: Goal, context: Observation = None, precision=0.05, precisionOrientation=0.05, inverse=True, contextColumns=None):
         assert(goal is not None)
         try:
             # norm = goal.norm() / goal.space.maxDistance
@@ -47,40 +47,47 @@ class RegressionModel(Model):
             #     precision = max(precision / 2, norm / 1.5)
             # TODO
             if inverse:
-                a0, y0, _, _, _, _, _, goalSpaceDistanceNormalized = self.bestLocality(
+                a0, y0, _, _, _, distance, distanceNormalized, _ = self.bestLocality(
                     goal, context, contextColumns=contextColumns)
             else:
-                y0, goalSpaceDistanceNormalized = self.bestLocality(
-                    goal, context, getClosestOutcome=True, contextColumns=contextColumns)
-                a0 = None
+                raise Exception('To check')
+                # y0, goalDistanceNormalized = self.bestLocality(
+                #     goal, context, getClosestOutcome=True, contextColumns=contextColumns)
+                # a0 = None
 
-            if goal.norm() == 0:
+            if goal.norm() < 0.001:
+                a0 = a0.space.zero().setRelative(True)
+                y0 = y0.space.zero().setRelative(True)
+                distance = 0
                 reachable = True
             else:
-                if y0.norm() == 0:
+                if y0.norm() < 0.001:
                     orientation = 1.
                 else:
                     orientation = 1. - goal.npPlain().dot(y0.npPlain()) / (goal.norm() * y0.norm())
-                goalDistanceNormalized = (goal - y0).norm() / goal.norm()
-                reachable = (goalSpaceDistanceNormalized < precision and goalDistanceNormalized < 0.7) or goalSpaceDistanceNormalized < precision * 0.5
-                if orientation < precision and y0.norm() > 0.2 * goal.norm():
-                    reachable = True
+
+                distance = (goal - y0).norm()
+                distanceGoalNormalized = max(0, distance - goal.space.maxDistance * 0.01) / goal.norm()
+                # reachable = (distanceGoalNormalized < precision and distanceGoalNormalized < 0.7) or distanceGoalNormalized < precision * 0.5
+                # self.dataset.logger.info(f'HEY=== {goal} {y0} {orientation} {distanceGoalNormalized}')
+                reachable = orientation < precisionOrientation and distanceGoalNormalized < precision
+                    # reachable = True
 
                 # if not reachable:
                 #     self.dataset.logger.info(
-                #         f'{goal} and got {y0} ({a0}->) distance {orientation} {goalSpaceDistanceNormalized} {goalDistanceNormalized}')
+                #         f'{reachable}: {goal} and got {y0} ({a0}->) distance {orientation} {distanceGoalNormalized}')
                 #     print('=== Hey ===')
-                #     print(goalSpaceDistanceNormalized)
-                #     print(goalDistanceNormalized)
+                #     print(distanceGoalNormalized)
+                #     print(distanceGoalNormalized)
                 #     print(self.outcomeSpace.maxDistance)
                 #     print(precision)
                 #     print(y0)
                 #     print(goal)
-            return reachable, y0, a0
+            return reachable, a0, y0, distance
         except ActionNotFound:
             # print('=== Hey ===')
             # print(goal)
-            return False, None, None
+            return False, None, None, None
 
     def inverse(self, goal: Goal, context: Observation = None, adaptContext=False, contextColumns=None, entity=None):
         assert(goal is not None)
@@ -408,6 +415,7 @@ class RegressionModel(Model):
             return y0, distanceGoal + distanceContext
 
         aList = self.actionSpace.getPlainPoint(ids)
+        # print(f'A Y\n{self.actionSpace.getNpPlainPoint(ids)}\n{self.outcomeSpace.getNpPlainPoint(ids)}')
 
         # print("=====")
         # print(self.outcomeSpace.getNpPlainPoint(ids))
@@ -419,11 +427,7 @@ class RegressionModel(Model):
         # print(self.outcomeSpace.getPlainPoint(ids)[:2])
         # print(self.contextSpace.getPlainPoint(ids)[:2])
 
-        bestScore = -1
-        minDistance = -1
-        # minStd = -1
-        minY0Plain = None
-        minA0Plain = None
+        bestScore = None
 
         idsAs, distAs = self.actionSpace.nearestDistanceArray(aList, n=self.NN_ALOCALITY, otherSpace=space,
                                                               restrictionIds=restrictionIds)
@@ -486,6 +490,11 @@ class RegressionModel(Model):
                     ycPlain, aPlain, goalContextPlain, columns=columns)
                 a0 = self.actionSpace.action(a0Plain)
 
+                if self.actionSpace.primitive():
+                    a0 = a0.bounded()
+
+                # print(f'a{i}: {a0.norm()} A YC GC\n{aPlain}\n{ycPlain}\n{goalContextPlain}')
+
                 if a0.norm() > self.actionSpace.maxDistance:
                     continue
 
@@ -505,7 +514,7 @@ class RegressionModel(Model):
                 # y0Plain, error = multivariateRegressionError(acLargePlain, yLargePlain, ac0Plain)
                 y0Plain, error = self.npForward(
                     a0, context, contextColumns=contextColumns)
-                distanceGoal = euclidean(goalPlain, y0Plain)
+                goalDistance = euclidean(goalPlain, y0Plain)
                 # print('---')
                 # print(ycPlain)
                 # print(aPlain)
@@ -513,39 +522,41 @@ class RegressionModel(Model):
                 # print('>')
                 # print(a0Plain)
                 # print(y0Plain)
-                # print(distanceGoal)
+                # print(goalDistance)
 
-                score = distanceGoal / self.outcomeSpace.maxDistance# + \
+                # print(f'a{i}: {a0}; error: {error}; y0/goal: {y0Plain}=?{goalPlain}; goalDistance: {goalDistance}')
+
+                score = goalDistance / self.outcomeSpace.maxDistance# + \
                     # 0.2 * proximityScore + 0.1 * error
 
                 # print('moa')
                 # print(a0Plain, y0Plain)
-                # print(distanceGoal)
+                # print(goalDistance)
                 # print(error)
                 # print(proximityScore)
                 # print(score)
                 # print()
 
                 # print(f'Score {score} a {a0} y0 {y0Plain} {goalPlain}')
-                if bestScore < 0 or score < bestScore:
+                if bestScore is None or score < bestScore:
                     bestScore = score
-                    minDistance = distanceGoal
-                    minError = error
+                    bestDistance = goalDistance
+                    bestError = error
                     # minYPlain = yPlain
                     # minAPlain = aPlain
-                    minY0Plain = y0Plain
-                    minA0Plain = a0Plain
-        if minY0Plain is None:
+                    bestY0Plain = y0Plain
+                    bestA0Plain = a0Plain
+        if bestScore is None:
             raise ActionNotFound(
                 "Not enough points to compute action")
 
-        y0 = self.outcomeSpace.asTemplate(minY0Plain, entity=entity)
-        a0 = self.actionSpace.asTemplate(minA0Plain, entity=entity)
-        if self.actionSpace.primitive():
-            a0 = a0.bounded()
+        y0 = self.outcomeSpace.asTemplate(bestY0Plain, entity=entity).setRelative(True)
+        a0 = self.actionSpace.asTemplate(bestA0Plain, entity=entity).setRelative(True)
+        # if self.actionSpace.primitive():
+        #     a0 = a0.bounded()
         # if a0.length() > 1000:
         #     raise Exception()
-        goalDistanceNormalized = minDistance / self.outcomeSpace.maxDistance
-        error = (minError + goalDistanceNormalized) / 2
-        return (a0, y0, context, self.computeCompetence(error),
-                error, minDistance, minError, goalDistanceNormalized)
+        goalDistanceNormalized = bestDistance / self.outcomeSpace.maxDistance
+        finalError = (bestError + goalDistanceNormalized) / 2
+        return (a0, y0, context, self.computeCompetence(finalError),
+                finalError, bestDistance, goalDistanceNormalized, bestError)

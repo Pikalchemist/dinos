@@ -111,8 +111,6 @@ class ContextSpatialization(Serializable):
         nearest, _ = self.space.nearest(point, n=self.NN_NUMBER)
         id_ = nearest[0]
         # self.model.saveRestrictionIds(nearest)
-        currentColumns = self.columns(point)
-        c = self.model.competence(onlyIds=nearest, contextColumns=currentColumns)
 
         # print('---')
         # print(c)
@@ -130,12 +128,12 @@ class ContextSpatialization(Serializable):
             stability = self.stability
             self.stability += 1
 
-        probality = max(0.2, np.exp(-stability * 0.1))
-        # print(self.model, probality)
+        probality = max(0.05, np.exp(-stability * 0.1))
+        # print(self.model, stability, probality)
 
         fullCompAllFalse = None
         fullCompAllTrue = None
-        if random.uniform(0, 1) < 0.1:
+        if random.uniform(0, 1) < probality * 0.1:
             fullComp = self.model.competence(precise=True)
 
             columnsFalse = np.full(self.evaluatedSpace.dim, False)
@@ -148,12 +146,15 @@ class ContextSpatialization(Serializable):
             columns = columnsTrue if fullCompAllTrue > fullCompAllFalse else columnsFalse
 
             if fullComp < bestFullComp - self.THRESHOLD_RESET * 2:
-                print('Reset all areas!')
+                # print('Reset all areas!')
                 self.resetAreas()
                 area = ContextArea(self, point, columns)
                 self._addArea(area)
 
         if random.uniform(0, 1) < probality:
+            currentColumns = self.columns(point)
+            c = self.model.competence(onlyIds=nearest, contextColumns=currentColumns)
+
             dims = np.arange(self.evaluatedSpace.dim)
             np.random.shuffle(dims)
             n = random.randint(1, min(1 + int(self.evaluatedSpace.dim * 0.4), 3))
@@ -172,7 +173,7 @@ class ContextSpatialization(Serializable):
                     bestAdd = (p, i, columns)
                 if not columns[i] and p >= -self.THRESHOLD_DEL and (not bestDel or p > bestDel[0]):
                     bestDel = (p, i, columns)
-            
+
             if (bestAdd or bestDel) and not fullCompAllFalse:
                 columnsFalse = np.full(self.evaluatedSpace.dim, False)
                 fullCompAllFalse = self.model.competence(
@@ -187,30 +188,32 @@ class ContextSpatialization(Serializable):
             for best, deletion, verb in ((bestAdd, False, 'add'), (bestDel, False, 'del')):
                 if best:
                     p, i, newColumns = best
-                    print(f'Should {verb} context column {i} (+{p}) around {point}')
+                    # print(f'Should {verb} context column {i} (+{p}) around {point}')
                     createNew = False
 
                     if area:
                         if area.attempt(newColumns, deletion):
-                            print(f'Updating current area')
+                            # print(f'Updating current area')
                             previousColumns = area.columns
                             area.columns = newColumns
                         else:
-                            print(f'Conflict trying to update current area, creating a new one')
+                            # print(f'Conflict trying to update current area, creating a new one')
                             createNew = True
-                        area.stability = 0
                     else:
-                        print(f'No existing area! Adding one')
+                        # print(f'No existing area! Adding one')
                         createNew = True
                     if createNew:
                         newArea = ContextArea(self, point, newColumns)
                         self._addArea(newArea)
                     fullComp = self.model.competence(precise=True)
                     if fullComp < bestFullComp - self.THRESHOLD_RESET:
+                        # print('Aborting')
                         if createNew:
                             self._removeArea(newArea)
                         else:
                             area.columns = previousColumns
+                    elif not createNew:
+                        area.stability = 0
             # self.model.restore()
     
     # Visual

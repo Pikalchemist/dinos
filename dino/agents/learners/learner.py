@@ -40,6 +40,8 @@ class Learner(Agent):
                          planner=planner, options=options)
         self.dataset.attachLearner(self)
 
+        self.learningConfigs = {}
+
         # if self.dataset:
         #     self.addChildModule(self.dataset)
 
@@ -111,6 +113,7 @@ class Learner(Agent):
 
     def _trainEpisode(self):
         config = self._preEpisode()
+        self.learningConfigs[self.iteration] = config
 
         # Performs the episode
         memory = self._performEpisode(config)
@@ -120,7 +123,7 @@ class Learner(Agent):
     def _performEpisode(self, config):
         # Run an episode of the given strategy
         if config.strategy not in self.trainStrategies:
-            raise Exception('{config.strategy} is not avaiable within {self}')
+            raise Exception(f'{config.strategy} is not avaiable within {self}')
         return config.strategy.run(config)
 
     def _preEpisode(self):

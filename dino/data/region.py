@@ -87,7 +87,7 @@ class SpaceRegion(Serializable):
     def __repr__(self):
         dim = len(self.points[0]) if self.points else '?'
         cut = strtab(f'{self.splitDim}d {self.splitValue:.4f} #{dim}')
-        return f'Region {self.space}\n    Left: {strtab(self.leftChild)}\n    <Cut {cut}>\n    Right: {strtab(self.rightChild)}'
+        return f'Region {self.space} {self.evaluation}\n    Left: {strtab(self.leftChild)}\n    <Cut {cut}>\n    Right: {strtab(self.rightChild)}'
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(

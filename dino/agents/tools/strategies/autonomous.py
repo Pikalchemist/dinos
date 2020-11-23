@@ -72,19 +72,21 @@ class AutonomousStrategy(RandomStrategy):
     def exploreGoal(self, config):
         # assert config.exploitation is False
         assert config.depth == 0
-        config.reachedGoal = 'random chosen instead'
+        config.result.reachedGoal = 'random chosen instead'
         path = None
 
         # for _ in self.performer.iterative():
         # Choose between local and global exploration
-        probUseGoal, path = self.useGoalCriteria(config.goal, config)
-        useGoal = random.uniform(0, 1) > probUseGoal
+        config.absoluteGoal = config.goal.absoluteData(self.agent.environment.state())
+        probUseRandom, path = self.useGoalCriteria(config.goal, config)
+        useGoal = random.uniform(0, 1) > probUseRandom
+        config.result.randomProbability = probUseRandom
         self.logger.debug(
-            f'goal exploration decision: criteria={probUseGoal}->useGoal={useGoal} exploration={config.exploitation} path={path}')
+            f'goal exploration decision: criteriaRandom={probUseRandom}->useGoal={useGoal} exploration={config.exploitation} path={path}')
 
         if useGoal:  # We have chosen local optimizattion
             self.testPath(path, config)
-            config.reachedGoal = self.agent.environment.state().context().projection(config.goal.space)
+            config.result.reachedGoal = self.agent.environment.state().context().projection(config.goal.space)
         elif not config.exploitation:  # We have chosen random exploration
             self.testRandomAction(config)
         else:
@@ -97,7 +99,7 @@ class AutonomousStrategy(RandomStrategy):
         prob = 1.0
 
         # First pass: only random
-        probFirstPass = 0.1 # TODO threshold(self.randomFirstPass, self.randomThreshold)
+        probFirstPass = self.randomFirstPass # TODO threshold(self.randomFirstPass, self.randomThreshold)
         # print(probFirstPass)
         if not config.exploitation and random.uniform(0, 1) < probFirstPass:
             return 1., Path()  # Random action
@@ -108,7 +110,7 @@ class AutonomousStrategy(RandomStrategy):
         except ActionNotFound:
             path = None
         if not path:
-            config.reachedGoal = 'planning failed'
+            config.result.reachedGoal = 'planning failed'
             self.logger.warning(
                 f"Planning failed for goal {goal}, switching to random")
             return 1., path  # Random action
@@ -117,12 +119,11 @@ class AutonomousStrategy(RandomStrategy):
         if config.exploitation:
             prob = -1.
         else:
-            space = goal.space
+            error = distance / (goal.space.maxDistance * 0.1)
             # (distance - space.options['err']) / space.options['range']
-            x = distance / space.maxDistance
-            prob = 0.8*(sigmoid(x) - 0.5) + 0.5
-            prob = (prob - self.randomFirstPass) / (1. - self.randomFirstPass)
-            prob = threshold(prob, self.randomThreshold)
+            # prob = 0.8*(sigmoid(error) - 0.5) + 0.5
+            # prob = (prob - self.randomFirstPass) / (1. - self.randomFirstPass)
+            prob = error  # threshold(prob, self.randomThreshold)
 
         '''space = goal.space
         if len(space.data) > self.options['min_points']:

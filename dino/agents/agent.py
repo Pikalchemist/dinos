@@ -255,7 +255,9 @@ class Agent(Module):
 
     def _test(self, config):
         self.syncCounter()
-        memory = self.testStrategies.sample().run(config)
+        strategy = self.testStrategies.sample()
+        config.strategy = strategy
+        memory = strategy.run(config)
         self.syncCounter()
         self.iterationType[self.iteration] = 'end'
 

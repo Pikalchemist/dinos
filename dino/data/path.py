@@ -112,13 +112,20 @@ class Path(object):
     Represents multiple goal nodes to be executed in order
     """
 
-    def __init__(self, nodes=[], goal=None):
+    def __init__(self, nodes=[], goal=None, planSettings=None):
         self.__nodes = nodes
         self.goal = goal
+        self.planSettings = planSettings  # .clone() if planSettings is not None else None
 
     @property
     def nodes(self):
         return self.__nodes
+    
+    @property
+    def model(self):
+        if len(self.__nodes) > 0:
+            return self.__nodes[0].model
+        return None
 
     # def getGroupedActionList(self):
     #     return [node.getGroupedActionList() for node in self]
@@ -195,7 +202,7 @@ class PathNode(object):
         # else:
         #     return self.goal.length()
     
-    def createPath(self, goal=None):
+    def createPath(self, goal=None, planSettings=None):
         path = []
         node = self
         while node.parent is not None:
@@ -203,7 +210,7 @@ class PathNode(object):
             node.valid = True
             #dist += euclidean(zeroPlain, node.goal.plain())
             node = node.parent
-        return Path(list(reversed(path)), goal=goal)
+        return Path(list(reversed(path)), goal=goal, planSettings=planSettings)
 
     # def getGroupedActionList(self):
     #     return self, self.getActionList()
