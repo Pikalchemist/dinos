@@ -22,6 +22,7 @@ class Performer(Module):
     """
 
     MAX_DERIVE = 0.04
+    MAX_DISTANCE = 0.01
 
     def __init__(self, agent, options={}):
         super().__init__('Performer', agent)
@@ -38,7 +39,7 @@ class Performer(Module):
         Tests a specific Path and stores consequences in memory.
         :param path: Path object (created by a planner)
         """
-        r = self.__perform(path, config)
+        r = self.__perform(path, config)[0]
         return r
 
     # def performGoal(self, goal, path=None, config=MoveConfig()):
@@ -54,7 +55,7 @@ class Performer(Module):
         :param actionList: ActionList
         """
         path = self.agent.planner.planActions(actionList)
-        return self.__perform(path, config)
+        return self.__perform(path, config)[0]
 
     def __perform(self, path, config, i=0, depth=0):
         """
@@ -78,16 +79,21 @@ class Performer(Module):
         replanning = 0
         maxReplanning = 2
         maxDistance = 7.
-        if absoluteGoal:
-            maxDistance = absoluteGoal.space.maxDistance * 0.01
+        maxDerive = None
+        if model:
+            maxDistance = model.getPrecision(self.MAX_DISTANCE, 1.5)
+            maxDerive = model.getPrecision(self.MAX_DERIVE, 2.5)
         nodes = list(path.nodes)
 
         formatParameters = FormatParameters()
         observationsPrevious = None
         distanceToGoal = None
         currentPos = None
+
         success = False
-        while not success:
+        fatal = False
+        topReplanning = False
+        while not success and not fatal:
             if not nodes and absoluteGoal and config.allowReplanning:
                 replanning += 1
                 config.result.performerReplanning += 1
@@ -106,7 +112,10 @@ class Performer(Module):
 
             for node in nodes:
                 if node.context:
-                    results += self.__perform(node.context, config, depth=depth+1)
+                    subResults, (fatal, topReplanning) = self.__perform(node.context, config, depth=depth+1)
+                    if fatal:
+                        break
+                    results += subResults
                     observationsPrevious = None
 
                 # print('=== HEY')
@@ -121,7 +130,8 @@ class Performer(Module):
                         pass
                     if not node.execution:
                         self.logger.warning(
-                            f'Iter (d{depth}) {i}: failed to break down non primitive action')
+                            f'Iter (d{depth}) {i}: failed to break down non primitive action {node.action}')
+                        fatal = True
                         break
 
                 if node.absPos:
@@ -131,7 +141,10 @@ class Performer(Module):
 
                 if node.execution:
                     observationsPrevious = self.agent.observe(formatParameters=formatParameters)
-                    results += self.__perform(node.execution, config, depth=depth+1)
+                    subResults, (fatal, topReplanning) = self.__perform(node.execution, config, depth=depth+1)
+                    if fatal:
+                        break
+                    results += subResults
                     observations = self.agent.observe(formatParameters=formatParameters)
                     differences = observations.difference(observationsPrevious)
                     observationsPrevious = None
@@ -144,6 +157,7 @@ class Performer(Module):
 
                 currentState = self.environment.state()
                 # self.logger.warning(currentState)
+                rdiff, rderive = None, -1
                 if node.absPos:
                     currentPos, derive, currentState = self.checkStatus(node, node.absPos, currentState)
 
@@ -168,14 +182,13 @@ class Performer(Module):
                 
                 # print('===')
                 # print(node.absPos)
-                if node.absPos:
+                if node.absPos and maxDerive:
                     currentPos, derive, currentState = self.checkStatus(node, node.absPos, currentState)
-                    maxDerive = self.MAX_DERIVE * node.absPos.space.maxDistance
                     # print(node.action)
                     # print(derive, maxDerive)
                     if derive > maxDerive:
                         self.logger.info(
-                            f'Iter (d{depth}) {i}: max derive exceeded ({derive:.4f} > {maxDerive:.4f}) trying to reach {node.goal} by doing {node.action}')
+                            f'Iter (d{depth}) {i}: max derive exceeded ({derive:.4f} > {maxDerive:.4f}) trying to reach {node.goal} by doing {node.action} to get {node.goal} and got {rdiff} Diff {rderive:.4f}')
                         self.postPerforming(model, False, derive)
                         if depth == 0:
                             config.result.performerDerive.append((derive, maxDerive))
@@ -201,7 +214,7 @@ class Performer(Module):
             if depth == 0:
                 config.result.performerDistance = (distanceToGoal, maxDistance)
 
-        return results
+        return results, (fatal, topReplanning)
     
     def performAction(self, node, observationsPrevious, formatParameters, config):
         action = node.action

@@ -8,7 +8,7 @@ from exlab.modular.module import Module
 from exlab.utils.io import parameter
 
 # from ..utils.debug import timethis
-# from ..utils.maths import uniformRowSampling
+from dino.utils.maths import linearValue
 from dino.data.data import Data, Goal, SingleAction, Action, ActionList
 from dino.data.path import ActionNotFound, Path, PathNode
 from dino.data.space import SpaceKind
@@ -84,6 +84,7 @@ class Planner(Module):
     - same model skill chaining: to reach out of range goals in a given model
     """
 
+    MAX_DISTANCE = 0.01
     MAX_MOVE_UNCHANGED_SPACES = 1.
     GOAL_SAMPLE_RATE = 0.2
 
@@ -221,6 +222,7 @@ class Planning(object):
 
         self.model = model
         self.space = model.outcomeSpace
+        self.space._validate()
 
         self.startState = parameter(state, self.planner.environment.state(self.planner.dataset))
         self.startPosition = self.startState.context().projection(self.space)
@@ -232,7 +234,7 @@ class Planning(object):
 
         self.initParameters()
         self.initVariables()
-    
+
     def logTag(self):
         return f'(d{self.settings.depth})'
 
@@ -242,17 +244,17 @@ class Planning(object):
 
     def initParameters(self):
         self.maxIter = parameter(self.settings.maxIterations, 20)
+        self.maxIterNoNodes = 5
         if self.settings.dontMoveSpaces:
             self.maxIter *= 5
-        self.maxIterNoNodes = 10
+            self.maxIterNoNodes *= 4
 
-        precision = 0.01
-        self.maxDistanceBest = precision * self.goal.space.maxDistance
-        self.maxDistance = self.maxDistanceBest * 2 + 0.02 * self.goal.norm()
-        self.maxDistanceIncomplete = self.maxDistanceBest * 5 + 0.1 * self.goal.norm()
+        self.maxDistanceBest = self.model.getPrecision(Planner.MAX_DISTANCE, 0.5)
+        self.maxDistance = self.maxDistanceBest * 3 + 0.02 * self.goal.norm()
+        self.maxDistanceIncomplete = self.maxDistanceBest * 8 + 0.1 * self.goal.norm()
     
     def initVariables(self):
-        self.minDistanceReached = math.inf
+        self.minDistanceReached = self.goal.norm()
         self.closestNodeToGoal = None
 
         self.nodes = [PathNode(pos=self.space.zero(), absPos=self.startPosition, state=self.startState)]
@@ -278,12 +280,16 @@ class Planning(object):
         self.a0, self.y0, self.c0, self.distance0 = [None, None, None, None]
     
     def execute(self):
+        if self.space._number < 100:
+            return None, None, 0
+
         # Main loop
         self.i = -1
-        while self.i < self.maxIter:
+        self.iterationOffset = 0
+        while self.i < self.maxIter + self.iterationOffset:
             self.i += 1
 
-            if len(self.nodes) <= 3 and self.i > self.maxIterNoNodes:
+            if len(self.nodes) <= 1 and self.i > self.maxIterNoNodes or len(self.nodes) <= 2 and self.i > self.maxIterNoNodes * 2:
                 self.logger.warning(f'Not enough nodes, aborting...')
                 break
     
@@ -303,6 +309,8 @@ class Planning(object):
 
             reachable, move = self.searchWithCurrentContext(baseMove, context)
             if reachable is None:
+                self.directGoal = False
+                self.iterationOffset += 1
                 continue
             reachable, contextPath = self.searchWithDifferentContext(baseMove, reachable)
 
@@ -327,7 +335,7 @@ class Planning(object):
         if self.closestNodeToGoal and not self.path:
             self.path = self.closestNodeToGoal.createPath(self.goal, self.pathSettings())
 
-        # self._plotNodes(self.nodes, self.goal, self.space, self.attemptedUnreachable, self.attemptedBreakConstraint)
+        self._plotNodes(self.nodes, self.goal, self.space, self.attemptedUnreachable, self.attemptedBreakConstraint)
 
         self.logger.debug(
             f"{self.logTag()} Planning {'generated' if self.path else 'failed'} for goal {self.goal} in {self.i+1} step(s)")
@@ -340,11 +348,18 @@ class Planning(object):
             self.settings.result.planningSuccess = self.path is not None
             self.settings.result.planningSteps = self.i
 
+        minDistance = max(0, self.minDistanceReached)
+
+        if not self.path and minDistance > 0:
+            self.model.updatePrecision(False, min(minDistance, self.space.maxDistance * 0.2))
+
         finalState = self.path[-1].state if self.path else None
-        return self.path, finalState, max(0, self.minDistanceReached)
+        return self.path, finalState, minDistance
 
     def searchWithCurrentContext(self, baseMove, context):
-        move, safeMove, nearestMove, _ = self.findBestMove(baseMove, context)
+        riskyMove, move, safeMove, nearestMove, _ = self.findBestMove(baseMove, context)
+
+        maxNoMoveDistance = 0.2 * self.space.maxDistance
 
         if move is None:
             self.logger.error(
@@ -355,11 +370,19 @@ class Planning(object):
             return False, None
 
         self.logger.debug2(
-            f'{self.logTag()} Iter {self.i}: chosen move is {move}')
+            f'{self.logTag()} Iter {self.i}: chosen move is {move} (risky move is {riskyMove})')
 
         reachable = False
         if not self.settings.forceContextPlanning:
-            reachable = self.attempt(move, context)
+            if riskyMove:
+                if riskyMove.norm() < maxNoMoveDistance and self.minDistanceReached > maxNoMoveDistance:
+                    return None, None
+                reachable = self.attempt(riskyMove, context) if riskyMove else False
+
+            if not reachable:
+                if move.norm() < maxNoMoveDistance and self.minDistanceReached > maxNoMoveDistance:
+                    return None, None
+                reachable = self.attempt(move, context)
             # if reachable:
             #     newPosition = nearestNode.pos + y0
             #     absPos = startPos + newPosition
@@ -373,6 +396,9 @@ class Planning(object):
 
             if not reachable:
                 reachable = self.attempt(nearestMove * 0.5, context)
+
+            if reachable and self.y0.norm() < maxNoMoveDistance and self.minDistanceReached > maxNoMoveDistance:
+                return None, None
             
             # if reachable and baseMove.norm() > 0.01:
             #     if self.y0.norm() < 0.01:
@@ -395,7 +421,7 @@ class Planning(object):
             # Save with context results
             a0wc, y0wc, d0wc = [self.a0, self.y0, self.distance0]
 
-            move, safeMove, nearestMove, c0 = self.findBestMove(baseMove)
+            riskyMove, move, safeMove, nearestMove, c0 = self.findBestMove(baseMove)
 
             # c0 = self.model.contextSpace.getPoint(nearestMoveId)[0]
             if settingsTestContext:
@@ -403,7 +429,10 @@ class Planning(object):
             else:
                 self.logger.debug2(f'{self.logTag()} Iter {self.i}: move still not reachable, trying to use a different context {c0}')
 
-            reachable = self.attempt(move, c0)
+            reachable = self.attempt(riskyMove, c0) if riskyMove else False
+
+            if not reachable:
+                reachable = self.attempt(move, c0)
             # if reachable:
             #     newPosition = nearestNode.pos + y0
             #     absPos = startPos + newPosition
@@ -422,11 +451,11 @@ class Planning(object):
             # print(reachable, y0, a0)
 
             switchBackWithContext = False
-            if reachableWithContext and (not reachable or d0wc <= self.distance0 + self.space.maxDistance * 0.01):
+            if reachableWithContext and (not reachable or d0wc <= self.distance0 + self.maxDistanceBest):
                 switchBackWithContext = True
             elif reachable:
                 self.logger.debug(
-                    f'{self.logTag()} Iter {self.i}: choose to {"change" if reachableWithContext else "use"} context ({d0wc} > {self.distance0 + self.space.maxDistance * 0.01}), is the context reachable?')
+                    f'{self.logTag()} Iter {self.i}: choose to {"change" if reachableWithContext else "use"} context ({d0wc} > {self.distance0 + self.maxDistanceBest}), is the context reachable?')
 
                 newSettings = self.settings.clone(context=True)
                 # if self.i == 0:
@@ -455,7 +484,7 @@ class Planning(object):
                     switchBackWithContext = True
                     self.logger.debug(
                         f'{self.logTag()} Iter {self.i}: context {c0} is not reachable')
-                elif reachableWithContext and d0wc <= self.distance0 + self.space.maxDistance * 0.005 * len(contextPath):
+                elif reachableWithContext and d0wc <= self.distance0 + self.maxDistanceBest * 0.5 * len(contextPath):
                     switchBackWithContext = True
             
             if switchBackWithContext and reachableWithContext:
@@ -518,10 +547,10 @@ class Planning(object):
         if distance > self.minDistanceReached:
             self.directGoal = False
             if self.minDistanceReached < self.maxDistance:
-                self.logger.debug(f'{self.logTag()} Iter {self.i}: close enough to the goal {distance:.3f} (max {self.maxDistance:.3f})')
+                self.logger.debug(f'{self.logTag()} Iter {self.i}: close enough to the goal {self.minDistanceReached:.3f} (max {self.maxDistance:.3f})')
                 self.path = self.closestNodeToGoal.createPath(self.goal, self.pathSettings())
                 if not self.settings.performing and not self.settings.context and self.settings.depth == 0:
-                    self.settings.result.planningDistance = (distance, self.maxDistance)
+                    self.settings.result.planningDistance = (self.minDistanceReached, self.maxDistance)
                 return True
         else:
             self.minDistanceReached = distance
@@ -651,10 +680,11 @@ class Planning(object):
             # space.goal([random.uniform(minrand, maxrand) for x in range(space.dim)])
 
             if self.lastInvalids:
-                for _ in range(50):
-                    invalids = np.array(self.lastInvalids)
+                invalids = np.array(self.lastInvalids)
+                for _ in range(100):
+                    distanceToNearestNode = (self.nearestNode(self.subGoal).pos - subGoal).norm()
                     dists = np.sum((invalids - subGoal.npPlain()) ** 2, axis=1) ** 0.5
-                    if not np.any(dists < self.invalidPointRatioLimit * self.space.maxDistance):
+                    if not np.any(dists < self.invalidPointRatioLimit * self.space.maxDistance) and distanceToNearestNode > 0.2 * self.space.maxDistance:
                         break
                     subGoal = self.generateRandomPoint()
                     # self.logger.debug2(f'(d{settings.depth}) Iter {i}: Too close to invalid point, retrying...')
@@ -664,7 +694,7 @@ class Planning(object):
         origin = random.uniform(0., 1.) * self.goal.npPlain()
         # point = [random.uniform(0., 1.) for _ in range(space.dim)]
         # point = point * self.goal
-        width = 0.7 * min(0.05 * self.space.maxDistance + self.goal.norm(), self.space.maxDistance)
+        width = 1.5 * min(0.05 * self.space.maxDistance + self.goal.norm(), self.space.maxDistance)
         point = origin + width * np.array([random.uniform(-1., 1.)
                                    for _ in range(self.space.dim)])
         return self.space.goal(point)
@@ -679,60 +709,24 @@ class Planning(object):
         # lastVariance = -1.
         # We are looking for a valid point in the outcome space
         # self.logger.debug2(f'=====================')
-        move = baseMove.clone()
-        c0 = None
-        c0safe = None
-        for j in range(10):
-            if j > 0:
-                move *= 1. * distanceToCenter / move.norm()
-            # self.logger.debug2(
-            #     f'(d{settings.depth}) Iter {i} {j}: {move}')
 
-            # moveContext = move.extends(context)
-            ids, _, _ = self.model.nearestOutcome(move, context=context, n=6, nearestUseContext=False)
-            # ids, dists = self.model.outcomeContextSpace.nearestDistance(moveContext, n=5, restrictionIds=ids)
-            if len(ids) == 0:
-                return None, None, None, None
-            nearestMoveId = ids[0]
-            nearestMove = self.space.getPoint(nearestMoveId)[0]
-
-            # print('----', j)
-            # print(move)
-            # print(nearestMove)
-            # print(self.model.outcomeSpace.variance(ids))
-            # print(self.model.outcomeSpace.denseEnough(ids))
-            # print(self.model.outcomeSpace.maxDistance * 0.1)
-
-            points = self.space.getNpPlainPoint(ids)
-            center = np.mean(points, axis=0)
-            distanceToCenter = np.sum(center ** 2) ** .5
-            # distanceToNode = np.mean(np.sum(points ** 2, axis=1) ** .5)
-            distanceMoveToCenter = np.mean(np.sum((center - move.npPlain()) ** 2) ** .5)
-            # distanceToMove = np.mean(np.sum((points - move.npPlain()) ** 2, axis=1) ** .5)
-            # self.logger.debug2(
-            #     f'(d{settings.depth}) Iter {i} {j}: {self.space.getPlainPoint(ids)}')
-
-            # self.logger.debug2(
-            #     f'(d{settings.depth}) Iter {i} {j}: {nearestMove} {distanceToMove} {distanceToNode}')
-            # print('!', distanceToMove)
-            # print(self.space.getPlainPoint(ids) - move.npPlain())
-            # if j == 0:
-            #     distanceToNode = 10.
-
-            # variance = self.space.variance(ids)
-            # if abs(lastVariance - variance) <= 0.05 * variance:
-            #     break
-            # lastVariance = variance
-
-            # if context is None:
-            #     cs = self.model.contextSpace.getNpPlainPoint(ids)
-            #     c0 = np.mean(cs, axis=0)
-            #     self.logger.info(f'{j}: {move} {distanceToCenter} {distanceMoveToCenter} {self.space.maxDistance * 0.05}\n    {points}\n{cs}\n{c0}')
-
-            # self.space.denseEnough(ids, threshold=0.1) or
-            if (j > 0 and distanceMoveToCenter <= self.space.maxDistance * 0.05) or distanceToCenter > move.norm():
-                break
+        ratio = (self.space._number - 100) / 300
+        number = int(linearValue(1, 2, ratio))
+        close = linearValue(1., 0.05, ratio)
+        riskyMove, _, _ = self._searchBestMove(baseMove, number, close, context)
+        if riskyMove is None:
+            return None, None, None, None, None
         
+        number = int(linearValue(1, 6, ratio))
+        close = linearValue(0.2, 0.05, ratio)
+        move, nearestMove, ids = self._searchBestMove(baseMove, number, close, context)
+        if move is None:
+            return None, None, None, None, None
+        
+        if riskyMove.norm() < move.norm():
+            riskyMove = None
+
+        c0 = None
         if context is None:
             cs = self.model.contextSpace.getNpPlainPoint(ids)
             c0 = self.model.contextSpace.asTemplate(np.mean(cs, axis=0))
@@ -743,7 +737,41 @@ class Planning(object):
         else:
             move *= 0.9
         # self.logger.debug2(f'---------------------')
-        return move, safeMove, nearestMove, c0  # , nearestMoveId
+        return riskyMove, move, safeMove, nearestMove, c0  # , nearestMoveId
+    
+    def _searchBestMove(self, baseMove, number, close, context):
+        move = baseMove.clone()
+        for j in range(10):
+            if j > 0:
+                move *= 1. * distanceToCenter / move.norm()
+            # self.logger.debug2(
+            #     f'(d{settings.depth}) Iter {i} {j}: {move}')
+
+            ids, _, _ = self.model.nearestOutcome(
+                move, context=context, n=number, nearestUseContext=False)
+            # ids, dists = self.model.outcomeContextSpace.nearestDistance(moveContext, n=5, restrictionIds=ids)
+            if len(ids) == 0:
+                return None
+            nearestMoveId = ids[0]
+            nearestMove = self.space.getPoint(nearestMoveId)[0]
+
+            points = self.space.getNpPlainPoint(ids)
+            center = np.mean(points, axis=0)
+            distanceToCenter = np.sum(center ** 2) ** .5
+            distanceMoveToCenter = np.mean(
+                np.sum((center - move.npPlain()) ** 2) ** .5)
+            # self.logger.debug2(f'(d{self.settings.depth}) Iter {i} {j}: {self.space.getPlainPoint(ids)}')
+            # self.logger.debug2(f'(d{self.settings.depth}) Iter {i} {j}: {nearestMove} {distanceToCenter} {distanceToNode}')
+
+            # if context is None:
+            #     cs = self.model.contextSpace.getNpPlainPoint(ids)
+            #     c0 = np.mean(cs, axis=0)
+            # self.logger.info(f'{j}: {move} {distanceToCenter} {distanceMoveToCenter} {self.space.maxDistance * close}\n    {points}')
+
+            if (j > 0 and distanceMoveToCenter <= self.space.maxDistance * close) or distanceToCenter > move.norm():
+                break
+        
+        return move, nearestMove, ids
 
     def _plotNodes(self, nodes, goal, space, attemptedUnreachable, attemptedBreakConstraint):
         import matplotlib.pyplot as plt
@@ -762,13 +790,13 @@ class Planning(object):
             # plt.scatter(attemptedBreakConstraint[:, 0], -attemptedBreakConstraint[:, 1], marker='o', color='purple')
             for x, y, fx, fy in attemptedBreakConstraint:
                 plt.plot([fx, x], [-fy, -y], 'r,--')
-        plt.scatter(goalPlain[0], -goalPlain[1], marker='x', color='orange')
+        plt.scatter(goalPlain[0], -goalPlain[1], marker='X', color='orange')
         for node in nodes:
             if node.parent is not None:
                 pos = node.pos.plain()
                 parentPos = node.parent.pos.plain()
-                plt.plot([parentPos[0], pos[0]], [-parentPos[1], -
-                                                  pos[1]], f"{'g' if node.valid else 'b'},-")
+                plt.scatter(pos[0], -pos[1], marker='+', color='green' if node.valid else 'blue')
+                plt.plot([parentPos[0], pos[0]], [-parentPos[1], -pos[1]], f"{'g' if node.valid else 'b'},-")
         for node in nodes:
             if node.parent is None:
                 pos = node.pos.plain()
