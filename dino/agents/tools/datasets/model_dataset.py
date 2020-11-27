@@ -181,21 +181,21 @@ class ModelDataset(Dataset):
         return any(visit(node) for node in graph)
 
     # Spaces
-    def controllableSpaces(self, spaces=None, merge=False, performant=False):
-        return self.__controllableSpaces(True, spaces, merge, performant)
+    def controllableSpaces(self, spaces=None, merge=False, performant=False, convert=True):
+        return self.__controllableSpaces(True, spaces, merge, performant, convert=convert)
 
-    def nonControllableSpaces(self, spaces=None, merge=False, performant=False):
-        return self.__controllableSpaces(False, spaces, merge, performant)
+    def nonControllableSpaces(self, spaces=None, merge=False, performant=False, convert=True):
+        return self.__controllableSpaces(False, spaces, merge, performant, convert=convert)
 
-    def __controllableSpaces(self, controllable, spaces=None, merge=False, performant=False):
+    def __controllableSpaces(self, controllable, spaces=None, merge=False, performant=False, convert=True):
         spaces = spaces if spaces else self.actionExplorationSpaces
-        if type(spaces) in (list, set):
-            spaces = [space.convertTo(kind=SpaceKind.BASIC)
-                      for space in spaces]
-        else:
-            spaces = spaces.convertTo(kind=SpaceKind.BASIC)
-        spaces = [space for space in spaces if self.controllableSpace(
-            space) == controllable]
+        if convert:
+            if type(spaces) in (list, set):
+                spaces = [space.convertTo(kind=SpaceKind.BASIC)
+                        for space in spaces]
+            else:
+                spaces = spaces.convertTo(kind=SpaceKind.BASIC)
+        spaces = [space for space in spaces if self.controllableSpace(space) == controllable]
         if merge:
             return self.multiColSpace(spaces)
         return spaces
@@ -205,7 +205,7 @@ class ModelDataset(Dataset):
             return False
         if space.primitive():
             return True
-        models = self.findModelsByOutcomeSpace(space)
+        models = self.findModelsByOutcomeSpace(space.convertTo(kind=SpaceKind.BASIC))
         if performant:
             models = [model for model in models if model.performant(self.MODEL_PERF_COMPETENCE, self.MODEL_PERF_DURATION)]
         return len(models) > 0
@@ -215,13 +215,13 @@ class ModelDataset(Dataset):
             return goalContext
 
         space = goalContext.space
-        currentContext = currentContext.projection(space)
+        currentContext = currentContext.projection(space, kindSensitive=True)
 
         nonControllable = currentContext.projection(
-            self.nonControllableSpaces(space, merge=True))
+            self.nonControllableSpaces(space, merge=True, convert=False), kindSensitive=True)
         controllable = goalContext.projection(
-            self.controllableSpaces(space, merge=True))
-        context = nonControllable.extends(controllable)
+            self.controllableSpaces(space, merge=True, convert=False), kindSensitive=True)
+        context = nonControllable.extends(controllable) 
 
         return context
 

@@ -39,7 +39,7 @@ class Data(Serializable):
             self.valueOrdered = self.plainOrdered()
 
     def _serialize(self, serializer):
-        dict_ = serializer.serialize(self, ['_parts'], exportPathType=True)
+        dict_ = serializer.serialize(self, ['_parts'])
         return dict_
 
     @classmethod
@@ -166,7 +166,7 @@ class Data(Serializable):
         return np.array(self.plain())
 
     # Projections
-    def singleSpaceComposante(self, singleSpace, entity=None):
+    def singleSpaceComposante(self, singleSpace, kindSensitive=False, entity=None):
         flatten = self.flat()
         # print(flatten)
         pm = next(iter([part for part in flatten if part.space.findMatchingSpaceRows(
@@ -174,7 +174,7 @@ class Data(Serializable):
         if not pm:
             pm = next(iter([part for part in flatten if part.space.findMatchingSpaceRows(
                 singleSpace, entity=entity)]), Data())
-        if not pm:
+        if not pm and not kindSensitive:
             pm = next(iter([part for part in flatten if part.space.findMatchingSpaceRows(
                 singleSpace, kindSensitive=False, entity=entity)]), Data())
         pm = pm.applyTo(entity)
@@ -199,8 +199,8 @@ class Data(Serializable):
 
         # return pm
 
-    def projection(self, space, allowAbstraction=True, entity=None):
-        parts = [self.singleSpaceComposante(s, entity=entity)
+    def projection(self, space, allowAbstraction=True, kindSensitive=False, entity=None):
+        parts = [self.singleSpaceComposante(s, kindSensitive=kindSensitive, entity=entity)
                  for s in space.flatColsWithMultiRows]
         # if self.abstract:
         #     parts = [self.singleSpaceComposante(s) for s in space.flatColsWithMultiRows]
@@ -314,8 +314,7 @@ class SingleData(Data):
         self.abstract = self.space.abstract
     
     def _serialize(self, serializer):
-        dict_ = serializer.serialize(self, ['value', 'relative'], foreigns=[
-                                     'space'], exportPathType=True)
+        dict_ = serializer.serialize(self, ['value', 'relative'], foreigns=['space'])
         return dict_
 
     @classmethod
@@ -444,7 +443,7 @@ class DataSequence(Serializable):
         self._parts = list(args)
 
     def _serialize(self, serializer):
-        dict_ = serializer.serialize(self, ['_parts'], exportPathType=True)
+        dict_ = serializer.serialize(self, ['_parts'])
         return dict_
 
     # Operators
