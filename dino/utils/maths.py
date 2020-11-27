@@ -45,7 +45,7 @@ def uniformSampling(probs):
 
 
 def linearValue(start, end, position):
-    return start + (end - start) * position
+    return start + (end - start) * max(min(position, 1), 0)
 
 
 def first(list_, default=None):

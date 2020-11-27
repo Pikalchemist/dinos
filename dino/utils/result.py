@@ -1,7 +1,9 @@
 import copy
 
+from exlab.interface.serializer import Serializable
 
-class Result(object):
+
+class Result(Serializable):
     def __init__(self, config):
         self.config = config
 
@@ -18,6 +20,26 @@ class Result(object):
         self.performerReplanningSteps = 0
         self.performerDistance = None
         self.performerDerive = []
+    
+    def _serialize(self, serializer):
+        dict_ = serializer.serialize(self, ['reachedGoal', 'reachedContext', 'action', 'randomProbability', 'planningSuccess', 'planningDistance',
+                                            'planningSteps', 'planningChangeContextSteps', 'performerReplanning', 'performerReplanning', 'performerReplanningSteps',
+                                            'performerDistance', 'performerDerive'])
+        return dict_
+
+    # @classmethod
+    # def _deserialize(cls, dict_, serializer, obj=None):
+    #     if obj is None:
+    #         obj = cls()
+    #     return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        for attr in ['reachedGoal', 'reachedContext', 'action', 'randomProbability', 'planningSuccess', 'planningDistance',
+                     'planningSteps', 'planningChangeContextSteps', 'performerReplanning', 'performerReplanning', 'performerReplanningSteps',
+                     'performerDistance', 'performerDerive']:
+            if attr in dict_:
+                setattr(self, attr, serializer.deserialize(dict_.get(attr)))
 
     def clone(self, config):
         new = copy.copy(self)

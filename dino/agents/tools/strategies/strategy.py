@@ -50,7 +50,7 @@ class Strategy(Module):
 
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
-        dict_.update(serializer.serialize(self, ['name'], exportPathType=True))
+        dict_.update(serializer.serialize(self, ['name']))
         return dict_
 
     # @classmethod
@@ -105,8 +105,11 @@ class Strategy(Module):
         if not config.goalContext:
             return True
 
+        settings = config.plannerSettings.clone(context=True)
+        if config.goal and not config.goal.space.matches(config.goalContext.space, kindSensitive=False):
+            settings.dontMoveSpaces.append(config.goal.space)
         try:
-            path, _, _ = self.planner.planDistance(config.goalContext.setRelative(False), settings=config.plannerSettings.clone(context=True))
+            path, _, _ = self.planner.planDistance(config.goalContext.setRelative(False), settings=settings)
         except ActionNotFound:
             config.result.reachedContext = 'planning failed'
             path = None

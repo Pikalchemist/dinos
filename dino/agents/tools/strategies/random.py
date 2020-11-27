@@ -22,7 +22,7 @@ class RandomStrategy(Strategy):
 
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
-        dict_.update(serializer.serialize(self, exportPathType=True))
+        dict_.update(serializer.serialize(self))
         return dict_
 
     # @classmethod

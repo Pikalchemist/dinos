@@ -52,6 +52,9 @@ class Model(Serializable):
         self.precision = -1.
 
         self.restrictionIds = restrictionIds
+        # self.nonDuplicateLastId = -1
+        # self.nonDuplicateActionIds = []
+        # self.nonDuplicateOutcomeIds = []
 
         self.actionSpace = dataset.multiColSpace(actionSpace)
         self.outcomeSpace = dataset.multiColSpace(outcomeSpace)
@@ -75,22 +78,32 @@ class Model(Serializable):
     def __repr__(self):
         disabled = '❌' if not self.enabled else ''
         return f'{disabled}Model{self.__class__.__name__}({self.actionSpace} | {self.contextSpace} => {self.outcomeSpace})'
+    
+    def _sid(self, serializer):
+        return serializer.serialize(self, foreigns=['dataset', 'actionSpace', 'outcomeSpace', 'contextSpace'], reference=True)
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(
-            self, ['enabled', 'createdSince', 'lowCompetenceSince', 'contextSpacialization', 'precision'], foreigns=['dataset', 'actionSpace', 'outcomeSpace', 'contextSpace'])
+            self, ['enabled', 'createdSince', 'lowCompetenceSince', 'contextSpacialization', 'precision'],
+            foreigns=['dataset', 'actionSpace', 'outcomeSpace', 'contextSpace'])
         return dict_
 
     @classmethod
     def _deserialize(cls, dict_, serializer, obj=None):
         if obj is None:
-            obj = cls(serializer.deserialize(dict_.get('dataset')),
-                      serializer.deserialize(dict_.get('actionSpace')),
-                      serializer.deserialize(dict_.get('outcomeSpace')),
-                      serializer.deserialize(dict_.get('contextSpace')),
-                      dict_.get('storesData'),
-                      metaData=dict_.get('metaData', {}))
+            obj = cls._findOrCreate(serializer.deserialize(dict_.get('dataset')),
+                    serializer.deserialize(dict_.get('actionSpace')),
+                    serializer.deserialize(dict_.get('outcomeSpace')),
+                    serializer.deserialize(dict_.get('contextSpace')),
+                    dict_.get('metaData', {}))
         return super()._deserialize(dict_, serializer, obj)
+
+    @classmethod
+    def _findOrCreate(cls, dataset, actionSpace, outcomeSpace, contextSpace=[], metaData={}):
+        obj = None
+        if obj is None:
+            obj = cls(dataset, actionSpace, outcomeSpace, contextSpace, metaData=metaData)
+        return obj
 
     def _postDeserialize(self, dict_, serializer):
         super()._postDeserialize(dict_, serializer)
@@ -173,14 +186,23 @@ class Model(Serializable):
             # context = event.context.projection(self.contextSpace)
             # self.contextSpacialization[1].addPoint(context)
 
-    def updatePrecision(self, success, distanceToGoal):
+    def updatePrecision(self, success, distanceToGoal, weight=1):
         # oldp = self.precision
         precision = min(distanceToGoal * self.PRECISION_MULTIPLIER, self.outcomeSpace.maxDistance * 0.1)
         if self.precision < 0:
-            self.precision = self.outcomeSpace.maxDistance * 0.05
-        self.precision = self.precision * (1 - self.PRECISION_LEARNING_RATE) + (precision - self.precision) * self.PRECISION_LEARNING_RATE
+            self.precision = self.outcomeSpace.maxDistance * 0.03
+        learningRate = self.PRECISION_LEARNING_RATE * weight
+        if distanceToGoal < self.precision:
+            learningRate *= 2
+        self.precision = self.precision * (1 - learningRate) + (
+            precision - self.precision) * learningRate
         self.precision = min(max(self.precision, self.outcomeSpace.maxDistance * 0.005), self.outcomeSpace.maxDistance * 0.1)
         # print(f'from {oldp} to {self.precision} // {distanceToGoal} // {self}')
+    
+    def getPrecision(self, ratio=0.01, multiplier=1):
+        if self.precision < 0:
+            return self.outcomeSpace.maxDistance * ratio
+        return self.precision * multiplier
 
     # Context
     def hasContext(self, contextSpace, contextColumns):
@@ -231,6 +253,17 @@ class Model(Serializable):
         #     ids = np.intersect1d(
         #         ids, self.contextSpace.getIds(self.restrictionIds))
         return self.findSharedIds(self.outcomeSpace, self.actionSpace, self.contextSpace, restrictionIds=self.restrictionIds)
+    
+    # def updateNonDuplicateIds(self):
+    #     number = self.actionSpace.number
+    #     if self.nonDuplicateLastActionId < number:
+    #         self.actionSpace.findDuplicates(self.nonDuplicateActionIds)
+
+    #         self.nonDuplicateLastActionId < number
+
+    #     self.nonDuplicateLastId = id_
+    #     self.nonDuplicateActionIds = []
+    #     self.nonDuplicateOutcomeIds = []
     
     @staticmethod
     def findSharedIds(self, *spaces, restrictionIds):

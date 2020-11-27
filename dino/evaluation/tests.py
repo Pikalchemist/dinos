@@ -16,8 +16,7 @@ class Test(Serializable):
         return serializer.uid('test', self.name)
 
     def _serialize(self, serializer):
-        dict_ = serializer.serialize(self, ['space', 'name', 'id', 'scene', 'points'],
-                                     exportPathType=True)
+        dict_ = serializer.serialize(self, ['space', 'name', 'id', 'scene', 'points'])
         return dict_
 
     # @classmethod
@@ -64,7 +63,7 @@ class TestResult(Serializable):
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(self, ['iteration', 'meanError', 'meanQuadError', 'std', 'results', 'method'],
-                                     foreigns=['test'], exportPathType=True)
+                                     foreigns=['test'])
         return dict_
     
     @classmethod

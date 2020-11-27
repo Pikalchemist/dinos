@@ -31,8 +31,7 @@ class Evaluation(Serializable):
         self.models = models
 
     def _serialize(self, serializer):
-        dict_ = serializer.serialize(self, ['iteration', 'meanError', 'meanStd', 'results', 'models'],
-                                     exportPathType=True)
+        dict_ = serializer.serialize(self, ['iteration', 'meanError', 'meanStd', 'results', 'models'])
         return dict_
     
     @classmethod
@@ -77,7 +76,7 @@ class Evaluator(Serializable):
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(
-            self, ['options', 'method', 'evaluations'], exportPathType=True)
+            self, ['options', 'method', 'evaluations'])
         return dict_
     
     @classmethod

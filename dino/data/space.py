@@ -83,7 +83,7 @@ class Space(Serializable):
         self.spaceManager.registerSpace(self)
     
     def _sid(self, serializer):
-        return serializer.serialize(self, ['kind'], foreigns=['spaceManager', 'boundProperty'], exportPathType=False)
+        return serializer.serialize(self, ['kind'], foreigns=['spaceManager', 'boundProperty'], reference=True)
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(

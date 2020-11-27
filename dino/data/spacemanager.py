@@ -49,8 +49,7 @@ class SpaceManager(Module, Serializable):
 
     def _serialize(self, serializer):
         dict_ = {}
-        dict_.update(serializer.serialize(
-            self, ['spaces', 'storesData'], exportPathType=True))
+        dict_.update(serializer.serialize(self, ['spaces', 'storesData']))
         return dict_
 
     @classmethod
@@ -241,14 +240,14 @@ class SpaceManager(Module, Serializable):
     def actions(self):
         return [event.actions for event in self.events]
 
-    def eventFromId(self, iteration):
-        register = self.events[iteration]
-        event = InteractionEvent(iteration)
-        event.actions = ActionList(Action(
-            *(SingleAction(t, self.getData(t, v).tolist()) for t, v in register.actions)))
-        event.outcomes = Observation(
-            *(SingleObservation(t, self.getData(t, v).tolist()) for t, v in register.outcomes))
-        return event
+    # def eventFromId(self, iteration):
+    #     register = self.events[iteration]
+    #     event = InteractionEvent(iteration)
+    #     event.actions = ActionList(Action(
+    #         *(SingleAction(t, self.getData(t, v).tolist()) for t, v in register.actions)))
+    #     event.outcomes = Observation(
+    #         *(SingleObservation(t, self.getData(t, v).tolist()) for t, v in register.outcomes))
+    #     return event
 
     def getData(self, space_id, data_id):
         return self.space(space_id).data[data_id]

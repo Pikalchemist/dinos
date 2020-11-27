@@ -7,7 +7,9 @@
 import copy
 import random
 
+from exlab.interface.serializer import Serializable
 from exlab.utils.io import parameter
+
 from dino.agents.tools.planners.planner import PlanSettings
 
 from .result import Result
@@ -18,7 +20,7 @@ Misc objects
 """
 
 
-class MoveConfig(object):
+class MoveConfig(Serializable):
     """
     Represents a move configuration:
     - Exploitation:
@@ -58,6 +60,27 @@ class MoveConfig(object):
 
         self.result = Result(self)
         self.plannerSettings.result = self.result
+    
+    def _serialize(self, serializer):
+        dict_ = serializer.serialize(self, ['exploitation', 'evaluating', 'depth', 'goal', 'goalContext', 'absoluteGoal',
+                                            'sampling', 'allowReplanning', 'iterations', 'iteration', 'result'],
+                                     foreigns=['strategy', 'model'])
+        return dict_
+
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = cls()
+        return super()._deserialize(dict_, serializer, obj)
+    
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        for attr in ['exploitation', 'evaluating', 'depth', 'goal', 'goalContext', 'absoluteGoal',
+                     'sampling', 'allowReplanning', 'iterations', 'iteration', 'strategy', 'model']:
+            if attr in dict_:
+                setattr(self, attr, serializer.deserialize(dict_.get(attr)))
+        if 'result' in dict_:
+            serializer.deserialize(dict_.get('result'), obj=self.result)
 
     def clone(self, **kwargs):
         new = copy.copy(self)
@@ -70,6 +93,10 @@ class MoveConfig(object):
     def nextdepth(self, **kwargs):
         kwargs['depth'] = self.depth + 1
         return self.clone(**kwargs)
+    
+    @property
+    def training(self):
+        return not self.evaluating and not self.exploitation
 
     def __repr__(self):
         if self.evaluating:

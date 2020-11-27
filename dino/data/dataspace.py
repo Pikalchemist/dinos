@@ -313,6 +313,15 @@ class DataSpace(Space):
         elif method == 'first':
             data = data[:n]
         return data
+    
+    # def findDuplicates(self, starting=-1):
+    #     self._validate()
+    #     if self.lastDuplicateSearch >= self._number:
+    #         return
+
+    #     self.noDuplicates = 
+
+    #     self.lastDuplicateSearch = self._number
 
     def addPoint(self, point, idx, cost=None, action=False):
         """Add a point in the space and if valid return id."""
