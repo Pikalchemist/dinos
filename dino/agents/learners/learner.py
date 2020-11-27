@@ -11,6 +11,7 @@ import time
 from ..agent import Agent
 
 from exlab.utils.io import parameter
+from exlab.interface.graph import Graph
 
 from dino.utils.move import MoveConfig
 # from ...utils.maths import uniformSampling, iterrange
@@ -40,8 +41,6 @@ class Learner(Agent):
                          planner=planner, options=options)
         self.dataset.attachLearner(self)
 
-        self.learningConfigs = {}
-
         # if self.dataset:
         #     self.addChildModule(self.dataset)
 
@@ -51,7 +50,7 @@ class Learner(Agent):
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
         dict_.update(serializer.serialize(
-            self, ['dataset', 'trainStrategies'], exportPathType=True))
+            self, ['dataset', 'trainStrategies']))
         return dict_
     
     def findStrategy(self, name):
@@ -113,7 +112,7 @@ class Learner(Agent):
 
     def _trainEpisode(self):
         config = self._preEpisode()
-        self.learningConfigs[self.iteration] = config
+        self.configs[self.iteration] = config
 
         # Performs the episode
         memory = self._performEpisode(config)
@@ -148,6 +147,101 @@ class Learner(Agent):
             for event in memory:
                 self.addEvent(event, config)
             self.dataset.updated()
+
+    class ResultAnalyser(Agent.ResultAnalyser):
+        @property
+        def trainingConfigs(self):
+            return {i: c for i, c in self.agent.configs.items() if c.training}
+        
+        def reachedSpaces(self, data, key=None):
+            if key is None:
+                key = lambda item: item.space
+            if isinstance(data, dict):
+                data = data.values()
+            return list(set([key(item) for item in data]))
+        
+        def groupBySpace(self, data, key=None):
+            if key is None:
+                key = lambda item: item.space
+
+            spaces = self.reachedSpaces(data, key=key)
+            if isinstance(data, dict):
+                return {space: {i: item for i, item in data.items() if key(item) == space} for space in spaces}
+            else:
+                return {space: [item for item in data if key(item) == space] for space in spaces}
+
+        def _filterNoDict(self, data, iteration=True):
+            if not iteration:
+                return list(data.values())
+            return data
+        
+        def _filterString(self, data):
+            return data and not isinstance(data, str)
+
+        # Analyse
+        def randomActions(self, range_=None, iteration=True):
+            points = {i: config.result.action for i, config in self.trainingConfigs.items() if config.result.action}
+            return self._filterNoDict(points, iteration)
+
+        def goals(self, range_=None, iteration=True):
+            points = {i: config.goal for i, config in self.trainingConfigs.items() if config.goal}
+            return self._filterNoDict(points, iteration)
+
+        def contextGoals(self, range_=None, iteration=True):
+            points = {i: config.goalContext for i, config in self.trainingConfigs.items() if config.goalContext}
+            return self._filterNoDict(points, iteration)
+        
+        def reachedGoals(self, range_=None, iteration=True):
+            points = {i: config.result.reachedGoal for i, config in self.trainingConfigs.items() if self._filterString(config.result.reachedGoal)}
+            return self._filterNoDict(points, iteration)
+        
+        def reachedContextGoals(self, range_=None, iteration=True):
+            points = {i: config.result.reachedContext for i, config in self.trainingConfigs.items() if self._filterString(config.result.reachedContext)}
+            return self._filterNoDict(points, iteration)
+        
+        def goalErrors(self, range_=None, iteration=True):
+            points = {i: (config.goal, config.result.reachedGoal - config.absoluteGoal)
+                      for i, config in self.trainingConfigs.items() if config.absoluteGoal and self._filterString(config.result.reachedGoal)}
+            return self._filterNoDict(points, iteration)
+
+        # Visual
+        def visualizeGeneralData(self, data, title='', color=False, options={}):
+            gs = []
+            grouped = self.groupBySpace(data)
+            for space, data in grouped.items():
+                g = Graph(title=f'{title} from {space}', options=options)
+                g.scatter(list(data.values()), color=list(data.keys()) if color else None)
+                gs.append(g)
+            return gs
+
+        def visualizeRandomActions(self, range_=None, color=False, options={}):
+            return self.visualizeGeneralData(self.randomActions(range_=range_), title='Random actions', color=color, options=options)
+
+        def visualizeGoals(self, range_=None, color=False, options={}):
+            return self.visualizeGeneralData(self.goals(range_=range_), title='Goals', color=color, options=options)
+        
+        def visualizeContextGoals(self, range_=None, color=False, options={}):
+            return self.visualizeGeneralData(self.contextGoals(range_=range_), title='ContextGoals', color=color, options=options)
+        
+        def visualizeReachedGoals(self, range_=None, color=False, options={}):
+            return self.visualizeGeneralData(self.reachedGoals(range_=range_), title='Reached Goals', color=color, options=options)
+
+        def visualizeReachedContextGoals(self, range_=None, color=False, options={}):
+            return self.visualizeGeneralData(self.reachedContextGoals(range_=range_), title='Reached ContextGoals', color=color, options=options)
+        
+        def visualizeGoalErrors(self, range_=None, color=False, options={}):
+            title = 'Goal Errors'
+            data = self.goalErrors(range_=range_)
+
+            gs = []
+            grouped = self.groupBySpace(data, key=lambda item: item[0].space)
+            for space, data in grouped.items():
+                values = [(d[0].plain(), d[1].plain()) for d in data.values()]
+                g = Graph(title=f'{title} from {space}', options=options)
+                g.arrow(values, color=list(data.keys()) if color else None)
+                gs.append(g)
+            return gs
+
     # Api
-    # def apiget_time(self, range_=(-1, -1)):
+    # def apiget_time(self, =(-1, -1)):
     #     return {'data': iterrange(self.iterationTimes, range_)}

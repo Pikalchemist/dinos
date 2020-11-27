@@ -65,6 +65,9 @@ class Agent(Module):
         self.scheduled = None
         self.iterationEvent = threading.Event()
 
+        self.configs = {}
+        self.analyse = self.__class__.ResultAnalyser(self)
+
         # self.iteration = 0
         self.episode = 0
         self.iterationByEpisode = []
@@ -95,7 +98,7 @@ class Agent(Module):
         """
         dict_ = super()._serialize(serializer)
         dict_.update(serializer.serialize(
-            self, ['options', 'testStrategies', 'iteration'], foreigns=['host'], exportPathType=True))
+            self, ['options', 'testStrategies', 'iteration', 'configs'], foreigns=['host']))
         return dict_
     
     @classmethod
@@ -113,6 +116,8 @@ class Agent(Module):
         if env.iteration < dict_.get('iteration', 0):
             env.counter.iteration = dict_.get('iteration')
         self.syncCounter()
+
+        self.configs = serializer.deserialize(dict_.get('configs'), default={})
     
     def deserializer(self):
         d = self.environment.deserializer()
@@ -291,6 +296,10 @@ class Agent(Module):
                 return self.iterationType[last]
             last = i
         return ''
+
+    class ResultAnalyser(object):
+        def __init__(self, agent):
+            self.agent = agent
 
     # def addReachStrategy(self, strategy):
     #     """Add a Strategy designed to perform a task in a certain way.
