@@ -53,11 +53,13 @@ class SpaceRegion(Serializable):
             "cost": 1.0,
             "window": 10,
             "maxAttempts": 20,
-            "maxPoints": 50,
-            "minSurface": 0.05
+            "maxPoints": 40,
+            "minSurface": 0.05,
+            "pointNumberSplit": 50
         }
         self.options.update(options)
 
+        self.number = 0
         self.points = []
         self.pointValues = []
         self.progresses = []
@@ -189,16 +191,16 @@ class SpaceRegion(Serializable):
         #     print("NULL POINT")
         #     return
 
-        if firstAlwaysNull and len(self.points) == 0:
-            value = 0.
+        # if firstAlwaysNull and len(self.points) == 0:
+        #     value = 0.
         self.points.append(point)
         self.pointValues.append(value)
+        self.number += 1
         self.computeEvaluation()
         # print(f'{self.evaluation}')
         addedInChildren = False
 
-        maxPoints = self.options['maxPoints']
-        if not self.splitten and self.splittable and len(self.points) > maxPoints:
+        if not self.splitten and self.splittable and self.number > self.options['pointNumberSplit']:
             # Leave reached
             # Region must be splat
             self.randomCut(self.options['maxAttempts'])
@@ -213,10 +215,15 @@ class SpaceRegion(Serializable):
                 self.leftChild.addPoint(point, value)
             else:
                 self.rightChild.addPoint(point, value)
+
         # Remove oldest points and pointValues
+        maxPoints = self.options['maxPoints']
         if len(self.points) > maxPoints:
             self.points = self.points[-maxPoints:]
             self.pointValues = self.pointValues[-maxPoints:]
+        maxPoints = self.options['window'] * 2
+        if len(self.progresses) > maxPoints:
+            self.progresses = self.progresses[-maxPoints:]
 
         if not addedInChildren and not populating and self.manager:
             self.manager.logger.debug(f'Adding point [{", ".join(["{:.4f}".format(p) for p in point])}] with value {value:.3e} to region {self}', tag=self.tag)
@@ -236,7 +243,7 @@ class SpaceRegion(Serializable):
         """Split region according to the cut decided beforehand."""
 
         if self.manager:
-            self.manager.logger.info(f'Splitting along dim {self.splitDim}: {self.splitValue:.4f} for {self}', tag=self.tag)
+            self.manager.logger.debug(f'Splitting along dim {self.splitDim}: {self.splitValue:.4f} for {self}', tag=self.tag)
 
         # Create child regions boundaries
         leftBounds = copy.deepcopy(self.bounds)

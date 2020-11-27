@@ -7,7 +7,7 @@ import time
 
 from dino.utils.move import MoveConfig
 
-from dino.utils.maths import sigmoid, threshold
+from dino.utils.maths import sigmoid, threshold, linearValue
 
 from dino.data.data import Action, ActionList
 # from dino.data.data import *
@@ -39,13 +39,14 @@ class AutonomousStrategy(RandomStrategy):
         self.criteria = []
         self.randomThreshold = self.options.get(
             'randomThreshold', 0.1)  # 1 -> only random
-        self.randomFirstPass = self.options.get(
-            'randomFirstPass', 0.1)  # 1 -> only random
+        self.randomFirstPassStart = 1.
+        self.randomFirstPassEnd = 0.4
+        self.randomFirstPassNumber = 250
+        self.randomFirstPassNumberMin = 100
 
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
-        dict_.update(serializer.serialize(
-            self, [], exportPathType=True))
+        dict_.update(serializer.serialize(self, []))
         return dict_
 
     # @classmethod
@@ -99,7 +100,11 @@ class AutonomousStrategy(RandomStrategy):
         prob = 1.0
 
         # First pass: only random
-        probFirstPass = self.randomFirstPass # TODO threshold(self.randomFirstPass, self.randomThreshold)
+        if goal.space.number < self.randomFirstPassNumberMin:
+            return 1., Path()
+
+        probFirstPass = linearValue(self.randomFirstPassStart, self.randomFirstPassEnd,
+                                    (goal.space.number - self.randomFirstPassNumberMin) / self.randomFirstPassNumber)
         # print(probFirstPass)
         if not config.exploitation and random.uniform(0, 1) < probFirstPass:
             return 1., Path()  # Random action

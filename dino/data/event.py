@@ -26,19 +26,19 @@ class InteractionEvent(Serializable):
 
         # Check if action is also present in the outcomes
         actions = self.actions.flat()
-        outcomes = self.outcomes.flat()
-        for outcome in list(outcomes):
+        onlyOutcomes = self.outcomes.flat()
+        for outcome in list(onlyOutcomes):
             for action in actions:
                 if outcome.space.matches(action.space):
                     action.value = outcome.value
-                    outcomes.remove(outcome)
+                    onlyOutcomes.remove(outcome)
 
         # Check for no parameter actions (and set it to 1)
         # for action in actions:
         #     if len(action.value) == 0:
         #         action.value = [1]
         self.actions = Action(*actions)
-        self.outcomes = Observation(*outcomes)
+        self.onlyOutcomes = Observation(*onlyOutcomes)
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(self, ['actions', 'primitiveActions', 'outcomes', 'context',
@@ -78,6 +78,8 @@ class InteractionEvent(Serializable):
             spaceManager=spaceManager, kind=kind, toData=toData)
         self.outcomes = self.outcomes.convertTo(
             spaceManager=spaceManager, kind=kind, toData=toData)
+        self.onlyOutcomes = self.onlyOutcomes.convertTo(
+            spaceManager=spaceManager, kind=kind, toData=toData)
         self.context = self.context.convertTo(
             spaceManager=spaceManager, kind=kind, toData=toData)
 
@@ -91,7 +93,7 @@ class InteractionEvent(Serializable):
                 idAction = point.space.addPoint(point, self.iteration, action=True)
                 self.primitiveActionsRegister.append((point.space.id, idAction))
 
-        for point in self.outcomes.flat():
+        for point in self.onlyOutcomes.flat():
             idOutcome = point.space.addPoint(point, self.iteration, cost)
             self.outcomesRegister.append((point.space.id, idOutcome))
 
