@@ -14,7 +14,7 @@ from .model import Model
 # from ..utils.io import getVisual, plotData, visualize, concat
 # from ..utils.serializer import serialize
 # from ..utils.maths import multivariateRegression, multivariateRegressionError
-from dino.utils.maths import multivariateRegression, multivariateRegressionError
+from dino.utils.maths import multivariateRegression, multivariateRegressionError, linearValue
 from dino.data.data import Data, Goal, Observation, Action
 # from dino.data.abstract import *
 from dino.data.space import SpaceKind
@@ -28,6 +28,7 @@ class RegressionModel(Model):
     NN_LOCALITY = 10
     MINIMUM_LENGTH = 0.001
     MAXIMUM_NULL = 5
+    OUTLIER_MAX_DISTANCE = 100
 
     def __init__(self, dataset, actionSpace, outcomeSpace, contextSpace=[], restrictionIds=None, model=None,
                  register=True, metaData={}):
@@ -69,8 +70,11 @@ class RegressionModel(Model):
                 distance = (goal - y0).norm()
                 distanceGoalNormalized = max(0, distance - goal.space.maxDistance * 0.01) / goal.norm()
                 # reachable = (distanceGoalNormalized < precision and distanceGoalNormalized < 0.7) or distanceGoalNormalized < precision * 0.5
-                # self.dataset.logger.info(f'HEY=== {goal} {y0} {orientation} {distanceGoalNormalized}')
-                reachable = orientation < precisionOrientation and distanceGoalNormalized < precision
+                # self.dataset.logger.info(f'HEY=== {reachable}: {goal} and got {y0} ({a0}->) distance {orientation} {distanceGoalNormalized}')
+
+                ratio = self.outcomeSpace.number / 500
+                multiplier = linearValue(3, 1, ratio)
+                reachable = orientation < precisionOrientation and distanceGoalNormalized < precision * multiplier
                     # reachable = True
 
                 # if not reachable:
@@ -102,7 +106,7 @@ class RegressionModel(Model):
         results = self._nearestData(
             action, context, self.NN_LOCALITY, bestContext, outcome=False, contextColumns=contextColumns,
             nearestUseContext=True, ignoreFirst=ignoreFirst, entity=entity)
-        ids, dist, context, restrictionIds, space, action, actionPlain, actionContext, actionContextPlain = results
+        ids, _, context, _, space, action, _, _, actionContextPlain = results
 
         # if debug:
         #     print('=========')
@@ -121,7 +125,15 @@ class RegressionModel(Model):
         x = space.getNpPlainPoint(ids)
         y = self.outcomeSpace.getNpPlainPoint(ids)
 
-        return multivariateRegressionError(x, y, actionContextPlain, columns=self.multiContextColumns(contextColumns, space))
+        y0, error = multivariateRegressionError(x, y, actionContextPlain, columns=self.multiContextColumns(contextColumns, space))
+        maxOutliers = self.outcomeSpace.maxDistance * self.OUTLIER_MAX_DISTANCE
+        if np.any(y0 > maxOutliers):
+            # print('======EROEOREOROEORROEO======')
+            # print(f'!!! {y0} {self.outcomeSpace.maxDistance}')
+            y0 = y[-1]
+            error = min(error, 0.2)
+
+        return y0, error
 
     def adaptContext(self, goal, context=None, relative=True, contextColumns=None, entity=None):
         if not context or not self.hasContext(self.contextSpace, contextColumns):
@@ -196,6 +208,8 @@ class RegressionModel(Model):
             self.outcomeContextSpace._validate()
             self.actionContextSpace._validate()
 
+        if outcome:
+            contextColumns = self.contextColumns(contextColumns, goal, context)
         if not self.hasContext(self.contextSpace, contextColumns):
             context = None
         if context:
@@ -334,10 +348,6 @@ class RegressionModel(Model):
     def bestLocality(self, goal: Goal, context: Observation = None, getClosestOutcome=False, bestContext=True,
                      adaptContext=False, contextColumns=None, entity=None):
         """Compute most stable local action-outcome model around goal outcome."""
-        contextColumns = self.contextColumns(contextColumns, goal, context)
-        if not self.hasContext(self.contextSpace, contextColumns):
-            context = None
-
         # self.outcomeSpace._validate()
         # self.actionSpace._validate()
         # if context:
@@ -488,6 +498,10 @@ class RegressionModel(Model):
                     contextColumns, self.outcomeContextSpace)
                 a0Plain = multivariateRegression(
                     ycPlain, aPlain, goalContextPlain, columns=columns)
+                maxOutliers = self.actionSpace.maxDistance * self.OUTLIER_MAX_DISTANCE
+                if np.any(a0Plain > maxOutliers):
+                    # print(f'/!!!!\\ {a0Plain} => {aPlain[-1]}\n{aPlain}')
+                    a0Plain = aPlain[-1]
                 a0 = self.actionSpace.action(a0Plain)
 
                 if self.actionSpace.primitive():
