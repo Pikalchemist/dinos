@@ -215,8 +215,8 @@ class Model(Serializable):
             return None
         return self.contextSpacialization[0].columns(goal, self.outcomeSpace)# & self.contextSpacialization[1].columns(context)
 
-    def multiContextColumns(self, contextColumns, space):
-        if contextColumns is None or not np.any(contextColumns):
+    def multiContextColumns(self, contextColumns, space, context):
+        if contextColumns is None or not np.any(contextColumns) or context is None:
             return None
         indices = space.columnsFor(self.contextSpace)
         cols = np.full(space.dim, True)
@@ -239,7 +239,7 @@ class Model(Serializable):
     def inverse(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None):
         raise NotImplementedError()
 
-    def bestLocality(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None):
+    def bestLocality(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None, dontMove=[]):
         raise NotImplementedError()
     
     def computeCompetence(self, error, distanceGoal=0):
@@ -331,7 +331,7 @@ class Model(Serializable):
         action = self.actionSpace.getPoint(eventId)[0]
         outcome = self.outcomeSpace.getPoint(eventId)[0]
         context = self.contextSpace.getPoint(eventId)[0] if self.contextSpace else None
-        
+
         return self._errorForwardData(action, outcome, context, contextColumns=contextColumns, eventId=eventId)
     
     def _errorForwardData(self, action, outcome, context=None, contextColumns=None, eventId=None):
@@ -361,6 +361,7 @@ class Model(Serializable):
             outcome) / (outcome.space.maxDistance if outcome.space.maxDistance != 0 else 1.)# + zeroError*0.0
 
         errorOutcome = min(errorOutcome, 1.)
+        # self.dataset.logger.info(f'{errorOutcome:.2f} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
 
         # if errorOutcome > 0.1:
         #     if context:

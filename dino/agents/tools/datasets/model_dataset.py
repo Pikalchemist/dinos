@@ -136,11 +136,11 @@ class ModelDataset(Dataset):
         return (self.findModelsByOutcomeSpace(outcomeSpace, models) + [None])[0]
 
     def findModelsByOutcomeSpace(self, outcomeSpace, models=None):
-        models = models if models else self.models
+        models = models if models else self.enabledModels()
         return [m for m in models if m.coversOutcomeSpaces(outcomeSpace)]
 
     def findModelsByActionSpace(self, actionSpace, models=None):
-        models = models if models else self.models
+        models = models if models else self.enabledModels()
         return [m for m in models if m.coversActionSpaces(actionSpace)]
     
     def competences(self, precise=False):
@@ -224,6 +224,19 @@ class ModelDataset(Dataset):
         context = nonControllable.extends(controllable) 
 
         return context
+
+    def checkSpaceChanges(self, spaces, action, context=None, ratio=False, precision=0.02):
+        # space.maxDistance * precision
+        return np.sum([self.computeSpaceChange(space, action, context, ratio=ratio) for space in spaces])
+
+    def computeSpaceChange(self, space, action, context=None, ratio=False):
+        actionSpace = action.space
+        models = [m for m in self.enabledModels() if m.coversActionSpaces(actionSpace) and m.coversOutcomeSpaces(space)]
+        outcomes = [m.forward(action, context)[0].projection(space) for m in models]
+        distance = np.sum([y.norm() for y in outcomes])
+        if ratio:
+            return distance / space.maxDistance
+        return distance
 
     # Data
     def setData(self, spaces, models, addHistory=True):
