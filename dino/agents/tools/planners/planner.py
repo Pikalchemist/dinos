@@ -246,12 +246,18 @@ class Planning(object):
         self.maxIter = parameter(self.settings.maxIterations, 20)
         self.maxIterNoNodes = 5
         if self.settings.dontMoveSpaces:
-            self.maxIter *= 5
+            self.maxIter *= 10
             self.maxIterNoNodes *= 4
 
         self.maxDistanceBest = self.model.getPrecision(Planner.MAX_DISTANCE, 0.5)
         self.maxDistance = self.maxDistanceBest * 3 + 0.02 * self.goal.norm()
         self.maxDistanceIncomplete = self.maxDistanceBest * 8 + 0.1 * self.goal.norm()
+
+        self.contextPlanningPossible = True
+        if self.model.contextSpace and not self.settings.freeSpace(self.model.contextSpace.convertTo(kind=SpaceKind.BASIC)):
+            self.contextPlanningPossible = False
+            self.logger.debug(
+                f'{self.logTag()} Context planning wont be available as {self.model.contextSpace} is already controlled')
     
     def initVariables(self):
         self.minDistanceReached = self.goal.norm()
@@ -263,6 +269,7 @@ class Planning(object):
         self.path = Path()
         # self.dist = 0
         self.directGoal = True
+        self.currentContextFailures = 0
         # previousMove = None
         # print('GOAL: {}'.format(goal))
         # print('================')
@@ -280,7 +287,7 @@ class Planning(object):
         self.a0, self.y0, self.c0, self.distance0 = [None, None, None, None]
     
     def execute(self):
-        if self.space._number < 100:
+        if self.space._number < 100 or self.minDistanceReached < self.maxDistanceBest:
             return None, None, 0
 
         # Main loop
@@ -309,8 +316,12 @@ class Planning(object):
 
             reachable, move = self.searchWithCurrentContext(baseMove, context)
             if reachable is None:
+                self.logger.debug2(
+                    f'{self.logTag()} Iter {self.i}: invalid move {self.y0}, skipping iteration')
                 self.directGoal = False
                 self.iterationOffset += 1
+                if move is True:
+                    self.currentContextFailures += 1
                 continue
             reachable, contextPath = self.searchWithDifferentContext(baseMove, reachable)
 
@@ -359,7 +370,14 @@ class Planning(object):
     def searchWithCurrentContext(self, baseMove, context):
         riskyMove, move, safeMove, nearestMove, _ = self.findBestMove(baseMove, context)
 
-        maxNoMoveDistance = 0.2 * self.space.maxDistance
+        maxIncorrectMoveDistance = 0.01 * self.space.maxDistance
+        maxNoMoveDistance = 0.15 * self.space.maxDistance
+        if self.minDistanceReached < self.space.maxDistance:
+            maxNoMoveDistance *= self.minDistanceReached / self.space.maxDistance
+        maxNoMoveDistanceMin = maxNoMoveDistance * 2
+
+        self.logger.error(
+            f'{self.logTag()} Iter {self.i}: {maxNoMoveDistance} {maxNoMoveDistanceMin} {self.minDistanceReached}')
 
         if move is None:
             self.logger.error(
@@ -370,34 +388,37 @@ class Planning(object):
             return False, None
 
         self.logger.debug2(
-            f'{self.logTag()} Iter {self.i}: chosen move is {move} (risky move is {riskyMove})')
+            f'{self.logTag()} Iter {self.i}: chosen move is {move} (risky move is {riskyMove}) {maxNoMoveDistance} {maxNoMoveDistanceMin}')
 
         reachable = False
         if not self.settings.forceContextPlanning:
             if riskyMove:
-                if riskyMove.norm() < maxNoMoveDistance and self.minDistanceReached > maxNoMoveDistance:
-                    return None, None
+                if riskyMove.norm() < maxNoMoveDistance and self.minDistanceReached > maxNoMoveDistanceMin:
+                    return None, True
                 reachable = self.attempt(riskyMove, context) if riskyMove else False
 
             if not reachable:
-                if move.norm() < maxNoMoveDistance and self.minDistanceReached > maxNoMoveDistance:
-                    return None, None
+                if move.norm() < maxNoMoveDistance and self.minDistanceReached > maxNoMoveDistanceMin:
+                    return None, True
                 reachable = self.attempt(move, context)
             # if reachable:
             #     newPosition = nearestNode.pos + y0
             #     absPos = startPos + newPosition
             #     dist = newPosition.distanceTo(attemptMove)
 
+            if not reachable:
+                self.currentContextFailures += 1
+
             if not reachable and safeMove:
                 reachable = self.attempt(safeMove, context)
             
-            if not reachable:
-                reachable = self.attempt(nearestMove, context)
+            for multiplier in (1., 0.5):
+                if not reachable:
+                    reachable = self.attempt(move * multiplier, context)
 
-            if not reachable:
-                reachable = self.attempt(nearestMove * 0.5, context)
-
-            if reachable and self.y0.norm() < maxNoMoveDistance and self.minDistanceReached > maxNoMoveDistance:
+            if reachable and self.y0.norm() < maxIncorrectMoveDistance and self.minDistanceReached > maxIncorrectMoveDistance * 2:
+                return False, None
+            if reachable and self.y0.norm() < maxNoMoveDistance and self.minDistanceReached > maxNoMoveDistanceMin:
                 return None, None
             
             # if reachable and baseMove.norm() > 0.01:
@@ -417,11 +438,13 @@ class Planning(object):
         reachable = reachableWithContext
         contextPath = None
         settingsTestContext = self.settings.forceContextPlanning or self.settings.tryContextPlanning
-        if (settingsTestContext or not reachableWithContext) and self.model.contextSpace:
+        if (settingsTestContext or not reachableWithContext) and self.model.contextSpace and self.contextPlanningPossible:
             # Save with context results
             a0wc, y0wc, d0wc = [self.a0, self.y0, self.distance0]
 
             riskyMove, move, safeMove, nearestMove, c0 = self.findBestMove(baseMove)
+            c0 = self.findBestContext(move)
+            riskyMove, move, safeMove, nearestMove, _ = self.findBestMove(baseMove, c0)
 
             # c0 = self.model.contextSpace.getPoint(nearestMoveId)[0]
             if settingsTestContext:
@@ -429,23 +452,22 @@ class Planning(object):
             else:
                 self.logger.debug2(f'{self.logTag()} Iter {self.i}: move still not reachable, trying to use a different context {c0}')
 
-            reachable = self.attempt(riskyMove, c0) if riskyMove else False
+            reachable = self.attempt(riskyMove, c0, adaptContext=True) if riskyMove else False
 
             if not reachable:
-                reachable = self.attempt(move, c0)
+                reachable = self.attempt(move, c0, adaptContext=True)
             # if reachable:
             #     newPosition = nearestNode.pos + y0
             #     absPos = startPos + newPosition
             #     dist = newPosition.distanceTo(attemptMove)
 
-            if not reachable and safeMove:
-                reachable = self.attempt(safeMove, c0)
-
-            if not reachable:
-                reachable = self.attempt(nearestMove, c0)
-
-            if not reachable:
-                reachable = self.attempt(nearestMove * 0.5, c0)
+            if not reachableWithContext or self.currentContextFailures >= self.maxIter * 0.1:
+                if not reachable and safeMove:
+                    reachable = self.attempt(safeMove, c0, adaptContext=True)
+                
+                for multiplier in (1., 0.5, 0.4, 0.25, 0.15):
+                    if not reachable:
+                        reachable = self.attempt(move * multiplier, c0, adaptContext=True)
 
             # print('===')
             # print(reachable, y0, a0)
@@ -471,8 +493,7 @@ class Planning(object):
                 #     contextPath, contextState = self.attemptPlanningContext(c0, self.state, newSettings)
 
                 if contextPath:
-                    self.state = contextState
-                    c0 = self.state.context()
+                    c0 = contextState.context()
                     reachable = self.attempt(nearestMove, c0)
 
                     if not reachable:
@@ -494,6 +515,7 @@ class Planning(object):
                 contextPath = None
 
             if contextPath:
+                self.state = contextState
                 self.logger.debug(
                     f'{self.logTag()} Iter {self.i}: changing context to reach c0={c0} with a {len(contextPath)} step sub path')
 
@@ -546,7 +568,7 @@ class Planning(object):
 
         if distance > self.minDistanceReached:
             self.directGoal = False
-            if self.minDistanceReached < self.maxDistance:
+            if self.minDistanceReached < self.maxDistance and self.closestNodeToGoal:
                 self.logger.debug(f'{self.logTag()} Iter {self.i}: close enough to the goal {self.minDistanceReached:.3f} (max {self.maxDistance:.3f})')
                 self.path = self.closestNodeToGoal.createPath(self.goal, self.pathSettings())
                 if not self.settings.performing and not self.settings.context and self.settings.depth == 0:
@@ -635,11 +657,15 @@ class Planning(object):
 
         return path
 
-    def attempt(self, move, context):
-        precision = 0.05 + (self.i / self.maxIter) * 0.05
+    def attempt(self, move, context, adaptContext=False):
+        precision = 0.45 + (self.i / self.maxIter) * 0.05
+        precisionOrientation = 0.05 + (self.i / self.maxIter) * 0.05
+        if adaptContext:
+            context = self.findBestContext(move)
         reachable, self.a0, self.y0, self.distance0 = self.model.reachable(
-            move, context=context, precision=precision, precisionOrientation=precision)
-        self.logger.debug2(f'{self.logTag()} Iter {self.i}: testing {move}: {"reachable" if reachable else "not reachable"}')
+            move, context=context, precision=precision, precisionOrientation=precisionOrientation, dontMove=self.settings.dontMoveSpaces)
+        contextLog = f' with context {context}' if adaptContext else ''
+        self.logger.debug2(f'{self.logTag()} Iter {self.i}: testing {move}{contextLog}: {"reachable" if reachable else "not reachable"}')
         return reachable
     
     def attemptPlanningContext(self, context, state, settings):
@@ -738,6 +764,17 @@ class Planning(object):
             move *= 0.9
         # self.logger.debug2(f'---------------------')
         return riskyMove, move, safeMove, nearestMove, c0  # , nearestMoveId
+    
+    def findBestContext(self, move):
+        # ratio = (self.space._number - 100) / 300
+        number = 1 #int(linearValue(1, 6, ratio))
+
+        ids, _, _ = self.model.nearestOutcome(move, n=number, nearestUseContext=False)
+        cs = self.model.contextSpace.getNpPlainPoint(ids)
+        c0 = self.model.contextSpace.asTemplate(np.mean(cs, axis=0))
+        # self.logger.debug2(
+        #     f'HEY {ids} {self.model.outcomeSpace.getNpPlainPoint(ids)}')
+        return c0
     
     def _searchBestMove(self, baseMove, number, close, context):
         move = baseMove.clone()
