@@ -75,6 +75,9 @@ class DataSpace(Space):
             if attr in dict_:
                 d = pickle.loads(bz2.decompress(dict_.get(attr)))
                 getattr(self, attr)[:len(d)] = d
+        
+        self._validate()
+        self._updateSpaceWeights()
 
     def icon(self):
         return '@☰'
@@ -91,8 +94,8 @@ class DataSpace(Space):
             self._nnWeights = np.ones(self.dim) / self.dim
         else:
             weights = np.array(self._spaceWeights)
-            weights[:, 1] /= sum(weights[:, 1])
-            weights[:, 1] = [weight/space.dim for space, weight in weights]
+            weights[:, 1] *= sum([space.maxDistance for space in weights[:, 0]]) / sum(weights[:, 1])
+            weights[:, 1] = [weight / space.maxDistance / space.dim for space, weight in weights]
             self._nnWeights = np.zeros(len(self.spaces))
 
             def getWeight(space):
@@ -118,7 +121,9 @@ class DataSpace(Space):
             elif space is None:
                 self._spaceWeights = [(space, weight) for space in self.spaces]
             else:
-                self._spaceWeights.append((space, weight))
+                weight /= len(space.spaces)
+                for subspace in space:
+                    self._spaceWeights.append((subspace, weight))
             self._updateSpaceWeights()
 
     # Data
@@ -184,6 +189,8 @@ class DataSpace(Space):
             data = self.data[:, columns]
             x = x[columns]
             weights = weights[columns]
+        # print(f'NN {weights}')
+        # print(f'{self} {x} {weights} {self._number} {columns}')
         return operations._computeDistances(data, x, weights, self.maxDistance)
 
     def computePerformances(self, x, weights=None, columns=None):
@@ -366,6 +373,8 @@ class DataSpace(Space):
             self.maxDistance = math.sqrt(
                 sum([(bound[1] - bound[0]) ** 2 for bound in self._bounds]))
         else:
+            self.maxDistance = 1
+        if self.maxDistance == 0:
             self.maxDistance = 1
         if self.aggregation:
             for space in self.spaces:

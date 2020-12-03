@@ -135,36 +135,36 @@ class SpaceManager(Module, Serializable):
         else:
             return r[0]
 
-    def _multiSpaceWeighted(self, spaces, list_, type_, weight=None, orderWise=False):
+    def _multiSpaceWeighted(self, spaces, list_, type_, weight=None, orderWise=False, weightSpaces=None):
         space = self._multiSpace(spaces, list_, type_, orderWise=orderWise)
 
         if weight:
             space.clearSpaceWeight()
-            for subspace in spaces:
+            for subspace in weightSpaces:
                 space.spaceWeight(weight, subspace)
 
         return space
 
     def multiColSpace(self, spaces, canStoreData=None, weight=None):
         # Flatten the list of spaces
-        spaces = list(set([subSpace for space in spaces for subSpace in space.cols if space is not None]))
+        flatSpaces = list(set([subSpace for space in spaces for subSpace in space.cols if space is not None]))
 
-        if len(spaces) == 1:
-            return spaces[0]
+        if len(flatSpaces) == 1:
+            return flatSpaces[0]
 
         if canStoreData is None:
-            if spaces:
+            if flatSpaces:
                 dataSpaces = list(set([space.canStoreData()
-                                       for space in spaces]))
+                                       for space in flatSpaces]))
                 if len(dataSpaces) > 1:
                     raise Exception(
-                        f"All spaces should be a DataSpace or none: {spaces}")
+                        f"All spaces should be a DataSpace or none: {flatSpaces}")
                 canStoreData = dataSpaces[0]
             else:
                 canStoreData = self.storesData
 
-        return self._multiSpaceWeighted(spaces, list_=self.multiColSpaces,
-                                        type_=MultiColDataSpace if canStoreData else MultiColSpace, weight=weight)
+        return self._multiSpaceWeighted(flatSpaces, list_=self.multiColSpaces,
+                                        type_=MultiColDataSpace if canStoreData else MultiColSpace, weight=weight, weightSpaces=spaces)
 
     def multiRowSpace(self, spaces, canStoreData=None):
         # spaces = list(set([subSpace for space in spaces for subSpace in space]))

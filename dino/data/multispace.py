@@ -104,16 +104,19 @@ class MultiColDataSpace(MultiColSpace, DataSpace):
 
     def _serialize(self, serializer):
         dict_ = MultiColSpace._serialize(self, serializer)
-        # dict_ = serializer.serialize(
-        #     self, ['spaces', 'options'])
+        dict_.update(serializer.serialize(
+            self, ['_spaceWeights']))
         return dict_
 
     # @classmethod
     # def _deserialize(cls, dict_, serializer, obj=None):
     #     return super()._deserialize(dict_, serializer, obj)
 
-    # def _postDeserialize(self, dict_, serializer):
-    #     super()._postDeserialize(dict_, serializer)
+    def _postDeserialize(self, dict_, serializer):
+        MultiColSpace._postDeserialize(self, dict_, serializer)
+        self._spaceWeights = serializer.deserialize(dict_.get('spaceWeights', []))
+        self._validate()
+        self._updateSpaceWeights()
 
     def addPoint(self, point, idx, cost=None, action=False):
         """Add a point in the space and if valid return id."""
@@ -217,6 +220,8 @@ class MultiColDataSpace(MultiColSpace, DataSpace):
 
     def _postValidate(self):
         DataSpace._postValidate(self)
+        if random.uniform(0, 1) < 0.1:
+            self._updateSpaceWeights()
 
 
 class MultiRowDataSpace(DataSpace):
@@ -238,16 +243,19 @@ class MultiRowDataSpace(DataSpace):
     
     def _serialize(self, serializer):
         dict_ = MultiColSpace._serialize(self, serializer)
-        # dict_ = serializer.serialize(
-        #     self, ['spaces', 'options'])
+        dict_.update(serializer.serialize(
+            self, ['_spaceWeights']))
         return dict_
 
     # @classmethod
     # def _deserialize(cls, dict_, serializer, obj=None):
     #     return super()._deserialize(dict_, serializer, obj)
 
-    # def _postDeserialize(self, dict_, serializer):
-    #     super()._postDeserialize(dict_, serializer)
+    def _postDeserialize(self, dict_, serializer):
+        MultiColSpace._postDeserialize(self, dict_, serializer)
+        self._spaceWeights = serializer.deserialize(dict_.get('spaceWeights', []))
+        self._validate()
+        self._updateSpaceWeights()
 
     @staticmethod
     def create(spaces):
@@ -326,3 +334,5 @@ class MultiRowDataSpace(DataSpace):
 
     def _postValidate(self):
         DataSpace._postValidate(self)
+        if random.uniform(0, 1) < 0.1:
+            self._updateSpaceWeights()
