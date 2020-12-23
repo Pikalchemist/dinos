@@ -226,8 +226,14 @@ class Agent(Module):
             if self.discreteActions and not environment.discreteActions:
                 environment.discretizeActions = True
     
-    def actions(self, onlyPrimitives=True):
+    def actions(self):
         return self.host.actions()
+
+    def explorableSpaces(self, onlyPrimitives=False):
+        spaces = [a.space for a in self.host.actions()]
+        if not onlyPrimitives and self.dataset:
+            spaces += self.dataset.controllableSpaces(explorable=True)
+        return list(set(spaces))
     
     def observe(self, formatParameters=None):
         return self.host.observeFrom(formatParameters=formatParameters)

@@ -18,7 +18,7 @@ class RandomStrategy(Strategy):
         super().__init__(agent, name=name, planner=planner, performer=performer,
                          options=options)
         self.exploreNonPrimitive = self.options.get(
-            'exploreNonPrimitive', False)
+            'exploreNonPrimitive', True)
 
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
@@ -40,7 +40,7 @@ class RandomStrategy(Strategy):
     def testRandomAction(self, config=MoveConfig(), actionSpaces=None, zero=False):
         """Build and test a random action."""
         if not actionSpaces:
-            actionSpaces = [a.space for a in self.agent.actions(onlyPrimitives=not self.exploreNonPrimitive)]
+            actionSpaces = self.agent.explorableSpaces(onlyPrimitives=not self.exploreNonPrimitive)
         if self.agent.dataset:
             actionSpaces = self.agent.dataset.controllableSpaces(actionSpaces)
         space = random.choice(actionSpaces)

@@ -181,26 +181,25 @@ class ModelDataset(Dataset):
         return any(visit(node) for node in graph)
 
     # Spaces
-    def controllableSpaces(self, spaces=None, merge=False, performant=False, convert=True):
-        return self.__controllableSpaces(True, spaces, merge, performant, convert=convert)
+    def controllableSpaces(self, spaces=None, merge=False, performant=False, explorable=False, convert=True):
+        return self.__controllableSpaces(True, spaces, merge, performant, explorable, convert=convert)
 
-    def nonControllableSpaces(self, spaces=None, merge=False, performant=False, convert=True):
-        return self.__controllableSpaces(False, spaces, merge, performant, convert=convert)
+    def nonControllableSpaces(self, spaces=None, merge=False, performant=False, explorable=False, convert=True):
+        return self.__controllableSpaces(False, spaces, merge, performant, explorable, convert=convert)
 
-    def __controllableSpaces(self, controllable, spaces=None, merge=False, performant=False, convert=True):
+    def __controllableSpaces(self, controllable, spaces=None, merge=False, performant=False, explorable=False, convert=True):
         spaces = spaces if spaces else self.actionExplorationSpaces
         if convert:
             if type(spaces) in (list, set):
-                spaces = [space.convertTo(kind=SpaceKind.BASIC)
-                        for space in spaces]
+                spaces = [space.convertTo(kind=SpaceKind.BASIC) for space in spaces]
             else:
                 spaces = spaces.convertTo(kind=SpaceKind.BASIC)
-        spaces = [space for space in spaces if self.controllableSpace(space) == controllable]
+        spaces = [space for space in spaces if self.controllableSpace(space, performant, explorable) == controllable]
         if merge:
             return self.multiColSpace(spaces)
         return spaces
 
-    def controllableSpace(self, space, performant=False):
+    def controllableSpace(self, space, performant=False, explorable=False):
         if space is None or space.null():
             return False
         if space.primitive():
@@ -208,6 +207,8 @@ class ModelDataset(Dataset):
         models = self.findModelsByOutcomeSpace(space.convertTo(kind=SpaceKind.BASIC))
         if performant:
             models = [model for model in models if model.performant(self.MODEL_PERF_COMPETENCE, self.MODEL_PERF_DURATION)]
+        if explorable:
+            models = [model for model in models if model.explorable()]
         return len(models) > 0
 
     def controlContext(self, goalContext, currentContext):

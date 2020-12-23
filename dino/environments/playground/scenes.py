@@ -30,7 +30,7 @@ class EmptyRoomScene(SceneSetup):
         self.world.addChild(Cylinder((400, 500), name='Cylinder3', color=(240, 0, 0), movable=False))
         # self.world.addChild(Cylinder((300, 500), name='Cylinder4', color=(240, 0, 0), movable=False))
 
-        self.world.addChild(Button((200, 200), name='Button1'))
+        self.world.addChild(Button((50, 50), name='Button1'))
         # self.world.addChild(Button((500, 500), name='Button2'))
 
         # self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
@@ -60,14 +60,17 @@ class EmptyRoomScene(SceneSetup):
             'Agent.position').space, boundaries, numberByAxis=2, relative=False))
 
         self.addTest(PointsTest('cylinder1-moving', self.world.cascadingProperty(
-            '#Cylinder1.position').space, [[-50, 0], [50, 0], [0, 50], [0, -50]], relative=True))
+            '#Cylinder1.position').space, [[-25, 0]], relative=True))
 
-    def setupEpisode(self, config):
+    def setupEpisode(self, config, forceReset=False):
         self.iterationReset += 1
-        if self.iterationReset >= self.RESET_ITERATIONS:
+        if config.evaluating:
+            self.world.child('Agent').body.position = (300, 300)
+            self.world.child('#Cylinder1').body.position = (200, 250)
+
+        elif self.iterationReset >= self.RESET_ITERATIONS or forceReset:
             self.iterationReset = 0
             self.world.child('Agent').body.position = (300, 300)
-
             if self.world.child('#Cylinder1'):
                 pos = self.world.child('Agent').body.position
 
