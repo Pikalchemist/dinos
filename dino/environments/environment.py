@@ -71,6 +71,8 @@ class Environment(SpaceManager):
         self.terminateThreads = False
 
         self.evaluators = []
+        self.evaluationTimesteps = [50, 100]
+        self.evaluationInterval = 100
 
         # Configuration
         self.options = options
@@ -211,6 +213,16 @@ class Environment(SpaceManager):
     def evaluate(self):
         for agent in self.agents():
             self.evaluator(agent, create=True).evaluate()
+    
+    def evaluations(self):
+        data = ''
+        for evaluator in self.evaluators:
+            data += f'Evaluator {evaluator.agent}:\n'
+            for i, evaluation in evaluator.evaluations.items():
+                data += f'    Iteration {i} {evaluation}:\n'
+                for result in evaluation.results:
+                    data += '        ' + result.details().replace('\n', '\n        ') + '\n'
+        return data
 
     # Entities
     def agents(self):

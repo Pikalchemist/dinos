@@ -419,13 +419,14 @@ class RegressionModel(Model):
                     a0Plain = aPlain[-1]
                 a0 = self.actionSpace.action(a0Plain)
 
-                # if self.actionSpace.primitive():
-                #     a0 = a0.bounded()
 
                 # print(f'a{i}: {a0} |a|={a0.norm()} A YC GC\n{aPlain}\n{ycPlain}\n{goalContextPlain}')
 
                 if a0.norm() > self.actionSpace.maxDistance:
                     continue
+
+                if self.actionSpace.primitive():
+                    a0 = a0.bounded()
 
                 # actionCenter = np.mean(aPlain, axis=0)
                 # actionCenterDistance = np.mean(

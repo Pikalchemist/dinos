@@ -288,7 +288,7 @@ class Planning(object):
     
     def execute(self):
         if self.space._number < 100 or self.minDistanceReached < self.maxDistanceBest:
-            return None, None, 0
+            return Path(), None, 0
 
         # Main loop
         self.i = -1
@@ -346,7 +346,7 @@ class Planning(object):
         if self.closestNodeToGoal and not self.path:
             self.path = self.closestNodeToGoal.createPath(self.goal, self.pathSettings())
 
-        self._plotNodes(self.nodes, self.goal, self.space, self.attemptedUnreachable, self.attemptedBreakConstraint)
+        # self._plotNodes(self.nodes, self.goal, self.space, self.attemptedUnreachable, self.attemptedBreakConstraint)
 
         self.logger.debug(
             f"{self.logTag()} Planning {'generated' if self.path else 'failed'} for goal {self.goal} in {self.i+1} step(s)")
@@ -361,8 +361,8 @@ class Planning(object):
 
         minDistance = max(0, self.minDistanceReached)
 
-        if not self.path and minDistance > 0:
-            self.model.updatePrecision(False, min(minDistance, self.space.maxDistance * 0.2))
+        # if not self.path and minDistance > 0:
+        #     self.model.updatePrecision(False, min(minDistance, self.space.maxDistance * 0.2))
 
         finalState = self.path[-1].state if self.path else None
         return self.path, finalState, minDistance
@@ -370,14 +370,14 @@ class Planning(object):
     def searchWithCurrentContext(self, baseMove, context):
         riskyMove, move, safeMove, nearestMove, _ = self.findBestMove(baseMove, context)
 
-        maxIncorrectMoveDistance = 0.01 * self.space.maxDistance
-        maxNoMoveDistance = 0.15 * self.space.maxDistance
+        maxIncorrectMoveDistance = 0.01 * self.space.maxDistance * self.model.limitMoves
+        maxNoMoveDistance = 0.15 * self.space.maxDistance * self.model.limitMoves
         if self.minDistanceReached < self.space.maxDistance:
             maxNoMoveDistance *= self.minDistanceReached / self.space.maxDistance
         maxNoMoveDistanceMin = maxNoMoveDistance * 2
 
-        self.logger.error(
-            f'{self.logTag()} Iter {self.i}: {maxNoMoveDistance} {maxNoMoveDistanceMin} {self.minDistanceReached}')
+        # self.logger.error(
+        #     f'{self.logTag()} Iter {self.i}: {maxNoMoveDistance} {maxNoMoveDistanceMin} {self.minDistanceReached}')
 
         if move is None:
             self.logger.error(
@@ -781,6 +781,8 @@ class Planning(object):
         for j in range(10):
             if j > 0:
                 move *= 1. * distanceToCenter / move.norm()
+            if j == 1:
+                move *= self.model.limitMoves
             # self.logger.debug2(
             #     f'(d{settings.depth}) Iter {i} {j}: {move}')
 

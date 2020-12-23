@@ -33,6 +33,7 @@ class Model(Serializable):
     ALMOST_ZERO_FACTOR = 0.002
     PRECISION_LEARNING_RATE = 0.01
     PRECISION_MULTIPLIER = 2.
+    PRECISION_GOAL_NUMBER = 25
 
     def __init__(self, dataset, actionSpace, outcomeSpace, contextSpace=[], restrictionIds=None, model=None,
                  register=True, metaData={}):
@@ -49,7 +50,10 @@ class Model(Serializable):
         self.lowCompetenceSince = -1
         self.evaluations = {}
         self.attemptedContextSpaces = {}
-        self.precision = -1.
+        self.precision = [-1., -1.]
+        self.precisionPerGoalNorm = np.zeros(self.PRECISION_GOAL_NUMBER)
+        self.precisionPerGoalNormNumber = np.zeros(self.PRECISION_GOAL_NUMBER)
+        self.limitMoves = 1.
 
         self.restrictionIds = restrictionIds
         # self.nonDuplicateLastId = -1
@@ -186,23 +190,42 @@ class Model(Serializable):
             # context = event.context.projection(self.contextSpace)
             # self.contextSpacialization[1].addPoint(context)
 
-    def updatePrecision(self, success, distanceToGoal, weight=1):
-        # oldp = self.precision
-        precision = min(distanceToGoal * self.PRECISION_MULTIPLIER, self.outcomeSpace.maxDistance * 0.1)
-        if self.precision < 0:
-            self.precision = self.outcomeSpace.maxDistance * 0.03
+    def updatePrecision(self, success, distanceToGoal, weight=1, index=0):
+        # oldp = self.precision[index]
+        precision = min(distanceToGoal * self.PRECISION_MULTIPLIER, self.outcomeSpace.maxDistance * 0.5)
+        if self.precision[index] < 0:
+            self.precision[index] = self.outcomeSpace.maxDistance * 0.03
         learningRate = self.PRECISION_LEARNING_RATE * weight
-        if distanceToGoal < self.precision:
+        if distanceToGoal < self.precision[index]:
+            if not success:
+                return
             learningRate *= 2
-        self.precision = self.precision * (1 - learningRate) + (
-            precision - self.precision) * learningRate
-        self.precision = min(max(self.precision, self.outcomeSpace.maxDistance * 0.005), self.outcomeSpace.maxDistance * 0.1)
-        # print(f'from {oldp} to {self.precision} // {distanceToGoal} // {self}')
+        self.precision[index] = self.precision[index] * (1 - learningRate) + (precision - self.precision[index]) * learningRate
+        if index == 1 and self.precision[index] < self.precision[0]:
+            self.precision[index] = self.precision[0]
+        self.precision[index] = min(max(self.precision[index], self.outcomeSpace.maxDistance * 0.005), self.outcomeSpace.maxDistance * 0.5)
+        # print(f'#{index} from {oldp} to {self.precision[index]} // {distanceToGoal} // {self}')
     
     def getPrecision(self, ratio=0.01, multiplier=1):
-        if self.precision < 0:
+        if self.precision[0] < 0:
             return self.outcomeSpace.maxDistance * ratio
-        return self.precision * multiplier
+        return self.precision[0] * multiplier
+    
+    def updatePrecisionPerGoal(self, goalMove, error):
+        index = int(goalMove.norm() / self.outcomeSpace.maxDistance * self.PRECISION_GOAL_NUMBER)
+        precision = min(error, self.outcomeSpace.maxDistance * 0.5)
+        if index >= self.PRECISION_GOAL_NUMBER:
+            return
+        # learningRate = self.PRECISION_LEARNING_RATE * 5
+        self.precisionPerGoalNormNumber[index] = min(self.precisionPerGoalNormNumber[index] + 1, 100)
+        self.precisionPerGoalNorm[index] = (
+            (self.precisionPerGoalNorm[index] * (self.precisionPerGoalNormNumber[index] - 1)) + precision) / self.precisionPerGoalNormNumber[index]
+        
+        # print(f'UPDATING {self} {goalMove.norm()} => {index}: {error}')
+    
+    def explorable(self):
+        return self.precision[0] >= 0.
+        #  and self.precision[0] <= self.outcomeSpace.maxDistance * 0.25
 
     # Context
     def hasContext(self, contextSpace, contextColumns):
@@ -305,9 +328,15 @@ class Model(Serializable):
 
     # data=None, context: Observation = None,
     def std(self, precise=False, onlyIds=None, contextColumns=None):
-        errors = self._errorForwardAll(
-            precise=precise, onlyIds=onlyIds, contextColumns=contextColumns)
-        return np.mean(errors)# + 0.08 * np.std(errors)
+        errorsZeros = self._errorForwardAll(
+            precise=precise, almostZeros=True, onlyIds=onlyIds, contextColumns=contextColumns)
+        errorZeros = np.mean(errorsZeros) if len(errorsZeros) > 0 else 0.
+
+        errorsNonZeros = self._errorForwardAll(
+            precise=precise, almostZeros=False, onlyIds=onlyIds, contextColumns=contextColumns)
+        errorNonZeros = np.mean(errorsNonZeros) if len(errorsNonZeros) > 0 else 0.
+
+        return 1 - (1 - errorNonZeros) * (1 - errorZeros)
     
     def stdData(self, actions, outcomes, contexts=None, precise=False, onlyIds=None, contextColumns=None):
         errors = self._errorForwardDataAll(
@@ -377,13 +406,16 @@ class Model(Serializable):
         #     print('---       ---')
         return errorOutcome
 
-    def _errorForwardAll(self, precise=False, exceptAlmostZero=False, onlyIds=None, contextColumns=None):
+    def _errorForwardAll(self, precise=False, almostZeros=None, onlyIds=None, contextColumns=None):
         ids = parameter(onlyIds, self.getIds())
-        if exceptAlmostZero:
+        if almostZeros is not None:
             data = self.outcomeSpace.getData(ids)
             indices = np.sum(np.abs(data), axis=1) > self.outcomeSpace.maxDistance * self.ALMOST_ZERO_FACTOR
-            if np.sum(indices) > 0:
-                ids = ids[indices]
+            if almostZeros:
+                indices = ~indices
+            if np.sum(indices) < 0:
+                return []
+                # ids = ids[indices]
         if not precise:
             number = 100
             ids_ = np.arange(len(ids))

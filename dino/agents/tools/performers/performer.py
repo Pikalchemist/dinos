@@ -88,6 +88,7 @@ class Performer(Module):
         formatParameters = FormatParameters()
         observationsPrevious = None
         distanceToGoal = None
+        distanceToGoalSinglePass = None
         currentPos = None
 
         success = False
@@ -95,6 +96,10 @@ class Performer(Module):
         topReplanning = False
         while not success and not fatal:
             if not nodes and absoluteGoal and config.allowReplanning:
+                if distanceToGoal:
+                    if replanning == 0:
+                        distanceToGoalSinglePass = distanceToGoal
+                    # self.postPerforming(model, False, distanceToGoal)
                 replanning += 1
                 config.result.performerReplanning += 1
                 if replanning > maxReplanning:
@@ -103,7 +108,8 @@ class Performer(Module):
                 try:
                     self.logger.warning(f'Iter (d{depth}) {i}: no more action to execute... trying to replan new ones')
                     newPath, _ = self.agent.planner.plan(absoluteGoal, settings=path.planSettings)
-                    nodes = newPath.nodes
+                    if newPath:
+                        nodes = newPath.nodes
                 except ActionNotFound:
                     self.logger.warning(f'Iter (d{depth}) {i}: failed to plan new one')
 
@@ -163,6 +169,8 @@ class Performer(Module):
 
                     rdiff = differences.projection(node.absPos.space)  # if differences is not None else None
                     rderive = (rdiff - node.goal).norm()  # if differences is not None else -1.
+                    if model:
+                        model.updatePrecisionPerGoal(node.goal, rderive)
                     self.logger.debug(
                         f'Iter (d{depth}) {i}: wanting {node.absPos} and got {currentPos} \n     Diff {derive:.4f} doing {node.action} to get {node.goal} and got {rdiff} Diff {rderive:.4f}')
 
@@ -190,6 +198,7 @@ class Performer(Module):
                         self.logger.info(
                             f'Iter (d{depth}) {i}: max derive exceeded ({derive:.4f} > {maxDerive:.4f}) trying to reach {node.goal} by doing {node.action} to get {node.goal} and got {rdiff} Diff {rderive:.4f}')
                         self.postPerforming(model, False, derive)
+                        self.postPerforming(model, False, derive, True)
                         if depth == 0:
                             config.result.performerDerive.append((derive, maxDerive))
                         if replanning <= maxReplanning:
@@ -210,7 +219,11 @@ class Performer(Module):
         # print('((OVER))')
 
         if distanceToGoal:
-            self.postPerforming(model, success, distanceToGoal)
+            if replanning == 0:
+                distanceToGoalSinglePass = distanceToGoal
+            if distanceToGoalSinglePass:
+                self.postPerforming(model, success, distanceToGoalSinglePass, True)
+            self.postPerforming(model, success, distanceToGoal * (1 + replanning * 0.1))
             if depth == 0:
                 config.result.performerDistance = (distanceToGoal, maxDistance)
 
@@ -250,9 +263,9 @@ class Performer(Module):
         distanceDerive = derive.norm()
         return currentPos, distanceDerive, currentState
     
-    def postPerforming(self, model, success, distanceToGoal):
+    def postPerforming(self, model, success, distanceToGoal, singlePrecision=False):
         if model:
-            model.updatePrecision(success, distanceToGoal)
+            model.updatePrecision(success, distanceToGoal, index=int(singlePrecision))
 
     def iterative(self):
         return range(self.iterations)

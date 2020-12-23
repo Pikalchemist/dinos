@@ -185,6 +185,7 @@ class Evaluator(Serializable):
         # n_ = 0
 
         for rawPoint in test.points:
+            self.environment.setupEpisode(MoveConfig(evaluating=True))
             if self.agent.dataset:
                 point = self.agent.dataset.convertData(rawPoint)
             else:
