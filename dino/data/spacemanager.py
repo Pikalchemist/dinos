@@ -83,8 +83,7 @@ class SpaceManager(Module, Serializable):
 
     def computeSpaces(self):
         self.actionSpaces = self.getActionSpaces(self.spaces)
-        self.actionExplorationSpaces = self.getActionExplorationSpaces(
-            self.spaces)
+        self.actionExplorationSpaces = self.getActionExplorationSpaces(self.spaces)
         self.actionPrimitiveSpaces = self.getActionPrimitiveSpaces(self.spaces)
         self.outcomeSpaces = self.getOutcomeSpaces(self.spaces)
     

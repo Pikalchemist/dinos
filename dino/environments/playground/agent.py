@@ -52,7 +52,6 @@ class Agent(Cylinder):
     def lidarFromPos(self, position):
         number = 2 if self.onlyX else 8
         maxdist = 100
-        step = 5
         width = 10
 
         dirs = np.linspace(0, 2*np.pi, number + 1)[:-1]
@@ -71,6 +70,7 @@ class Agent(Cylinder):
             self.shape.body.position.x + 20, self.shape.body.position.y)
 
     def move(self, parameters, property=None):
+        # print(f'MOVE! {parameters}')
         self.performAction(self._move, args=(
             parameters, property), duration=0.6, step=0.05)
 

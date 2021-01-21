@@ -74,6 +74,8 @@ class EmptyRoomScene(SceneSetup):
             if self.world.child('#Cylinder1'):
                 pos = self.world.child('Agent').body.position
 
+                distance = 40. if self.environment.iteration < 100 else 120.
+
                 obj = self.world.child('#Cylinder1').body
                 if self.world.child('#Cylinder2'):
                     if random.uniform(0, 1) < 0.5:
@@ -81,8 +83,8 @@ class EmptyRoomScene(SceneSetup):
                         obj = self.world.child('#Cylinder2').body
                     else:
                         obj2 = self.world.child('#Cylinder2').body
-                    obj2.position = pos + Vec2d(200. + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
-                obj.position = pos + Vec2d(40. + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
+                    obj2.position = pos + Vec2d(240. + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
+                obj.position = pos + Vec2d(distance + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
 
     def setupIteration(self, config):
         pass

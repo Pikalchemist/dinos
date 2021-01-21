@@ -34,7 +34,7 @@ class State(object):
                     for part in parts:
                         variations[part.space] = part
                 else:
-                    print(f'======= {model} {action} {context}')
+                    # print(f'======= {model} {action} {context}')
                     result[0].flat()
 
         for i, part in enumerate(self.values):
