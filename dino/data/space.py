@@ -48,13 +48,16 @@ class Space(Serializable):
         Space._number += 1
 
         self.spaces = spaces if spaces is not None else [self]
+        self.rows = self.spaces
         self.aggregation = len(self.spaces) > 1
         self.rowAggregation = False
         self.childrenSpaces = []
 
-        self.allowedSimilarRows = []
+        # self.allowedSimilarRows = []
 
         self.native = native if native else self
+        self.nativeRoot = self
+        self.nativeRoot = self.native.nativeRoot
         self.kind = kind
         self._property = property
 
@@ -128,16 +131,16 @@ class Space(Serializable):
     #     return obj
 
     # Properties
-    def nativeRoot(self):
-        if self.native == self:
-            return self
-        return self.native.nativeRoot()
+    # def nativeRoot(self):
+    #     if self.native == self:
+    #         return self
+    #     return self.native.nativeRoot()
     
     @property
     def boundProperty(self):
         if self._property:
             return self._property
-        return self.nativeRoot()._property
+        return self.nativeRoot._property
     
     def observable(self):
         if self.boundProperty is None or self.null():
@@ -164,15 +167,15 @@ class Space(Serializable):
 
     @property
     def relative(self):
-        return self.nativeRoot()._relative
+        return self.nativeRoot._relative
     
     @property
     def relativeLearning(self):
-        return self.nativeRoot()._relativeLearning
+        return self.nativeRoot._relativeLearning
 
     @property
     def modulo(self):
-        return self.nativeRoot()._modulo
+        return self.nativeRoot._modulo
 
     def null(self):
         return not self.spaces
@@ -185,9 +188,15 @@ class Space(Serializable):
     def cols(self):
         return self.spaces
 
-    @property
-    def rows(self):
-        return [self] + [row for row in self.allowedSimilarRows if row not in self]
+    # @property
+    # def rows(self):
+    #     return self.spaces + [row for row in self.allowedSimilarRows if row not in self]
+
+    def allowSimilarRows(self, rows):
+        self.rows += [row for row in rows if row not in self]
+    
+    def resetSimilarRows(self):
+        self.rows = self.spaces
 
     @property
     def baseCols(self):
@@ -266,20 +275,20 @@ class Space(Serializable):
         return None
 
     def matches(self, other, kindSensitive=True, dataSensitive=False, idSensitive=False, rowMatching=False, entity=None):
+        if idSensitive and self != other:
+            return False
         if entity and (not self.matchesEntity(entity) or not other.matchesEntity(entity)):
             return False
         if kindSensitive and self.kind.value != other.kind.value:
             return False
         if dataSensitive and self.canStoreData != other.canStoreData:
             return False
-        if idSensitive and self != other:
-            return False
         if rowMatching and self.findMatchingSpaceRows(other, kindSensitive=kindSensitive, idSensitive=idSensitive):
             return True
-        return self.nativeRoot() == other.nativeRoot()
+        return self.nativeRoot == other.nativeRoot
 
-    def linkedTo(self, otherSpace):
-        return self.nativeRoot() == otherSpace.nativeRoot()
+    def linkedTo(self, other):
+        return self.nativeRoot == other.nativeRoot
     
     def intersects(self, space):
         if isinstance(space, list):
@@ -361,7 +370,7 @@ class Space(Serializable):
     def applyTo(self, entity):
         if not entity or len(self.rows) == 1:
             return self
-        return next(iter([row for row in self.rows if row.matchesEntity(entity)]), self)
+        return next((row for row in self.rows if row.matchesEntity(entity)), self)
 
     # Data
     @property

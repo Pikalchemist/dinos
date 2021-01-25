@@ -10,7 +10,7 @@ from . import operations
 
 
 class ContextSpatialization(Serializable):
-    MAX_AREAS = 1000
+    MAX_AREAS = 100
     NN_NUMBER = 10
     MINIMUM_POINTS = 100
     THRESHOLD_ADD = 0.05
@@ -82,7 +82,7 @@ class ContextSpatialization(Serializable):
         if not self.areas:
             return None
         point = point.projection(parameter(space, self.space))
-        nearest, _ = operations._nearestFromData(self.centers[:len(self.areas)], point.npPlain())
+        nearest, _ = operations.nearestNeighborsFromDataContiguous(self.centers[:len(self.areas)], point.npPlain())
         return self.areas[nearest[0]]
     
     def columns(self, goal, space=None):
@@ -133,7 +133,7 @@ class ContextSpatialization(Serializable):
 
         fullCompAllFalse = None
         fullCompAllTrue = None
-        if random.uniform(0, 1) < probality * 0.1:
+        if area and random.uniform(0, 1) < probality * 0.1:
             fullComp = self.model.competence(precise=True)
 
             columnsFalse = np.full(self.evaluatedSpace.dim, False)

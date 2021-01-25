@@ -155,7 +155,7 @@ class SpaceRegion(Serializable):
             self.contextSpace).plain()
 
         indices, distances = DataSpace.nearestFromData(np.array(self.points)[:, self.colsContext], context,
-                                                       n=self.options['maxPoints']//2)
+                                                                n=self.options['maxPoints']//2)
 
         return indices, distances
 

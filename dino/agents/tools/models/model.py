@@ -184,8 +184,8 @@ class Model(Serializable):
 
     def pointAdded(self, event, progress):
         if self.contextSpacialization:
-            outcome = event.outcomes.projection(self.outcomeSpace)
-            self.contextSpacialization[0].addPoint(outcome)
+            # outcome = event.outcomes.projection(self.outcomeSpace)
+            self.contextSpacialization[0].addPoint(event.outcomes)
 
             # context = event.context.projection(self.contextSpace)
             # self.contextSpacialization[1].addPoint(context)
@@ -270,11 +270,6 @@ class Model(Serializable):
         return max(0, min(1, (1. - distanceGoal - error) / np.exp((error * 4.15) ** 3)))
 
     def getIds(self):
-        # ids = self.outcomeSpace.getIds(self.restrictionIds)
-        # ids = np.intersect1d(ids, self.actionSpace.getIds(self.restrictionIds))
-        # if self.contextSpace:
-        #     ids = np.intersect1d(
-        #         ids, self.contextSpace.getIds(self.restrictionIds))
         return self.findSharedIds(self.outcomeSpace, self.actionSpace, self.contextSpace, restrictionIds=self.restrictionIds)
     
     # def updateNonDuplicateIds(self):
@@ -346,16 +341,6 @@ class Model(Serializable):
     # def variance(self, data=None, context: Observation = None, precise=False, contextColumns=None):
     #     return self.std(data=data, context=context, precise=precise, contextColumns=contextColumns) ** 2
 
-    # def domainVariance(self, data=None, precise=False):
-    #     data = data if data else self.outcomeSpace.getData(self.restrictionIds)
-    #     if not precise:
-    #         number = 100
-    #         ids = np.arange(len(data))
-    #         np.random.shuffle(ids)
-    #         data = data[ids[:number]]
-
-    #     return np.std(data)
-    
     def _errorForward(self, eventId, contextColumns=None):
         action = self.actionSpace.getPoint(eventId)[0]
         outcome = self.outcomeSpace.getPoint(eventId)[0]
@@ -417,7 +402,7 @@ class Model(Serializable):
                 return []
                 # ids = ids[indices]
         if not precise:
-            number = 100
+            number = min(80 if not almostZeros else 50, self.outcomeSpace.number // 10)
             ids_ = np.arange(len(ids))
             np.random.shuffle(ids_)
             ids = ids[ids_[:number]]
@@ -433,7 +418,7 @@ class Model(Serializable):
             if np.sum(indices) > 0:
                 ids = ids[indices]
         if not precise:
-            number = 100
+            number = min(100, self.outcomeSpace.number // 10)
             ids_ = np.arange(len(ids))
             np.random.shuffle(ids_)
             ids = ids[ids_[:number]]
@@ -444,38 +429,6 @@ class Model(Serializable):
             errors = np.array(
                 [self._errorForwardData(*data, contextColumns=contextColumns) for data in zip(actions, outcomes)])
         return errors
-
-    # Deprecated
-    # def _errorInverseAll(self, data=None, context: Observation = None, precise=False, exceptAlmostZero=True, contextColumns=None):
-    #     data = data if data else self.outcomeSpace.getData(self.restrictionIds)
-    #     if self.hasContext(self.contextSpace, contextColumns):
-    #         context = context if context else self.contextSpace.getData(
-    #             self.restrictionIds)
-    #     else:
-    #         context = None
-    #     if exceptAlmostZero:
-    #         indices = np.sum(
-    #             np.abs(data), axis=1) > self.outcomeSpace.maxDistance * self.ALMOST_ZERO_FACTOR
-    #         if np.sum(indices) > 0:
-    #             data = data[indices]
-    #             if context is not None:
-    #                 context = context[indices]
-    #     if not precise:
-    #         number = 100
-    #         ids = np.arange(len(data))
-    #         np.random.shuffle(ids)
-    #         data = data[ids[:number]]
-    #         if context is not None:
-    #             context = context[ids[:number]]
-
-    #     if context is not None:
-    #         errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist(
-    #         )), self.contextSpace.point(c.tolist()), contextColumns=contextColumns)[1] for d, c in zip(data, context)]
-    #     else:
-    #         errors = [self.goalCompetenceError(self.outcomeSpace.point(d.tolist()))[
-    #             1] for d in data]
-
-    #     return errors
 
     # Space coverage
     def reachesSpaces(self, spaces):

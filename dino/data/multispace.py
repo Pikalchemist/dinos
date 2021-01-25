@@ -212,7 +212,7 @@ class MultiColDataSpace(MultiColSpace, DataSpace):
             #     self.lids[nz] = space.lids[nz] + pos
             #     pos += space.number
 
-        self.continuous = all(space.continuous for space in self.spaces)
+        self.contiguous = all(space.contiguous for space in self.spaces)
 
         #print(self.data)
         self._number = len(self.ids)
@@ -280,7 +280,7 @@ class MultiRowDataSpace(DataSpace):
     def applyTo(self, entity):
         if not entity:
             return self
-        return next(iter([row for row in self.rows if row.matchesEntity(entity)]), self)
+        return next((row for row in self.rows if row.matchesEntity(entity)), self)
 
     # @property
     # def colSpaces(self):
@@ -298,9 +298,9 @@ class MultiRowDataSpace(DataSpace):
     def cols(self):
         return [self]
 
-    @property
-    def rows(self):
-        return self.spaces + [row for row in self.allowedSimilarRows if row not in self]
+    # @property
+    # def rows(self):
+    #     return self.spaces + [row for row in self.allowedSimilarRows if row not in self]
 
     @property
     def baseCols(self):

@@ -117,7 +117,7 @@ class Environment(SpaceManager):
         return self.world.cascadingProperty(name)
     
     def findTest(self, name):
-        return next(iter([test for test in self.tests if test.name == name]), None)
+        return next((test for test in self.tests if test.name == name), None)
 
     @property
     def counter(self):

@@ -14,7 +14,7 @@ class Data(Serializable):
             # Null data
             self.space = None
             self.value = []
-            self.valueOrdered = []
+            self._valueOrdered = []
             self._parts = []
         else:
             if len(args) == 2 and not isinstance(args[0], Data):
@@ -36,7 +36,7 @@ class Data(Serializable):
 
             self.abstract = any(p.abstract for p in self._parts)
             self.value = self.plain()
-            self.valueOrdered = self.plainOrdered()
+            self._valueOrdered = None
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(self, ['_parts'])
@@ -111,6 +111,12 @@ class Data(Serializable):
 
     def length(self):
         return np.linalg.norm(self.value)
+    
+    @property
+    def valueOrdered(self):
+        if self._valueOrdered is None:
+            self._valueOrdered = self.plainOrdered()
+        return self._valueOrdered
 
     def setRelative(self, relative=None):
         if relative is not None:
@@ -137,6 +143,9 @@ class Data(Serializable):
     def plainOrdered(self, spaceOrder=None, assertSize=True, fill=False):
         if not self._parts:
             return []
+        if len(self._parts) == 1:
+            return self.value
+
         if not spaceOrder:
             spaceOrder = self.space
 
@@ -169,53 +178,20 @@ class Data(Serializable):
     def singleSpaceComposante(self, singleSpace, kindSensitive=False, entity=None):
         flatten = self.flat()
         # print(flatten)
-        pm = next(iter([part for part in flatten if part.space.findMatchingSpaceRows(
-            singleSpace, idSensitive=True, entity=entity)]), Data())
+        pm = next((part for part in flatten if part.space.findMatchingSpaceRows(
+            singleSpace, idSensitive=True, entity=entity)), Data())
         if not pm:
-            pm = next(iter([part for part in flatten if part.space.findMatchingSpaceRows(
-                singleSpace, entity=entity)]), Data())
+            pm = next((part for part in flatten if part.space.findMatchingSpaceRows(
+                singleSpace, entity=entity)), Data())
         if not pm and not kindSensitive:
-            pm = next(iter([part for part in flatten if part.space.findMatchingSpaceRows(
-                singleSpace, kindSensitive=False, entity=entity)]), Data())
+            pm = next((part for part in flatten if part.space.findMatchingSpaceRows(
+                singleSpace, kindSensitive=False, entity=entity)), Data())
         pm = pm.applyTo(entity)
         return pm
-        # pm = next(iter([d for d in flatten if d.space.matches(singleSpace, dataSensitive=True)]), Data())
-        # # print(self)
-        # # print(flatten)
-        # # print(pm)
-        # if not pm and singleSpace.rowAggregation:
-        #     for possibility in singleSpace.rows:
-        #         spaces = possibility.flatColsWithMultiRows
-        #         projection = [self.singleSpaceComposante(s) for s in spaces]
-        #         projection = [p for p in projection if p != Data()]
-        #         if len(spaces) == len(projection):
-        #             return SingleData(singleSpace, [v for p in projection for v in p.valueOrdered])
-        # if not pm:
-        #     pm = ([d for d in flatten if d.space.native == singleSpace.native and d.space.kind.value == singleSpace.kind.value]
-        #           + [Data()])[0]
-        # if not pm:
-        #     pm = ([d for d in flatten if d.space.native ==
-        #            singleSpace.native] + [Data()])[0]
-
-        # return pm
 
     def projection(self, space, allowAbstraction=True, kindSensitive=False, entity=None):
         parts = [self.singleSpaceComposante(s, kindSensitive=kindSensitive, entity=entity)
                  for s in space.flatColsWithMultiRows]
-        # if self.abstract:
-        #     parts = [self.singleSpaceComposante(s) for s in space.flatColsWithMultiRows]
-        # else:
-        #     parts_ = [[list(map(self.singleSpaceComposante, possibility)) for possibility in group] for group in space.groupedCols]
-        #     # parts = [part for group in parts for part in group if len([p for p in group if p != Data()]) == len(group)]
-        #     parts = []
-        #     for group in parts_:
-        #         if len(group) == 1:
-        #             parts += group[0]
-        #         else:
-        #             for possibility in group:
-        #                 if len([p for p in possibility if p != Data()]) == len(possibility):
-        #                     parts += possibility
-        #                     break
         return self.__class__._vectorClass_(*[p for p in parts if p != Data()])
 
     # Entity
@@ -306,7 +282,7 @@ class SingleData(Data):
     def __init__(self, space, value):
         self.space = space
         self.value = value if isinstance(value, list) else [value]
-        self.valueOrdered = self.value
+        self._valueOrdered = self.value
         self._parts = [self]
         if len(self.value) != self.space.dim:
             raise Exception(f"Size mismatch: space {self.space} is {self.space.dim}d and the data value {self.value} is {len(self.value)}d")

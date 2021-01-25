@@ -213,7 +213,10 @@ class Planner(Module):
 
 
 class Planning(object):
+    DEBUG = {}
+
     def __init__(self, planner, model, goal, state, settings):
+        self.DEBUG['plannings'] = self.DEBUG.get('plannings', 0) + 1
         self.planner = planner
         self.settings = settings
 
@@ -294,6 +297,7 @@ class Planning(object):
         self.i = -1
         self.iterationOffset = 0
         while self.i < self.maxIter + self.iterationOffset:
+            self.DEBUG['iterations'] = self.DEBUG.get('iterations', 0) + 1
             self.i += 1
 
             if len(self.nodes) <= 1 and self.i > self.maxIterNoNodes or len(self.nodes) <= 2 and self.i > self.maxIterNoNodes * 2:
@@ -550,6 +554,7 @@ class Planning(object):
         return newNode
     
     def nextState(self, nearestNode, goalDistance, state):
+        self.DEBUG['next'] = self.DEBUG.get('next', 0) + 1
         newState = state.copy().apply(self.a0, self.planner.dataset)
         if self.settings.dontMoveSpaces and goalDistance > self.ignoreConstraintDistanceLimit:
             if self.hasSpacesChanged(nearestNode, newState):
@@ -658,6 +663,7 @@ class Planning(object):
         return path
 
     def attempt(self, move, context, adaptContext=False):
+        self.DEBUG['attempts'] = self.DEBUG.get('attempts', 0) + 1
         precision = 0.45 + (self.i / self.maxIter) * 0.05
         precisionOrientation = 0.05 + (self.i / self.maxIter) * 0.05
         if adaptContext:

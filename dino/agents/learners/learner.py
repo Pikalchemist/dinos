@@ -54,7 +54,7 @@ class Learner(Agent):
         return dict_
     
     def findStrategy(self, name):
-        return next(iter([strategy for strategy in self.trainStrategies if strategy.name == name]), None)
+        return next((strategy for strategy in self.trainStrategies if strategy.name == name), None)
 
     # @classmethod
     # def _deserialize(cls, dict_, environment, dataset=None, options={}, obj=None):

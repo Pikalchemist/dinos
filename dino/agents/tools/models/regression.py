@@ -29,11 +29,13 @@ class RegressionModel(Model):
     MINIMUM_LENGTH = 0.001
     MAXIMUM_NULL = 5
     OUTLIER_MAX_DISTANCE = 100
+    ENFORCE_MAX_NN_DISTANCE = False
 
     def __init__(self, dataset, actionSpace, outcomeSpace, contextSpace=[], restrictionIds=None, model=None,
                  register=True, metaData={}):
         super().__init__(dataset, actionSpace, outcomeSpace,
                          contextSpace, restrictionIds, model, register, metaData)
+        self.bestLocalityCandidates = [[], []]
 
     def computeCompetence(self, error, distanceGoal=0):
         distanceGoal = min(distanceGoal, 1.)
@@ -225,7 +227,7 @@ class RegressionModel(Model):
         context = context.convertTo(self.dataset, kind=SpaceKind.PRE).projection(
             self.contextSpace, entity=entity) if context else None
         goalContext = goal.extends(context)
-        goalContextPlain = Data.plainData(goalContext, space)
+        goalContextPlain = Data.npPlainData(goalContext, space)
 
         # Ids
         restrictionIds = self.restrictionIds
@@ -248,10 +250,10 @@ class RegressionModel(Model):
             numberContext = int(self.NN_CONTEXT + (len(restrictionIds)
                                                    if restrictionIds is not None else self.contextSpace.number) * 0.04)
             if bestContext:
-                ids, _ = goalSpace.nearest(goalPlain, n=numberContext,
+                ids, _ = goalSpace.nearestPlain(goalPlain, n=numberContext,
                                            restrictionIds=restrictionIds, otherSpace=otherSpace)
-                cids, cdists = self.contextSpace.nearestDistance(contextPlain, n=self.NN_LOCALITY,
-                                                                 restrictionIds=ids, otherSpace=otherSpace, columns=contextColumns)
+                cids, cdists = self.contextSpace.nearestDistancePlain(contextPlain, n=self.NN_LOCALITY,
+                                                                      restrictionIds=ids, otherSpace=otherSpace, columns=contextColumns)
 
                 cdistMean = np.mean(cdists[:self.NN_LOCALITY // 2])
 
@@ -259,18 +261,18 @@ class RegressionModel(Model):
                     # print('Trying to find a better context')
                     context = self.contextSpace.getPoint(cids)[0]
                     goalContext = goal.extends(context)
-                    goalContextPlain = Data.plainData(goalContext, space)
+                    goalContextPlain = Data.npPlainData(goalContext, space)
                     contextPlain = Data.npPlainData(context, self.contextSpace)
             # print(contextPlain)
 
-            restrictionIds, _ = self.contextSpace.nearestDistance(contextPlain, n=numberContext,
-                                                                  restrictionIds=restrictionIds, otherSpace=otherSpace,
-                                                                  columns=contextColumns)
+            restrictionIds, _ = self.contextSpace.nearestDistancePlain(contextPlain, n=numberContext,
+                                                                       restrictionIds=restrictionIds, otherSpace=otherSpace,
+                                                                       columns=contextColumns)
 
             if differentRestrictionIds:
-                restrictionIdsWithZeros, _ = self.contextSpace.nearestDistance(contextPlain, n=numberContext,
-                                                                               restrictionIds=restrictionIdsWithZeros, otherSpace=otherSpace,
-                                                                               columns=contextColumns)
+                restrictionIdsWithZeros, _ = self.contextSpace.nearestDistancePlain(contextPlain, n=numberContext,
+                                                                                    restrictionIds=restrictionIdsWithZeros, otherSpace=otherSpace,
+                                                                                    columns=contextColumns)
             # print('===')
             # for id_ in restrictionIds:
             #     print(f'{self.actionSpace.getPoint(id_)[0]} + {self.contextSpace.getPoint(id_)[0]} -> {self.outcomeSpace.getPoint(id_)[0]}')
@@ -280,16 +282,16 @@ class RegressionModel(Model):
         # Compute best locality candidates
         # nearestUseContext = False
         if nearestUseContext:
-            ids, dist = space.nearest(goalContextPlain,
-                                      n=n+ignoreFirst,
-                                      restrictionIds=restrictionIds,
-                                      otherSpace=otherSpace,
-                                      columns=self.multiContextColumns(contextColumns, space, context))
+            ids, dist = space.nearestPlain(goalContextPlain,
+                                           n=n+ignoreFirst,
+                                           restrictionIds=restrictionIds,
+                                           otherSpace=otherSpace,
+                                           columns=self.multiContextColumns(contextColumns, space, context))
         else:
-            ids, dist = goalSpace.nearest(goalPlain,
-                                          n=n+ignoreFirst,
-                                          restrictionIds=restrictionIds,
-                                          otherSpace=otherSpace)
+            ids, dist = goalSpace.nearestPlain(goalPlain,
+                                               n=n+ignoreFirst,
+                                               restrictionIds=restrictionIds,
+                                               otherSpace=otherSpace)
         if ignoreFirst and len(ids) > 0:
             ids = ids[1:]
             dist = dist[1:]
@@ -344,10 +346,10 @@ class RegressionModel(Model):
         # print(f'=> {context} {self.outcomeSpace.getPlainPoint(ids)}')
 
         # Check if distance to goal is not too important
-        idsPart = np.squeeze(np.argwhere(dist < self.outcomeSpace.maxNNDistance), axis=1)
-        if len(idsPart) < minPointsY:
-            idsPart = range(0, len(idsPart))
-        ids = ids[idsPart]
+        if self.ENFORCE_MAX_NN_DISTANCE:
+            idsPart = np.squeeze(np.argwhere(dist < self.outcomeSpace.maxNNDistance), axis=1)
+            if len(idsPart) >= minPointsY:
+                ids = ids[idsPart]
 
         # outcomes = self.outcomeSpace.getNpPlainPoint(ids)
         # idsPart = np.squeeze(np.argwhere(np.sum(outcomes, axis=1) > minNorm), axis=1)
@@ -377,101 +379,101 @@ class RegressionModel(Model):
 
         idsAs, distAs = self.actionSpace.nearestDistanceArray(aList, n=self.NN_ALOCALITY, otherSpace=space,
                                                               restrictionIds=restrictionIds)
-        if len(idsAs) > 0:
-            for i, (idsA, distA) in enumerate(zip(idsAs, distAs)):
-                # print(len(idsA))
-                # print(self.outcomeSpace.getNpPlainPoint(idsA))
-                # print(distA)
-                # idsA, distA = self.actionSpace.nearest(p, n=10, otherSpace=space, restrictionIds=self.restrictionIds)
+        for i, (idsA, distA) in enumerate(zip(idsAs, distAs)):
+            # print(len(idsA))
+            # print(self.outcomeSpace.getNpPlainPoint(idsA))
+            # print(distA)
+            # idsA, distA = self.actionSpace.nearest(p, n=10, otherSpace=space, restrictionIds=self.restrictionIds)
 
-                # Check if distance to a is too big and enough neighbours studied already
-                # idsALarge = idsA[:]
-                idsPart = np.squeeze(np.argwhere(
-                    distA[:min(self.NN_LOCALITY, len(idsA))] < self.actionSpace.maxNNDistance), axis=1)
-                if len(idsPart) < minPointsA:
-                    idsPart = range(len(idsPart))
-                idsA = idsA[idsPart]
-                if len(idsA) == 0:
-                    continue
+            # Check if distance to a is too big and enough neighbours studied already
+            # idsALarge = idsA[:]
+            if self.ENFORCE_MAX_NN_DISTANCE:
+                idsPart = np.squeeze(np.argwhere(distA < self.actionSpace.maxNNDistance), axis=1)
+                if len(idsPart) >= minPointsA:
+                    idsA = idsA[idsPart]
+            if len(idsA) == 0:
+                continue
 
-                yPlain = self.outcomeSpace.getNpPlainPoint(idsA)
-                aPlain = self.actionSpace.getNpPlainPoint(idsA)
+            yPlain = self.outcomeSpace.getNpPlainPoint(idsA)
+            aPlain = self.actionSpace.getNpPlainPoint(idsA)
 
-                # if adaptContext:
-                #     cPlain = self.contextSpace.getNpPlainPoint(idsA)
+            # if adaptContext:
+            #     cPlain = self.contextSpace.getNpPlainPoint(idsA)
 
-                if context:
-                    ycPlain = self.outcomeContextSpace.getNpPlainPoint(idsA)
-                    # acLargePlain = self.actionContextSpace.getNpPlainPoint(idsALarge)
-                else:
-                    ycPlain = yPlain
-                    # acLargePlain = aLargePlain
+            if context:
+                ycPlain = self.outcomeContextSpace.getNpPlainPoint(idsA)
+                # acLargePlain = self.actionContextSpace.getNpPlainPoint(idsALarge)
+            else:
+                ycPlain = yPlain
+                # acLargePlain = aLargePlain
 
-                distanceGoal = 0.
+            distanceGoal = 0.
 
-                columns = self.multiContextColumns(
-                    contextColumns, self.outcomeContextSpace, context)
-                a0Plain = multivariateRegression(
-                    ycPlain, aPlain, goalContextPlain, columns=columns)
-                maxOutliers = self.actionSpace.maxDistance * self.OUTLIER_MAX_DISTANCE
-                if np.any(a0Plain > maxOutliers):
-                    # print(f'/!!!!\\ {a0Plain} => {aPlain[-1]}\n{aPlain}')
-                    a0Plain = aPlain[-1]
-                a0 = self.actionSpace.action(a0Plain)
+            columns = self.multiContextColumns(
+                contextColumns, self.outcomeContextSpace, context)
+            a0Plain = multivariateRegression(
+                ycPlain, aPlain, goalContextPlain, columns=columns)
+            maxOutliers = self.actionSpace.maxDistance * self.OUTLIER_MAX_DISTANCE
+            if np.any(a0Plain > maxOutliers):
+                # print(f'/!!!!\\ {a0Plain} => {aPlain[-1]}\n{aPlain}')
+                a0Plain = aPlain[-1]
+            a0 = self.actionSpace.action(a0Plain)
 
 
-                # print(f'a{i}: {a0} |a|={a0.norm()} A YC GC\n{aPlain}\n{ycPlain}\n{goalContextPlain}')
+            # print(f'a{i}: {a0} |a|={a0.norm()} A YC GC\n{aPlain}\n{ycPlain}\n{goalContextPlain}')
 
-                if a0.norm() > self.actionSpace.maxDistance:
-                    continue
+            if a0.norm() > self.actionSpace.maxDistance:
+                continue
 
-                if self.actionSpace.primitive():
-                    a0 = a0.bounded()
+            if self.actionSpace.primitive():
+                a0 = a0.bounded()
 
-                # actionCenter = np.mean(aPlain, axis=0)
-                # actionCenterDistance = np.mean(
-                #     np.sum((aPlain - actionCenter) ** 2, axis=1) ** .5)
-                # actionDistance = np.mean(
-                #     np.sum((aPlain - a0Plain) ** 2, axis=1) ** .5)
-                # proximityScore = (
-                #     actionDistance / (actionCenterDistance if actionCenterDistance != 0 else 1.) - 1.) / 20.
+            # actionCenter = np.mean(aPlain, axis=0)
+            # actionCenterDistance = np.mean(
+            #     np.sum((aPlain - actionCenter) ** 2, axis=1) ** .5)
+            # actionDistance = np.mean(
+            #     np.sum((aPlain - a0Plain) ** 2, axis=1) ** .5)
+            # proximityScore = (
+            #     actionDistance / (actionCenterDistance if actionCenterDistance != 0 else 1.) - 1.) / 20.
 
-                # if context:
-                #     a0 = self.actionSpace.action(a0Plain)
-                #     ac0Plain = Data.plainData(a0.extends(context), self.actionContextSpace)
-                # else:
-                #     ac0Plain = a0Plain
-                # y0Plain, error = multivariateRegressionError(acLargePlain, yLargePlain, ac0Plain)
-                y0Plain, error = self.npForward(
-                    a0, context, contextColumns=contextColumns)
-                goalDistance = euclidean(goalPlain, y0Plain)
-                # print('---')
-                # print(ycPlain)
-                # print(aPlain)
-                # print(goalContextPlain)
-                # print('>')
-                # print(a0Plain)
-                # print(y0Plain)
-                # print(goalDistance)
+            # if context:
+            #     a0 = self.actionSpace.action(a0Plain)
+            #     ac0Plain = Data.plainData(a0.extends(context), self.actionContextSpace)
+            # else:
+            #     ac0Plain = a0Plain
+            # y0Plain, error = multivariateRegressionError(acLargePlain, yLargePlain, ac0Plain)
+            y0Plain, error = self.npForward(
+                a0, context, contextColumns=contextColumns)
+            goalDistance = euclidean(goalPlain, y0Plain)
+            # print('---')
+            # print(ycPlain)
+            # print(aPlain)
+            # print(goalContextPlain)
+            # print('>')
+            # print(a0Plain)
+            # print(y0Plain)
+            # print(goalDistance)
 
-                # print(f'a{i}: {a0}; error: {error}; y0/goal: {y0Plain}=?{goalPlain}; goalDistance: {goalDistance}')
+            # print(f'a{i}: {a0}; error: {error}; y0/goal: {y0Plain}=?{goalPlain}; goalDistance: {goalDistance}')
 
-                score = (goalDistance + self.dataset.checkSpaceChanges(dontMove, a0, context)) / self.outcomeSpace.maxDistance
-                    # 0.2 * proximityScore + 0.1 * error
+            score = goalDistance / self.outcomeSpace.maxDistance
+                # 0.2 * proximityScore + 0.1 * error
 
-                result = (a0, a0Plain, y0Plain, goalDistance, error)
-                if dontMove:
-                    scores.append(score)
-                    results.append(result)
-                elif bestScore is None or score < bestScore:
-                    bestScore = score
-                    results = [result]
+            result = (a0, a0Plain, y0Plain, goalDistance, error, i)
+            if dontMove:
+                scores.append(score)
+                results.append(result)
+            elif bestScore is None or score < bestScore:
+                bestScore = score
+                results = [result]
         if not results:
             raise ActionNotFound(
                 "Not enough points to compute action")
         
         if dontMove:
-            results = np.array(results)
+            results = np.array(results, dtype=object)
+            # print(results)
+            # print(np.argsort(scores))
             result = results[np.argsort(scores)]
             move = self.dataset.checkSpaceChanges(dontMove, results[0][0], context)
             if move >= 0.1:
@@ -481,7 +483,8 @@ class RegressionModel(Model):
                         scores[i] += self.dataset.checkSpaceChanges(dontMove, result[0], context)
                 result = results[np.argsort(scores)]
 
-        a0, a0Plain, y0Plain, goalDistance, error = results[0]
+        a0, a0Plain, y0Plain, goalDistance, error, i = results[0]
+        self.bestLocalityCandidates[True if dontMove else False].append(i)
         # a0Plain, y0Plain, goalDistance, error = bestA0Plain, bestY0Plain, bestDistance, bestError
 
         y0 = self.outcomeSpace.asTemplate(y0Plain, entity=entity).setRelative(True)

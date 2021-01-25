@@ -92,8 +92,7 @@ class SpaceManager(Module, Serializable):
         toData = parameter(toData, self.storesData)  # space.canStoreData()
         kind = parameter(kind, space.kind)
 
-        relatedSpace = next(iter([s for s in self.spaces if s.linkedTo(
-            space) and s.kind.value == kind.value]), None)
+        relatedSpace = next((s for s in self.spaces if s.kind.value == kind.value and s.linkedTo(space)), None)
         if relatedSpace is not None:
             return relatedSpace
 
@@ -184,7 +183,7 @@ class SpaceManager(Module, Serializable):
 
     def spaceSearch(self, property=None, kind=SpaceKind.BASIC):
         if property:
-            return next(iter([s for s in self.spaces if s.boundProperty == property and s.kind.value == kind.value]), None)
+            return next((s for s in self.spaces if s.boundProperty == property and s.kind.value == kind.value), None)
         return None
 
     def getActionSpaces(self, spaces):
