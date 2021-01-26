@@ -47,10 +47,11 @@ class Agent(Cylinder):
             (self.sufaceWidth, self.sufaceWidth), pygame.SRCALPHA)
 
     def lidar(self, property=None):
-        return self.lidarFromPos(self.shape.body.position)
+        return self.lidarFromPos(self.shape, self.engine.physics, self.shape.body.position, self.onlyX)
 
-    def lidarFromPos(self, position):
-        number = 2 if self.onlyX else 8
+    @staticmethod
+    def lidarFromPos(ownShape, physics, position, onlyX):
+        number = 2 if onlyX else 8
         maxdist = 100
         width = 10
 
@@ -58,10 +59,10 @@ class Agent(Cylinder):
         distances = np.zeros(number)
         for i, dir in enumerate(dirs):
             d = Vec2d(maxdist, 0.0).rotated(dir)
-            hits = self.world.engine.physics.segment_query(position, position + d,
-                                                           width, pymunk.ShapeFilter())
+            hits = physics.segment_query(position, position + d,
+                                                width, pymunk.ShapeFilter())
             dists = [info.alpha *
-                     maxdist for info in hits if info.shape != self.shape]
+                     maxdist for info in hits if info.shape != ownShape]
             distances[i] = min(dists) if dists else maxdist
         return distances
 

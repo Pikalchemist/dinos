@@ -4,8 +4,9 @@ from dino.data.data import Data
 
 
 class State(object):
-    def __init__(self, environment, values=[], dataset=None):
+    def __init__(self, environment, values=[], dataset=None, featureMap=None):
         self.environment = environment
+        self.featureMap = featureMap
         if not isinstance(values, list):
             values = [values]
         self.values = [part for value in values for part in value.flat()]
@@ -20,6 +21,8 @@ class State(object):
         return self.values.__iter__()
 
     def update(self):
+        if self.featureMap:
+            self.featureMap.update(self.values)
         self._context = Data(*self.values)
 
     def apply(self, action, dataset, overwrite=None):
@@ -33,9 +36,9 @@ class State(object):
                     parts = result.flat()
                     for part in parts:
                         variations[part.space] = part
-                else:
-                    # print(f'======= {model} {action} {context}')
-                    result[0].flat()
+                # else:
+                #     # print(f'======= {model} {action} {context}')
+                #     result[0].flat()
 
         for i, part in enumerate(self.values):
             if part.space in variations.keys():
