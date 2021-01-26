@@ -14,28 +14,25 @@ from exlab.modular.module import Module
 from exlab.interface.serializer import Serializable
 from exlab.utils.io import parameter
 
-from dino.representation.entity import Entity
-
 from .data import *
 from .space import Space, SpaceKind
 from .event import InteractionEvent
 from .multispace import MultiColSpace, MultiColDataSpace, MultiRowDataSpace
+from dino.representation.entity_manager import EntityManager, Entity
 
 
 # import graphviz
 
 
-class SpaceManager(Module, Serializable):
-    def __init__(self, storesData=False, options={}, entityCls=Entity, parent=None, name=''):
+class SpaceManager(Module, Serializable, EntityManager):
+    def __init__(self, name, storesData=False, options={}, parent=None, entityCls=Entity):
         Module.__init__(self, parent=parent)
         Serializable.__init__(self)
+        EntityManager.__init__(self, name, entityCls=entityCls)
+        self.name = name
         self.spaces = []
         self.storesData = storesData
         self.options = options
-        self.name = name
-
-        self.world = entityCls('root', spaceManager=self)
-        self.conserveRoot = False
 
         self.multiColSpaces = []
         self.multiRowSpaces = []
@@ -65,7 +62,7 @@ class SpaceManager(Module, Serializable):
         super()._postDeserialize(dict_, serializer)
 
     def __repr__(self):
-        return f'SpaceManager({len(self.spaces)} spaces and {len(self.world.cascadingChildren()) + 1} entities)'
+        return f'SpaceManager({len(self.spaces)} spaces) and {EntityManager.__repr__()}'
     
     @property
     def size(self):
@@ -106,14 +103,6 @@ class SpaceManager(Module, Serializable):
 
     def convertData(self, data, kind=None, toData=None):
         return data.convertTo(self, kind=kind, toData=toData)
-    
-    def propertySpace(self, filterOrProperty=None, kind=None, dataset=None):
-        if isinstance(filterOrProperty, str):
-            filterOrProperty = self.world.cascadingProperty(filterOrProperty)
-        space = filterOrProperty.space
-        if dataset:
-            space = space.convertTo(spaceManager=dataset, kind=kind)
-        return space
 
     # Multi Spaces
     def _multiSpace(self, spaces, list_, type_, orderWise=False):
@@ -207,33 +196,6 @@ class SpaceManager(Module, Serializable):
         event.addToSpaces(cost=cost)
         self.logger.debug(f'Adding point {event} to dataset {self}', tag='dataset')
         self.events[event.iteration] = event
-        # eventId = self.nextEventId()  # used to identify the execution order
-        # self.iterationIds.append([self.iteration, eventId])
-        # event.iteration = self.iteration
-        # self.iteration += 1
-        # Register the iteration when the event was done
-        # if self.iteration == event.iteration + 1:
-        #     self.iterationIds[-1].append(eventId)
-        # elif self.iteration < event.iteration + 1:
-        #     self.iterationIds.append([event.iteration, eventId])
-        #     self.iteration = event.iteration + 1
-        # else:
-        #     raise Exception("Adding event in the past is forbidden!")
-
-        '''if event.outcomes.get()[0].value[0] ** 2 + event.outcomes.get()[0].value[1] ** 2 < 0.1:
-            if event.actions.get()[0].get()[0].value[0] ** 2 + event.actions.get()[0].get()[0].value[1] ** 2 > 0.05:'''
-        #print("{}: {} -> {}".format(eventId, event.actions, event.outcomes))
-
-        # event.id = eventId
-        
-
-        # assert a_type[0] < len(self.actionSpaces)
-        '''if p_type:
-            idP = self.p_spaces[p_type[0]][p_type[1]].addPoint(p, eventId)
-            self.idP.append((p_type, idP))
-            self.idEP.append(eventId)
-        else:
-            self.idP.append(None)'''
 
     def actions(self):
         return [event.actions for event in self.events]
@@ -249,16 +211,3 @@ class SpaceManager(Module, Serializable):
 
     def getData(self, space_id, data_id):
         return self.space(space_id).data[data_id]
-    
-    # Entities
-    def convertEntity(self, entity, proxy=True):
-        relatedEntity = ([e for e in self.world.cascadingChildren() if e.linkedTo(entity)] + [None])[0]
-        if relatedEntity:
-            return relatedEntity
-
-        entity = entity.createLinkedEntity(self, proxy=proxy)
-        if entity.isRoot() and not self.conserveRoot:
-            self.world = entity
-        elif not entity.parent:
-            self.world.addChild(entity)
-        return entity

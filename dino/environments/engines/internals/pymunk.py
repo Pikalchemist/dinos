@@ -55,7 +55,7 @@ class PymunkEngine(InternalEngine):
         self.drawScreen()
 
         pil_string_image = pygame.image.tostring(self.screen, "RGBA", False)
-        pil_image = Image.frombytes("RGBA", (600, 600), pil_string_image)
+        pil_image = Image.frombytes("RGBA", self.DISPLAY_SIZE, pil_string_image)
 
         return pil_image
 
@@ -150,7 +150,7 @@ class PymunkEngine(InternalEngine):
                             self.current_space) + 1]
                 elif event.type == pygame.MOUSEBUTTONUP:
                     # convert to local agent coordinates
-                    pos = self.property(self.current_space.property).convert_to_feature(
+                    pos = self.propertyItem(self.current_space.property).convert_to_feature(
                         pymunk.pygame_util.from_pygame(event.pos, self.screen))
                     self.experiment.exploit(
                         pos, self.env.dataset.outcomeSpaces.index(self.current_space))

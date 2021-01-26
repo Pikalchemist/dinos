@@ -18,7 +18,7 @@ class Dataset(SpaceManager):
         """
         options dict: parameters for the dataset
         """
-        super().__init__(storesData=True, options=options, name='dataset')
+        super().__init__('dataset', storesData=True, options=options)
         self.learner = None
 
     def _serialize(self, serializer):

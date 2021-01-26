@@ -169,13 +169,13 @@ class AMT(AMTBase):
         obj.element.assignable(entity)
         return obj
 
-    def abstractProperty(self, property, kind=SpaceKind.BASIC, abstractNewElements=True, appendToChildren=False):
+    def abstractProperty(self, property_, kind=SpaceKind.BASIC, abstractNewElements=True, appendToChildren=False):
         entity = self.abstractEntity(
-            property.entity, abstractNewElements=abstractNewElements)
-        if id(property) in self.context.matching:
-            return entity.property(element=self.context.matching[id(property)], kind=kind)
-        obj = entity.property(propertyName=property.name, kind=kind)
-        self.context.matching[id(property)] = obj.element
+            property_.entity, abstractNewElements=abstractNewElements)
+        if id(property_) in self.context.matching:
+            return entity.propertyItem(element=self.context.matching[id(property_)], kind=kind)
+        obj = entity.propertyItem(propertyName=property_.name, kind=kind)
+        self.context.matching[id(property_)] = obj.element
         if appendToChildren:
             self.addChild(obj)
         return obj
@@ -248,7 +248,7 @@ class AMTEntity(AMTElementLinked):
     def __init__(self, context, entity=None, element=None):
         super().__init__(context, element=element, assigned=entity)
 
-    def property(self, propertyName=None, element=None, kind=SpaceKind.BASIC):
+    def propertyItem(self, propertyName=None, element=None, kind=SpaceKind.BASIC):
         return AMTProperty(self.context, self, propertyName=propertyName, element=element, kind=kind)
 
     def get(self, spaceManager):
@@ -295,7 +295,7 @@ class AMTProperty(AMTElementLinked):
         properties = []
         for propertyName in list(self.element.assignables):
             for entity in self.entity.get(spaceManager):
-                prop = entity.property(propertyName)
+                prop = entity.propertyItem(propertyName)
                 if prop is None:
                     raise Exception(
                         f'{entity} has no property {propertyName}!')

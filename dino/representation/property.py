@@ -51,7 +51,7 @@ class Property(Serializable):
         if self._dim is None:
             raise Exception(
                 f'You should specify the dimension of the effector parameter space for {self}')
-        self.space = Space(self.entity.spaceManager, self._dim)
+        self.space = Space(self.entity.manager, self._dim)
         self.space._property = self
 
     def _sid(self, serializer, raw=False):
@@ -157,7 +157,7 @@ class Effector(Property):
     def perform(self, action):
         if self.space is None:
             raise UnboundedProperty(
-                f"{self.name} of {self.entity.name} is not bounded to any space")
+                f"{self.name} of {self.entity} is not bounded to any space")
         parameters = action.projection(self.space)
         self.performPlain(parameters.valueOrdered)
 
@@ -199,7 +199,7 @@ class Observable(Property):
     def observe(self, formatParameters=None):
         if self.space is None:
             raise UnboundedProperty(
-                f"{self.name} of {self.entity.name} is not bounded to any space")
+                f"{self.name} of {self.entity} is not bounded to any space")
         return Observation(self.space, self.space.formatData(self.observePlain(),
                                                              formatParameters=formatParameters))
 
@@ -254,10 +254,17 @@ class FunctionObservable(Observable):
     A property provided by a given function
     """
 
-    def __init__(self, entity, name, function, absoluteName=None, discretization=None, visual=False):
+    def __init__(self, entity, name, function, absoluteName=None, discretization=None, visual=False, proxySpace=False):
         self.function = function
+
+        if proxySpace:
+            existingProperty = entity.propertyItem(name)
+
         Observable.__init__(
             self, entity, name, absoluteName=absoluteName, discretization=discretization, visual=visual)
+
+        if proxySpace and existingProperty:
+            self.space = existingProperty.space
 
     def _observePlain(self):
         return self.function(entity=self.entity, property=self)

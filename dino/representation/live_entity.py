@@ -48,8 +48,8 @@ class LiveEntity(Entity):
     DISCRETE_ACTIONS = False
     CAN_BE_DISCRETIZED = False
 
-    def __init__(self, kind, absoluteName='', disconnected=False, spaceManager=None):
-        super().__init__(kind, absoluteName, disconnected, spaceManager=spaceManager)
+    def __init__(self, kind, absoluteName='', disconnected=False, manager=None):
+        super().__init__(kind, absoluteName, disconnected, manager=manager)
         self.host = False
         self.hosting = None
         self.scheduledAction = False
@@ -87,88 +87,6 @@ class LiveEntity(Entity):
         if not name:
             return next(iter(self.hosts()), None)
         return next((host for host in self.hosts() if host.absoluteName == name), None)
-
-    @property
-    def discretizeStates(self):
-        return self.root._discretizeStates
-
-    @discretizeStates.setter
-    def discretizeStates(self, discretizeStates):
-        if discretizeStates == self._discretizeStates:
-            return
-        assert(self.root.CAN_BE_DISCRETIZED)
-        self._discretizeStates = discretizeStates
-        self._discretizationChanged(False, discretizeStates)
-
-    @property
-    def discretizeActions(self):
-        return self.root._discretizeActions
-
-    @discretizeActions.setter
-    def discretizeActions(self, discretizeActions):
-        if discretizeActions == self._discretizeActions:
-            return
-        assert(self.root.CAN_BE_DISCRETIZED)
-        self._discretizeActions = discretizeActions
-        self._discretizationChanged(True, discretizeActions)
-
-    def _discretizationChanged(self, action, discrete):
-        pass
-
-    @property
-    def discreteStates(self):
-        return self.discretizeStates or self.root.DISCRETE_STATES
-
-    @property
-    def discreteActions(self):
-        return self.discretizeActions or self.root.DISCRETE_ACTIONS
-
-    @property
-    def world(self):
-        # Supposed to be the root
-        return self.root
-    
-    @property
-    def engine(self):
-        return self.spaceManager.engine
-
-    def observables(self):
-        return [p for p in self.cascadingProperties() if p.observable()]
-
-    def actions(self):
-        actions = [p for p in self.cascadingProperties() if p.controllable()]
-        if self.discretizeActions:
-            actions = {(p, name): p.space.point(params)
-                       for p in actions for name, params in p.actions.items()}
-        return Ensemble(actions)
-
-    def observe(self, spaces=None, formatParameters=None):
-        spaces = spaces.convertTo(
-            self.spaceManager, kind=SpaceKind.BASIC) if spaces else None
-        if self.filterObservables:
-            obsSpaces = [x.space for x in self.filterObservables]
-            if not spaces:
-                spaces = obsSpaces
-            else:
-                spaces = [x for x in spaces if x in obsSpaces]
-
-        ys = []
-        # spaces = spaces if spaces else self.outcomeSpaces
-        for property in self.cascadingProperties():
-            if property.observable() and property.bounded:
-                y = property.observe(formatParameters=formatParameters)
-                if spaces is None or y.space in spaces:
-                    ys.append(y)
-        return Observation(*ys)
-
-    def observeFrom(self, spaces=None, formatParameters=None):
-        return self.world.observe(spaces=spaces, formatParameters=formatParameters)
-
-    def currentContext(self, dataset=None, spaces=None):
-        obs = self.observe(spaces=spaces)
-        if dataset:
-            obs = obs.convertTo(dataset)
-        return obs
 
     def _update(self, dt):
         pass

@@ -8,6 +8,7 @@ import numpy as np
 from exlab.interface.serializer import Serializable, Serializer
 from exlab.utils.text import colorText, Colors
 from exlab.utils.ensemble import Ensemble
+from exlab.utils.io import parameter
 
 from dino.data.data import Observation
 from dino.data.space import SpaceKind
@@ -33,26 +34,28 @@ class Entity(Serializable):
     number = 0
     indexes = {}
 
-    def __init__(self, kind, absoluteName='', disconnected=False, spaceManager=None, native=None, proxy=None):
+    def __init__(self, kind, absoluteName='', disconnected=False, manager=None):
         self.absoluteName = absoluteName
         self.kind = kind
 
-        self.proxy = proxy
+        # self.proxy = proxy
 
-        self._spaceManager = spaceManager
+        self._manager = manager
 
         self.disconnected = disconnected
         self._discretizeStates = False
         self._discretizeActions = False
 
-        if proxy:
-            native = proxy
-        self.native = native if native else self
+        self.native = self
+
+        # if proxy:
+        #     native = proxy
+        # self.native = native if native else self
 
         # Indexing
         self.index = Entity.number
-        Entity.number += 1
         self.indexKind = Entity.indexes.get(self.kind, 0)
+        Entity.number += 1
         Entity.indexes[self.kind] = self.indexKind + 1
 
         self._properties = {}
@@ -76,21 +79,19 @@ class Entity(Serializable):
         dict_ = serializer.serialize(
             self, ['kind', 'absoluteName', 'index', 'indexKind', 'parent', '_children', '_properties'])
         return dict_
-    
-    def convertTo(self, spaceManager=None, proxy=True):
-        spaceManager = spaceManager if spaceManager else self.spaceManager
-        return spaceManager.convertEntity(self, proxy=proxy)
-    
+
+    # Links and proxies
     def linkedTo(self, entity):
         return self.native == entity.native
+
+    def convertTo(self, manager=None):
+        manager = parameter(manager, self.manager)
+        return manager.convertEntity(self)
     
-    def createLinkedEntity(self, spaceManager, proxy=True):
+    def createLinkedEntity(self, manager, proxy=True):
         if self.parent:
-            parent = self.parent.convertTo(spaceManager)
-        if proxy:
-            entity = ProxyEntity(self, spaceManager=spaceManager)
-        else:
-            entity = Entity(self.kind, self.absoluteName, spaceManager=spaceManager, native=self)
+            parent = self.parent.convertTo(manager)
+        entity = manager.proxyCls(self, manager=manager)
         if self.parent:
             parent.addChild(entity)
         return entity
@@ -128,11 +129,11 @@ class Entity(Serializable):
         if self.parent:
             return self.parent.root
         return self
-    
+
     @property
-    def spaceManager(self):
-        return self.root._spaceManager
-    
+    def manager(self):
+        return self.root._manager
+
     def isRoot(self):
         return not self.parent and self.kind == 'root'
     
@@ -157,18 +158,14 @@ class Entity(Serializable):
 
     def _filterChild(self, filter_):
         if not filter_:
-            def filtered(child):
-                return True
+            filtered = lambda child: True
         if filter_[0] == '#':
-            def filtered(child):
-                return child.absoluteName == filter_[1:]
+            filtered = lambda child: child.absoluteName == filter_[1:]
         elif ':' in filter_:
             kind, index = filter_.split(':')
-            def filtered(child):
-                return child.kind == kind and child.indexKind == index
+            filtered = lambda child: child.kind == kind and child.indexKind == index
         else:
-            def filtered(child):
-                return child.kind == filter_
+            filtered = lambda child: child.kind == filter_
         return filtered
 
     # Properties and children
@@ -189,21 +186,16 @@ class Entity(Serializable):
     # Properties
     @property
     def _proxifiedProperties(self):
-        if self.proxy:
-            return self.proxy._properties
-        else:
-            return self._properties
+        return self._properties
 
     def addProperty(self, prop):
-        if self.proxy:
-            raise Exception('Cannot add a new property to a Proxy Entity!')
         self._properties[prop.name] = prop
 
     def removeProperty(self, prop):
         if prop.name in self._properties:
             del self._properties[prop.name]
 
-    def property(self, filter_=None):
+    def propertyItem(self, filter_=None):
         return (self.properties(filter_) + [None])[0]
 
     def properties(self, filter_=None, visual=None):
@@ -253,12 +245,40 @@ class Entity(Serializable):
     def observeVisualProperties(self):
         values = []
         for name, dim in self.visualPropertyNames():
-            prop = self.property(f'.{name}')
+            prop = self.propertyItem(f'.{name}')
             if prop:
                 values += prop.observePlain().tolist()
             else:
                 values += [0] * dim
         return values
+    
+    def observe(self, spaces=None, formatParameters=None):
+        spaces = spaces.convertTo(
+            self.manager, kind=SpaceKind.BASIC) if spaces else None
+        if self.filterObservables:
+            obsSpaces = [x.space for x in self.filterObservables]
+            if not spaces:
+                spaces = obsSpaces
+            else:
+                spaces = [x for x in spaces if x in obsSpaces]
+
+        ys = []
+        # spaces = spaces if spaces else self.outcomeSpaces
+        for property_ in self.cascadingProperties():
+            if property_.observable() and property_.bounded:
+                y = property_.observe(formatParameters=formatParameters)
+                if spaces is None or y.space in spaces:
+                    ys.append(y)
+        return Observation(*ys)
+
+    def observeFrom(self, spaces=None, formatParameters=None):
+        return self.world.observe(spaces=spaces, formatParameters=formatParameters)
+
+    def currentContext(self, dataset=None, spaces=None):
+        obs = self.observe(spaces=spaces)
+        if dataset:
+            obs = obs.convertTo(dataset)
+        return obs
     
     # Routines
     def activate(self):
@@ -287,6 +307,61 @@ class Entity(Serializable):
 
     def _deactivate(self):
         pass
+
+    # Discretization
+    @property
+    def discretizeStates(self):
+        return self.root._discretizeStates
+
+    @discretizeStates.setter
+    def discretizeStates(self, discretizeStates):
+        if discretizeStates == self._discretizeStates:
+            return
+        assert(self.root.CAN_BE_DISCRETIZED)
+        self._discretizeStates = discretizeStates
+        self._discretizationChanged(False, discretizeStates)
+
+    @property
+    def discretizeActions(self):
+        return self.root._discretizeActions
+
+    @discretizeActions.setter
+    def discretizeActions(self, discretizeActions):
+        if discretizeActions == self._discretizeActions:
+            return
+        assert(self.root.CAN_BE_DISCRETIZED)
+        self._discretizeActions = discretizeActions
+        self._discretizationChanged(True, discretizeActions)
+
+    def _discretizationChanged(self, action, discrete):
+        pass
+
+    @property
+    def discreteStates(self):
+        return self.discretizeStates or self.root.DISCRETE_STATES
+
+    @property
+    def discreteActions(self):
+        return self.discretizeActions or self.root.DISCRETE_ACTIONS
+
+    @property
+    def world(self):
+        # Supposed to be the root
+        return self.root
+
+    @property
+    def engine(self):
+        return self.manager.engine
+
+    def observables(self):
+        return [p for p in self.cascadingProperties() if p.observable()]
+
+    def actions(self):
+        actions = [p for p in self.cascadingProperties() if p.controllable()]
+        if self.discretizeActions:
+            actions = {(p, name): p.space.point(params)
+                       for p in actions for name, params in p.actions.items()}
+        return Ensemble(actions)
     
     # String
     def fullname(self):
@@ -316,7 +391,17 @@ class Entity(Serializable):
     
 
 class ProxyEntity(Entity):
-    def __init__(self, entity, spaceManager=None):
-        spaceManager = spaceManager if spaceManager else entity.spaceManager
+    def __init__(self, entity, manager=None):
+        manager = parameter(manager, entity.manager)
         super().__init__(entity.kind, entity.absoluteName,
-                         spaceManager=spaceManager, proxy=entity)
+                         manager=manager)
+
+        self.proxy = entity
+        self.native = entity.native
+    
+    @property
+    def _proxifiedProperties(self):
+        _properties = dict(self.proxy._properties)
+        _properties.update(self._properties)
+        return _properties
+

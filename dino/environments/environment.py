@@ -22,6 +22,7 @@ from dino.data.spacemanager import SpaceManager
 
 from dino.evaluation.evaluator import Evaluator
 
+from dino.representation.entity_manager import EntityManager
 from dino.representation.live_entity import LiveEntity
 from dino.representation.property import Property
 from dino.representation.state import State
@@ -40,7 +41,7 @@ from .scene import SceneSetup
 #     return DataManager.makeEnv(id_, scene, params)
 
 
-class Environment(SpaceManager):
+class Environment(SpaceManager, EntityManager):
     """
     Describes the environment for the agent in an experiment.
     Root entity of a world
@@ -58,7 +59,8 @@ class Environment(SpaceManager):
     def __init__(self, sceneCls=None, options={}):
         """
         """
-        SpaceManager.__init__(self, storesData=False, entityCls=LiveEntity, name='environment')
+        SpaceManager.__init__(self, 'environment', storesData=False)
+        EntityManager.__init__(self, 'environment', entityCls=LiveEntity)
         # self.name = options.get('name', 'Environment')
         self.experiment = None
 
@@ -110,12 +112,6 @@ class Environment(SpaceManager):
         d.attach_finder('property', self.findProperty)
         d.attach_finder('test', self.findTest)
         return d
-
-    def findEntity(self, name):
-        return self.world.cascadingChild(name)
-
-    def findProperty(self, name):
-        return self.world.cascadingProperty(name)
     
     def findTest(self, name):
         return next((test for test in self.tests if test.name == name), None)
@@ -227,20 +223,6 @@ class Environment(SpaceManager):
         return data
 
     # Entities
-    def agents(self):
-        return [host.hosting for host in self.world.hosts() if host.hosting]
-    
-    def scheduledActions(self, notNone=True):
-        if notNone:
-            return {agent: agent.scheduled for agent in self.agents() if agent.scheduled}
-        return {agent: agent.scheduled for agent in self.agents()}
-    
-    def countScheduledActions(self):
-        return len(self.scheduledActions())
-
-    def clear(self):
-        self.world.clearChildren()
-
     def reset(self):
         self._reset()
         if self.scene:

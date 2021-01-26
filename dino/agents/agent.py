@@ -50,14 +50,14 @@ class Agent(Module):
     PERFORMER_CLASS = Performer
 
     def __init__(self, host, dataset=None, performer=None, planner=None, options={}):
-        super().__init__('Agent', host.spaceManager)
+        super().__init__('Agent', host.manager)
         manage(self).attach_counter(AsyncCounter(self))
         self.logger.tag = 'agent'
 
         self.host = host
         self.host.hosting = self
 
-        self.environment = host.world.spaceManager
+        self.environment = host.world.manager
         self.assertDiscrete(self.environment)
 
         self.dataset = dataset

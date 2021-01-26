@@ -83,7 +83,7 @@ class PandaEnvironment(InternalEngine):
                         self.current_space = self.env.dataset.outcomeSpaces[self.env.dataset.outcomeSpaces.index(self.current_space) + 1]
                 elif event.type == pygame.MOUSEBUTTONUP:
                     # convert to local agent coordinates
-                    pos = self.property(self.current_space.property).convert_to_feature(pymunk.pygame_util.from_pygame(event.pos, self.screen))
+                    pos = self.propertyItem(self.current_space.property).convert_to_feature(pymunk.pygame_util.from_pygame(event.pos, self.screen))
                     self.experiment.exploit(pos, self.env.dataset.outcomeSpaces.index(self.current_space))'''
 
         # Draw stuff
