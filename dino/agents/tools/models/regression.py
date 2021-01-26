@@ -50,7 +50,7 @@ class RegressionModel(Model):
             #     precision = max(precision / 2, norm / 1.5)
             # TODO
             if inverse:
-                a0, y0, _, _, _, distance, distanceNormalized, _ = self.bestLocality(
+                a0, y0, _, _, _, distance, _, _ = self.bestLocality(
                     goal, context, contextColumns=contextColumns, dontMove=dontMove, adaptContext=adaptContext)
             else:
                 raise Exception('To check')

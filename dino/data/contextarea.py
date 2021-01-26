@@ -185,7 +185,7 @@ class ContextSpatialization(Serializable):
                 
                 bestFullComp = max(fullCompAllFalse, fullCompAllTrue)
 
-            for best, deletion, verb in ((bestAdd, False, 'add'), (bestDel, False, 'del')):
+            for best, deletion, _ in ((bestAdd, False, 'add'), (bestDel, False, 'del')):
                 if best:
                     p, i, newColumns = best
                     # print(f'Should {verb} context column {i} (+{p}) around {point}')

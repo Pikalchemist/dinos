@@ -372,7 +372,7 @@ class Planning(object):
         return self.path, finalState, minDistance
 
     def searchWithCurrentContext(self, baseMove, context):
-        riskyMove, move, safeMove, nearestMove, _ = self.findBestMove(baseMove, context)
+        riskyMove, move, safeMove, _, _ = self.findBestMove(baseMove, context)
 
         maxIncorrectMoveDistance = 0.01 * self.space.maxDistance * self.model.limitMoves
         maxNoMoveDistance = 0.15 * self.space.maxDistance * self.model.limitMoves
