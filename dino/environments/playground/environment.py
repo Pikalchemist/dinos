@@ -22,15 +22,3 @@ class PlaygroundEnvironment(Environment):
 
     # def __init__(self, scene=None, options={}):
     #     super().__init__(scene, options)
-
-    # def registerScenes(self):
-    #     self.addScene(ObstructedRoomScene(), default=True)
-
-    #     self.addScene(EmptyRoomScene())
-    #     self.addScene(EmptyRoomOmniScene())
-
-    #     self.addScene(OneObjectScene())
-    #     self.addScene(MultiObjectsScene())
-
-    #     self.addScene(Obstructed1DRoomScene())
-    #     self.addScene(SpotRoomScene())

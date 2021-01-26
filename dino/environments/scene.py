@@ -32,6 +32,7 @@ class Challenge(object):
 
 class SceneSetup(object):
     CLASS_ENDNAME = 'Scene'
+    environmentClass = None
 
     def __init__(self, environment):
         self.environment = environment
@@ -40,6 +41,10 @@ class SceneSetup(object):
         self.tests = []
         self.testIds = {}
         self._configure()
+    
+    @classmethod
+    def init(cls):
+        return cls.environmentClass(cls)
     
     @property
     def world(self):
@@ -57,7 +62,7 @@ class SceneSetup(object):
         return name
 
     def __repr__(self):
-        return f'SceneSetup {self.__class__.__name__} for env {self.world.name}'
+        return f'SceneSetup {self.__class__.__name__} for env {self.environment.envname}'
 
     def _configure(self):
         pass

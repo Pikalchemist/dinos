@@ -89,17 +89,18 @@ class Environment(SpaceManager):
 
         # Scenes
         self.scene = None
-        self.defaultScene = self.defaultSceneCls
+        self.sceneClass = self.defaultSceneCls
 
-        if isinstance(sceneCls, SceneSetup):
-            self.registerScene(sceneCls, default=True)
+        if issubclass(sceneCls, SceneSetup):
+            self.registerScene(sceneCls)
+            self.sceneClass = sceneCls
         elif isinstance(sceneCls, str):
-            self.defaultScene = self.findScene(sceneCls)
+            self.sceneClass = self.findScene(sceneCls)
         elif 'scene' in options:
-            self.defaultScene = self.findScene(options['scene'])
+            self.sceneClass = self.findScene(options['scene'])
 
-        if self.defaultScene:
-            self.setupScene(self.defaultScene)
+        if self.sceneClass:
+            self.setupScene(self.sceneClass)
     
     def deserializer(self):
         d = Serializer()
@@ -153,6 +154,7 @@ class Environment(SpaceManager):
             cls.defaultSceneCls = sceneCls
         if sceneCls not in cls.sceneClasses:
             cls.sceneClasses.append(sceneCls)
+            sceneCls.environmentClass = cls
 
     # def addSceneAndSetup(self, scene, overwrite=True):
     #     self.addScene(scene)

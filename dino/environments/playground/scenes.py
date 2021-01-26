@@ -13,78 +13,20 @@ from .agent import Agent
 from .wall import Wall
 
 
-class EmptyRoomScene(SceneSetup):
-    DESCRIPTION = 'Just a mobile robot with no obstacle and no other objects.\n' +\
-                  'Use: learning how to move.'
+class BaseScene(SceneSetup):
     RESET_ITERATIONS = 10
 
-    def _setup(self):
+    # Setup
+    def _baseSetup(self):
         self.iterationReset = 0
 
-        # Add agent
-        self.world.addChild(Agent((300, 300), name='Agent'))
-
-        # Add cylinders
-        self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
-        # self.world.addChild(Cylinder((500, 300), name='Cylinder2'))
-        self.world.addChild(Cylinder((400, 500), name='Cylinder3', color=(240, 0, 0), movable=False))
-        # self.world.addChild(Cylinder((300, 500), name='Cylinder4', color=(240, 0, 0), movable=False))
-
-        self.world.addChild(Button((50, 50), name='Button1'))
-        # self.world.addChild(Button((500, 500), name='Button2'))
-
-        # self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
-        # self.world.addChild(Cylinder((500, 300), name='Cylinder2', color=(128, 224, 0)))
-    
-
-        # self.agent = Agent((200, 400), radius=30, name='agent',
-        #                    omni=True, xydiscretization=self.world.xydiscretization)
-        # self.world.addEntity(self.agent)
-
-        # Walls
-        # w = 5
-        # self.world.addChild(Wall((270.0, 200.0), (270.0, 400.0), w))
-        # self.walls = [Wall((50.0, 50.0), (550.0, 50.0), w),
-        #               Wall((550.0, 50.0), (550.0, 500.0), w),
-        #               Wall((550.0, 500.0), (50.0, 500.0), w),
-        #               Wall((50.0, 500.0), (50.0, 50.0), w),
-        #               Wall((285.0, 380.0), (315.0, 380.0), w),
-        #               Wall((285.0, 410.0), (315.0, 410.0), w)]
-        # self.walls = self.walls[:-2]
-        # for wall in self.walls:
-        #     self.world.addChild(wall)
-
-    def _setupTests(self):
-        boundaries = [(200, 400), (200, 400)]
-        self.addTest(UniformGridTest('agent-moving', self.world.cascadingProperty(
-            'Agent.position').space, boundaries, numberByAxis=2, relative=False))
-
-        self.addTest(PointsTest('cylinder1-moving', self.world.cascadingProperty(
-            '#Cylinder1.position').space, [[-25, 0]], relative=True))
-
-    def setupEpisode(self, config, forceReset=False):
+    # Resets
+    def countReset(self, forceReset=False):
         self.iterationReset += 1
-        if config.evaluating:
-            self.world.child('Agent').body.position = (300, 300)
-            self.world.child('#Cylinder1').body.position = (200, 250)
-
-        elif self.iterationReset >= self.RESET_ITERATIONS or forceReset:
+        if self.iterationReset >= self.RESET_ITERATIONS or forceReset:
             self.iterationReset = 0
-            self.world.child('Agent').body.position = (300, 300)
-            if self.world.child('#Cylinder1'):
-                pos = self.world.child('Agent').body.position
-
-                distance = 40. if self.environment.iteration < 100 else 120.
-
-                obj = self.world.child('#Cylinder1').body
-                if self.world.child('#Cylinder2'):
-                    if random.uniform(0, 1) < 0.5:
-                        obj2 = obj
-                        obj = self.world.child('#Cylinder2').body
-                    else:
-                        obj2 = self.world.child('#Cylinder2').body
-                    obj2.position = pos + Vec2d(240. + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
-                obj.position = pos + Vec2d(distance + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
+            return True
+        return False
 
     def setupIteration(self, config):
         pass
@@ -98,4 +40,178 @@ class EmptyRoomScene(SceneSetup):
         #     obj.body.position = obj.coordsInit
 
 
-PlaygroundEnvironment.registerScene(EmptyRoomScene, True)
+class EmptyScene(BaseScene):
+    DESCRIPTION = 'Just a mobile robot with no obstacle and no other objects.\n' +\
+                  'Use: learning how to move.'
+
+    # Setup
+    def _setup(self):
+        self._baseSetup()
+
+        # Add agent
+        self._setupAgent()
+
+        # Add cylinders
+        # self.world.addChild(Cylinder((400, 500), name='Cylinder3', color=(240, 0, 0), movable=False))
+        # self.world.addChild(Cylinder((300, 500), name='Cylinder4', color=(240, 0, 0), movable=False))
+
+        # self.world.addChild(Button((50, 50), name='Button1'))
+        # self.world.addChild(Button((500, 500), name='Button2'))
+
+        # self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
+        # self.world.addChild(Cylinder((500, 300), name='Cylinder2', color=(128, 224, 0)))
+    
+
+        # self.agent = Agent((200, 400), radius=30, name='agent',
+        #                    omni=True, xydiscretization=self.world.xydiscretization)
+        # self.world.addEntity(self.agent)
+    
+    def _setupAgent(self):
+        self.world.addChild(Agent((300, 300), name='Agent'))
+
+    # Tests
+    def _setupTests(self):
+        self._testAgentMoving()
+
+    def _testAgentMoving(self):
+        boundaries = [(200, 400), (200, 400)]
+        self.addTest(UniformGridTest('agent-moving', self.world.cascadingProperty(
+            'Agent.position').space, boundaries, numberByAxis=2, relative=False))
+
+    # Resets
+    def setupEpisode(self, config, forceReset=False):
+        if self.countReset(forceReset):
+            self._resetAgent()
+    
+    def setupPreTest(self, test):
+        self._resetAgent()
+    
+    def _resetAgent(self):
+        self.world.child('Agent').body.position = (300, 300)
+
+
+class RoomWithWallsScene(EmptyScene):
+    DESCRIPTION = 'Just a mobile robot with walls and no other objects.\n' +\
+                  'Use: learning how to move.'
+
+    # Setup
+    def _setup(self):
+        self._baseSetup()
+
+        self._setupAgent()
+        self._setupWalls()
+
+    def _setupWalls(self):
+        w = 5
+        self.world.addChild(Wall((270.0, 200.0), (270.0, 400.0), w))
+        self.walls = [Wall((50.0, 50.0), (550.0, 50.0), w),
+                      Wall((550.0, 50.0), (550.0, 500.0), w),
+                      Wall((550.0, 500.0), (50.0, 500.0), w),
+                      Wall((50.0, 500.0), (50.0, 50.0), w),
+                      Wall((285.0, 380.0), (315.0, 380.0), w),
+                      Wall((285.0, 410.0), (315.0, 410.0), w)]
+        self.walls = self.walls[:-2]
+        for wall in self.walls:
+            self.world.addChild(wall)
+
+    # Tests
+    def _testAgentMoving(self):
+        boundaries = [(200, 400), (200, 400)]
+        self.addTest(UniformGridTest('agent-moving', self.world.cascadingProperty(
+            'Agent.position').space, boundaries, numberByAxis=2, relative=False))
+
+
+class OneCylinderScene(EmptyScene):
+    DESCRIPTION = 'Just a mobile robot with no obstacle and no other objects.\n' +\
+                  'Use: learning how to move.'
+
+    # Setup
+    def _setup(self):
+        self._baseSetup()
+
+        self._setupAgent()
+
+        # Add cylinders
+        self._setupCylinder1()
+
+        # self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
+        # self.world.addChild(Cylinder((500, 300), name='Cylinder2'))
+        # self.world.addChild(Cylinder((400, 500), name='Cylinder3', color=(240, 0, 0), movable=False))
+        # self.world.addChild(Cylinder((300, 500), name='Cylinder4', color=(240, 0, 0), movable=False))
+
+        # self.world.addChild(Button((50, 50), name='Button1'))
+        # self.world.addChild(Button((500, 500), name='Button2'))
+
+        # self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
+        # self.world.addChild(Cylinder((500, 300), name='Cylinder2', color=(128, 224, 0)))
+
+        # self.agent = Agent((200, 400), radius=30, name='agent',
+        #                    omni=True, xydiscretization=self.world.xydiscretization)
+        # self.world.addEntity(self.agent)
+
+    def _setupCylinder1(self):
+        self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
+
+    def _setupCylinder2(self):
+        self.world.addChild(Cylinder((500, 300), name='Cylinder2'))
+
+    def _setupCylinder3Fixed(self):
+        self.world.addChild(Cylinder((400, 500), name='Cylinder3', color=(240, 0, 0), movable=False))
+
+    # Tests
+    def _setupTests(self):
+        self._testAgentMoving()
+        self._testMovingCylinder()
+
+    def _testMovingCylinder(self):
+        self.addTest(PointsTest('cylinder1-moving', self.world.cascadingProperty(
+            '#Cylinder1.position').space, [[-25, 0]], relative=True))
+
+    # Resets
+    def setupEpisode(self, config, forceReset=False):
+        if self.countReset(forceReset):
+            self._resetAgent()
+            self._resetCylinders()
+
+    def setupPreTest(self, test):
+        self._resetAgent()
+        self.world.child('#Cylinder1').body.position = (200, 250)
+        if self.world.child('#Cylinder2'):
+            self.world.child('#Cylinder2').body.position = (300, 150)
+
+    def _resetCylinders(self):
+        pos = self.world.child('Agent').body.position
+
+        distance = 40. if self.environment.iteration < 100 else 120.
+
+        obj = self.world.child('#Cylinder1').body
+        if self.world.child('#Cylinder2'):
+            if random.uniform(0, 1) < 0.5:
+                obj2 = obj
+                obj = self.world.child('#Cylinder2').body
+            else:
+                obj2 = self.world.child('#Cylinder2').body
+            obj2.position = pos + Vec2d(240. + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
+        obj.position = pos + Vec2d(distance + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
+
+
+class OneCylinderPlusFixedScene(OneCylinderScene):
+    DESCRIPTION = 'Just a mobile robot with no obstacle and no other objects.\n' +\
+                  'Use: learning how to move.'
+
+    # Setup
+    def _setup(self):
+        self._baseSetup()
+
+        self._setupAgent()
+
+        # Add cylinders
+        self._setupCylinder1()
+        self._setupCylinder3Fixed()
+
+
+PlaygroundEnvironment.registerScene(EmptyScene, True)
+PlaygroundEnvironment.registerScene(RoomWithWallsScene)
+PlaygroundEnvironment.registerScene(OneCylinderScene)
+PlaygroundEnvironment.registerScene(OneCylinderPlusFixedScene)
+
