@@ -329,6 +329,11 @@ class Space(Serializable):
     def plainZero(self):
         self._validate()
         return np.array([0.] * self.dim)
+    
+    def randomPoint(self, relative=None):
+        d = Action(self, [random.uniform(minb, maxb) for minb, maxb in self.bounds])
+        d.setRelative(relative)
+        return d
 
     def plainRandomPoint(self):
         return np.array([random.uniform(minb, maxb) for minb, maxb in self.bounds])

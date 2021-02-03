@@ -23,6 +23,7 @@ from dino.utils.move import MoveConfig
 
 from dino.agents.tools.datasets.dataset import Dataset
 from dino.agents.tools.strategies.strategy_set import StrategySet
+from dino.environments.priors.maps.auto import Mapper
 
 
 class Learner(Agent):
@@ -30,14 +31,14 @@ class Learner(Agent):
 
     DATASET_CLASS = Dataset
 
-    def __init__(self, environment, dataset=None, performer=None, planner=None, options={}):
+    def __init__(self, host, dataset=None, performer=None, planner=None, options={}):
         """
         dataset Dataset: dataset of the agent
         strategies Strategy list: list of learning strategies available to the agent
-        env Environment: environment of the experiment
+        env Environment: host of the experiment
         """
         dataset = parameter(dataset, self.DATASET_CLASS())
-        super().__init__(environment, dataset=dataset, performer=performer,
+        super().__init__(host, dataset=dataset, performer=performer,
                          planner=planner, options=options)
         self.dataset.attachLearner(self)
 
@@ -46,6 +47,8 @@ class Learner(Agent):
 
         self.trainStrategies = StrategySet(agent=self)
         # self.reachStrategies.append(reachStrategies if reachStrategies else None)#AutonomousExploration(self))
+
+        self.featureMap = Mapper.get(self.environment.__class__)
 
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)

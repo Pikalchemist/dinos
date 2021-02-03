@@ -220,8 +220,8 @@ class MultiColDataSpace(MultiColSpace, DataSpace):
 
     def _postValidate(self):
         DataSpace._postValidate(self)
-        if random.uniform(0, 1) < 0.1:
-            self._updateSpaceWeights()
+        # if random.uniform(0, 1) < 0.1:
+        self._updateSpaceWeights()
 
 
 class MultiRowDataSpace(DataSpace):
@@ -334,5 +334,5 @@ class MultiRowDataSpace(DataSpace):
 
     def _postValidate(self):
         DataSpace._postValidate(self)
-        if random.uniform(0, 1) < 0.1:
-            self._updateSpaceWeights()
+        # if random.uniform(0, 1) < 0.1:
+        self._updateSpaceWeights()

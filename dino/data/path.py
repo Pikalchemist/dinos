@@ -183,6 +183,7 @@ class PathNode(object):
         self.state = state
 
         self.failures = 0
+        self.cantConnectToGoal = False
 
         self.context = None
         self.execution = None

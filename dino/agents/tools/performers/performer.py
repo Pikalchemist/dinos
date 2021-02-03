@@ -143,7 +143,7 @@ class Performer(Module):
                 if node.absPos:
                     currentPos, derive, currentState = self.checkStatus(node, node.parent.absPos)
                     self.logger.debug(
-                        f'Iter (d{depth}) {i}: pre execution check: should be at {node.parent.absPos} and currently at {currentPos}, diff {derive:.4f}\n{currentState}')
+                        f'Iter (d{depth}) {i}: pre execution check: should be at {node.parent.absPos} and currently at {currentPos}, diff {derive:.4f}\nCurrent Pre State:\n{currentState.context()}')
 
                 if node.execution:
                     observationsPrevious = self.agent.observe(formatParameters=formatParameters)
@@ -155,9 +155,17 @@ class Performer(Module):
                     differences = observations.difference(observationsPrevious)
                     observationsPrevious = None
                 else:
+                    self.logger.debug(f'Iter (d{depth}) {i}:\n{node.model.npForward(node.action, currentState.context())}')
                     event, differences, observationsPrevious = self.performAction(
                         node, observationsPrevious, formatParameters, config)
                     results.append(event)
+                
+                # print('=== ===')
+                # print(node.state)
+                # print(self.environment.state().context())
+
+                self.logger.debug(
+                    f'Iter (d{depth}) {i}:\n{node.ty0} Estimated state:\n{node.state.context()}\nCurrent New State:\n{self.environment.state().context()}')
                 
                 # self.logger.info(f'Iter (d{depth}) {i}: performing {node.action}')
 

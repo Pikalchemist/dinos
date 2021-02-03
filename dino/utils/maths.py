@@ -110,29 +110,28 @@ def multivariateRegression(x, y, x0, columns=None):
         x = x[:, columns]
         x0 = np.array(x0)[columns]
     try:
-        # ransac = linear_model.RANSACRegressor()
-        # ransac.fit(x, y)
-        # return ransac.predict([x0])[0]
         return operations.multivariateRegression(x, y, x0)
     except ValueError as e:
         logging.critical(f"Regression failed: y is {y.shape[0]}x{y.shape[1]}d, X is {x.shape[0]}x{x.shape[1]}d and goal is {len(x0)}d ({e})")
         # return operations.multivariateRegression(x, y, x0)
+    except LinAlgError as e:
+        return operations.multivariateRegression(x[:1 + len(x) // 2], y[:1 + len(x) // 2], x0)
 
 
-def multivariateRegressionError(x, y, x0, testSetX=None, testSetY=None, columns=None):
+def multivariateRegressionError(x, y, x0, testSetX=None, testSetY=None, columns=None, weights=None):
     if columns is not None:
         x = x[:, columns]
         x0 = np.array(x0)[columns]
+    if weights is not None:
+        if columns is not None:
+            weights = weights[columns]
+        x = x * weights
+        x0 = x0 * weights
     # if len(x.shape) == 2:
     #     plt.figure()
     #     plt.scatter(x[:, 0], x[:, 1])
     #     plt.scatter(y[:, 0], y[:, 1])
     try:
-        # ransac = linear_model.RANSACRegressor()
-        # ransac.fit(x, y)
-        # # return ransac.predict([x0])[0], 1.-ransac.score(x, y)
-        # return ransac.predict([x0])[0], 1.-ransac.score(x[ransac.inlier_mask_], y[ransac.inlier_mask_])
-
         return operations.multivariateRegressionError(x, y, x0)
     except ValueError as e:
         logging.critical(f"Regression failed: y is {y.shape[0]}x{y.shape[1]}d, X is {x.shape[0]}x{x.shape[1]}d and goal is {len(x0)}d ({e})")

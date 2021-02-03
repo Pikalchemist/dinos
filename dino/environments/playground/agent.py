@@ -51,8 +51,9 @@ class Agent(Cylinder):
 
     @staticmethod
     def lidarFromPos(ownShape, physics, position, onlyX):
+        # Distances[0 E, 1 SE, 2 S, 3 SW, 4 W, 5 NW, 6 N, 7 NE]
         number = 2 if onlyX else 8
-        maxdist = 100
+        maxdist = 70
         width = 10
 
         dirs = np.linspace(0, 2*np.pi, number + 1)[:-1]

@@ -52,13 +52,11 @@ class PyMunkFeatureMap(FeatureMap):
         self.physics.gravity = (0.0, 0.0)
         self.physics.damping = 0.1
 
-    def update(self, values):
-        pass
-
     def image(self):
         self.physics.step(0.0001)
         surface = pygame.Surface((800, 600))
         options = pymunk.pygame_util.DrawOptions(surface)
+        pymunk.pygame_util.positive_y_is_up = False
         self.physics.debug_draw(options)
 
         pil_string_image = pygame.image.tostring(surface, "RGBA", False)

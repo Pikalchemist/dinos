@@ -1,3 +1,4 @@
+import math
 import random
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
@@ -12,21 +13,27 @@ from . import operations
 class ContextSpatialization(Serializable):
     MAX_AREAS = 100
     NN_NUMBER = 10
-    MINIMUM_POINTS = 100
-    THRESHOLD_ADD = 0.05
-    THRESHOLD_DEL = -0.02
+    CENTER_RADIUS = 0.25
+    MINIMUM_POINTS = 300
+    THRESHOLD_ADD = 0.01
+    THRESHOLD_DEL = 0.005
     THRESHOLD_RESET = 0.05
+    THRESHOLD_VALID = 0.5
+    THRESHOLD_CANT_CREATE = 0.1
+    MIN_DISTANCE_CENTERS = 0.05
 
     def __init__(self, model, space, boolean=False):
         self.model = model
         self.space = space
         self.evaluatedSpace = self.model.contextSpace
+        self.dim = self.evaluatedSpace.dim
         self.boolean = boolean
-        self.resetAreas()
-
+    
+        self.resetAreas(False)
+    
     def _serialize(self, serializer):
         dict_ = serializer.serialize(
-            self, ['areas', 'stability'])
+            self, ['number', 'data', 'relevances'])
         return dict_
 
     @classmethod
@@ -39,11 +46,361 @@ class ContextSpatialization(Serializable):
         super()._postDeserialize(dict_, serializer)
         serializer = serializer.clone(values={'.area.manager': self})
 
-        self.stability = dict_.get('stability', 0)
-        for areaDict in dict_.get('areas', []):
-            area = serializer.deserialize(areaDict)
-            self._addArea(area)
+        self.number = serializer.deserialize(dict_.get('number', []))
+        self.data = serializer.deserialize(dict_.get('data', []))
+        self.relevances = serializer.deserialize(dict_.get('relevances', []))
+
+    @property
+    def dataset(self):
+        return self.model.dataset
     
+    # def continueFrom(self, cs):
+    #     for area in cs.areas:
+    #         self._addArea(area.cloneTo(self))
+
+    def _addArea(self, column, point, relevant):
+        if self.number[column] >= self.MAX_AREAS:
+            return
+            # self.data[column, :-1, :] = self.data[column, 1:, :]
+            # self.relevances[column, :-1] = self.relevances[column, 1:]
+
+        self._updateArea(column, point, relevant, self.number[column])
+        self.number[column] += 1
+
+        # self.findAllPointAreas()
+        self.model.invalidateCompetences()
+    
+    def _updateArea(self, column, point, relevant, index):
+        if index == 0:
+            return
+
+        self.data[column, index, :] = point.npPlain()
+        self.relevances[column, index] = relevant
+
+        self.model.invalidateCompetences()
+
+    # def _removeArea(self, area):
+    #     column = area.column
+    #     index = self.areas[column].index(area)
+    #     self.centers[column, index:-1, :] = self.centers[column, index+1:, :]
+    #     self.areas[column].remove(area)
+
+    #     # self.findAllPointAreas()
+    #     self.model.invalidateCompetences()
+
+    def resetAreas(self, defaultRelevance=False):
+        self.number = np.ones(self.dim, dtype=np.int)
+        self.data = np.zeros((self.dim, self.MAX_AREAS, self.space.dim))
+        self.relevances = np.full((self.dim, self.MAX_AREAS), defaultRelevance, dtype=np.bool)
+
+        self.model.invalidateCompetences()
+    
+    def allTrue(self):
+        self.resetAreas(True)
+
+    def allFalse(self):
+        self.resetAreas(False)
+    
+    def _findAreaForOneColumn(self, point, column, space, projection=False):
+        # return 0, math.inf
+
+        # HARDCODED
+        if projection:
+            point = point.projection(parameter(space, self.space))
+        if point.norm() < 0.01:
+            return 0, math.inf
+        point = point.plain()
+        direction = np.arctan2(point[1], point[0]) / np.math.pi * 180.
+        col = int(np.round(direction / 45)) % 8
+        colUp = int(np.ceil(direction / 45)) % 8
+        colDown = int(np.floor(direction / 45)) % 8
+        if abs(col - column) <= 1 or abs(col - column) >= 7:
+            return 1, math.inf
+        # if column in [colUp, colDown]:
+        #     return 1, math.inf
+        else:
+            return 0, math.inf
+        # END HARDCODED
+
+        if self.number[column] == 1:
+            return 0, math.inf
+
+        if projection:
+            point = point.projection(parameter(space, self.space))
+        nearest, d = operations.nearestNeighborsFromDataContiguous(self.data[column, 1:self.number[column]], point.npPlain())
+        if d[0] > self.space.maxDistance * self.CENTER_RADIUS:
+            return 0, math.inf
+        return nearest[0] + 1, d[0]
+
+    def findAreaForOneColumn(self, point, column, space=None):
+        return self._findAreaForOneColumn(point, column, space, True)[0]
+
+    def findAreaForAllColumns(self, point, space=None):
+        point = point.projection(parameter(space, self.space))
+        return [self._findAreaForOneColumn(point, column, space)[0] for column in range(self.dim)]
+    
+    def findAreaForAllColumnsDistances(self, point, space=None):
+        point = point.projection(parameter(space, self.space))
+        r = [self._findAreaForOneColumn(point, column, space) for column in range(self.dim)]
+        return [item[0] for item in r], [item[1] for item in r]
+    
+    def columns(self, point, space=None):
+        point = point.projection(parameter(space, self.space))
+        relevances = np.array([False, True])
+        return np.array([relevances[self._findAreaForOneColumn(point, column, space)[0]] for column in range(self.dim)])
+        # return np.array([self.relevances[column, self._findAreaForOneColumn(point, column, space)[0]] for column in range(self.dim)])
+    
+    def columnsAreas(self, areas):
+        return np.array([self.relevances[column, area] for column, area in enumerate(areas)])
+    
+    def findAllAreasForColumn(self, column):
+        if self.number[column] == 1:
+            return [0] * self.space.getData().shape[0]
+
+        nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(self.data[column, 1:self.number[column]])
+        data = self.space.getData()
+        dists, indices = nbrs.kneighbors(data)
+        dists, indices = dists.flatten(), indices.flatten() + 1
+        indices[dists > self.space.maxDistance * self.CENTER_RADIUS] = 0
+        return indices
+    
+    def update(self, point):
+        self.addPoint(point)
+        self.addPoint(self.space.randomPoint())
+
+    def addPoint(self, point):
+        return
+        # if self.space.number < self.MINIMUM_POINTS:
+        #     return
+
+        point = point.projection(self.space)
+        nearest, _ = self.space.nearest(point, n=self.NN_NUMBER)
+        # id_ = nearest[0]
+
+        bestAdd = ()
+        bestDel = ()
+
+        # print('---')
+        print(point)
+        # print(c)
+        # bestAdd = ()
+        # bestDel = ()
+        # print(point)
+
+        areas, distances = self.findAreaForAllColumnsDistances(point)
+
+        columns = np.arange(self.evaluatedSpace.dim)
+        # np.random.shuffle(columns)
+        # n = random.randint(1, min(1 + int(self.evaluatedSpace.dim * 0.4), 3))
+        # columns = columns[:n]
+
+        noiseMargin = 0.005
+
+        errors = self.model.forwardErrors(onlyIds=nearest, precise=True)
+        c = self.model.competence(onlyIds=nearest, precise=True)
+
+        # print(columns)
+        checkDeletion = False
+        currentColumns = self.columnsAreas(areas)
+        if np.any(currentColumns) and random.uniform(0, 1) < 0.5:
+            checkDeletion = True
+        print(currentColumns)
+        for column in columns:
+            probality = 2.  # max(0.05, np.exp(-stability * 0.1))
+
+            # c = None
+            if currentColumns[column] == checkDeletion and random.uniform(0, 1) < probality:
+                # print(nearest)
+                # print(self.space.getData(nearest))
+                # print(self.model.outcomeSpace.getData(nearest))
+                # print(currentColumns)
+                # print(self.evaluatedSpace.getData(nearest)[:, currentColumns])
+                # if c is None:
+
+                # print(c)
+
+                newColumns = np.copy(currentColumns)
+                newColumns[column] = not newColumns[column]
+
+                newColumnsOverwrite = np.full_like(currentColumns, True)
+                newColumnsOverwrite[column] = False
+                # print(newColumns)
+                # print(self.evaluatedSpace.getData(nearest)[:, newColumns])
+                newErrors = self.model.forwardErrors(onlyIds=nearest, contextColumns=newColumns, precise=True, contextColumnsOverwrite=newColumnsOverwrite)
+                nc = self.model.competence(onlyIds=nearest, contextColumns=newColumns, precise=True, contextColumnsOverwrite=newColumnsOverwrite)
+
+                progress = -(newErrors - errors)
+                progress = np.sign(progress) * (np.clip(np.abs(progress) - noiseMargin, 0., None))
+                meanProgress = np.mean(progress)
+                meanRegression = np.percentile(progress, 10)
+                pc = nc - c
+                progressValue = meanProgress + meanRegression + pc * 0.02
+
+                print(f'{column}={newColumns[column]} ==== {c}+{progressValue} ({meanRegression} {meanRegression} {pc})')
+                for error, nerror, pr, ptx, ctx in zip(errors, newErrors, progress, self.space.getData(nearest), self.evaluatedSpace.getData(nearest)):
+                    print(f'{ptx} | {ctx[newColumns]} -> {error:.3f}->{nerror:.3f} {pr:.3f}')
+                # print(progressValue)
+                # addition = newColumns[column]
+
+                if not checkDeletion and progressValue >= self.THRESHOLD_ADD and (not bestAdd or progressValue > bestAdd[0]):
+                    bestAdd = (progressValue, column, newColumns)
+                elif checkDeletion and progressValue >= self.THRESHOLD_DEL and (not bestDel or progressValue > bestDel[0]):
+                    bestDel = (progressValue, column, newColumns)
+
+                # registerColumns = None
+                # if (addition and p >= self.THRESHOLD_ADD) or (not addition and p >= self.THRESHOLD_DEL):
+                #     registerColumns = newColumns
+                # # else:
+                # #     registerColumns = currentColumns
+                # if registerColumns is not None:
+                #     canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
+                #     print(f'Create new columns for {column}: {registerColumns[column]} around {point.plain()} {p}')
+
+                #     if canCreateNew:
+                #         self._addArea(column, point, registerColumns[column])
+                #     else:
+                #         self._updateArea(column, point, registerColumns[column], areas[column])
+
+            # if (bestAdd or bestDel) and not fullCompAllFalse:
+            #     columnsFalse = np.full(self.evaluatedSpace.dim, False)
+            #     fullCompAllFalse = self.model.competence(
+            #         precise=True, contextColumns=columnsFalse)
+
+            #     columnsTrue = np.full(self.evaluatedSpace.dim, True)
+            #     fullCompAllTrue = self.model.competence(
+            #         precise=True, contextColumns=columnsTrue)
+                
+            #     bestFullComp = max(fullCompAllFalse, fullCompAllTrue)
+
+        for best, deletion, verb in ((bestAdd, False, 'add'), (bestDel, True, 'del')):
+            if best:
+                progressValue, column, newColumns = best
+                print(f'Should {verb} context column {column} (+{progressValue:.2f}) around {point}')
+
+                canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
+                print(f'Create new columns for {column}: {newColumns[column]} around {point.plain()} +{progressValue} new: {canCreateNew}')
+
+                if canCreateNew:
+                    self._addArea(column, point, newColumns[column])
+                else:
+                    self._updateArea(column, point, newColumns[column], areas[column])
+
+
+        # for best, deletion, verb in ((bestAdd, False, 'add'), (bestDel, False, 'del')):
+        #     if best:
+        #         p, column, newColumns = best
+        #         print(f'Should {verb} context column {column} ({c:.2f}+{p:.2f}) around {point}')
+        #         newArea = None
+
+        #         area = areas[column]
+        #         # fullComp = self.model.competence(precise=True)
+        #         canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
+        #         if not area.default and area.attempt(currentColumns, newColumns, deletion, canCreateNew):
+        #             print('Updating current area')
+        #             # previousUsed = area.used
+        #             area.used = newColumns[column]
+        #         else:
+        #             if not canCreateNew:
+        #                 print('To close!')
+        #                 continue
+        #             print('Creating a new area')
+        #             newArea = ContextArea(self, point, column, newColumns[column])
+        #             self._addArea(newArea)
+
+        #         # newFullComp = self.model.competence(precise=True)
+        #         # print(f'Variation: {newFullComp - fullComp}')
+        #         # if newFullComp < fullComp * self.THRESHOLD_VALID:  # bestFullComp - self.THRESHOLD_RESET:
+        #         #     print('Reverting...')
+        #         #     if newArea:
+        #         #         self._removeArea(newArea)
+        #         #     else:
+        #         #         area.used = previousUsed
+        #         #     currentColumns = newColumns
+        #         # else:
+        #         area.stability = 0
+    
+    # Visual
+    def visualizeAreaColumn(self, column=0, options={}):
+        g = Graph(title=f'Context areas from {self.space} for column {column}', options=options)
+
+        # All points
+        areas = self.findAllAreasForColumn(column)
+        points = self.space.getData()
+
+        for relevant in (True, False):
+            data = points[np.argwhere(self.relevances[column, areas] == relevant).flatten(), :]
+            if len(data) > 0:
+                g.scatter(data, label=relevant, color=('orange' if relevant else 'gray'))
+
+        # Centroids
+        for (relevant, name, color) in ((True, 'Relevant', 'red'), (False, 'Non relevant', 'black')):
+            data = np.argwhere(self.relevances[column, :self.number[column]] == relevant).flatten()
+            if not relevant:
+                data = data[1:]
+            if len(data) > 0:
+                g.scatter(self.data[column, data, :], label=f'{name} centers', color=color, marker='x')
+        return g
+
+    def visualizeAreaColumns(self, options={}):
+        g = Graph(title=f'Context areas from {self.space}', options=options)
+
+        points = self.space.getData()
+        offsetWidth = self.model.actionSpace.maxDistance * 0.01
+        offsetN = np.math.ceil(np.math.sqrt(self.dim))
+
+        for column in range(self.dim):
+            offset = np.array([offsetWidth * (-offsetN / 2 + column % offsetN),
+                               offsetWidth * (-offsetN / 2 + column // offsetN)])
+
+            areas = self.findAllAreasForColumn(column)
+            data = points[np.argwhere(self.relevances[column, areas]).flatten(), :] + offset
+            if len(data) > 0:
+                g.scatter(data, label=column, alpha=0.9, marker='.')
+        return g
+
+
+class ContextSpatializationAreas(Serializable):
+    MAX_AREAS = 100
+    NN_NUMBER = 20
+    MINIMUM_POINTS = 100
+    THRESHOLD_ADD = 0.05
+    THRESHOLD_DEL = 0.
+    THRESHOLD_RESET = 0.05
+    THRESHOLD_VALID = 0.5
+    THRESHOLD_CANT_CREATE = 0.1
+    MIN_DISTANCE_CENTERS = 0.05
+
+    def __init__(self, model, space, boolean=False):
+        self.model = model
+        self.space = space
+        self.evaluatedSpace = self.model.contextSpace
+        self.dim = self.evaluatedSpace.dim
+        self.boolean = boolean
+
+        self.defaultAreas = [ContextArea(self, self.space.zero(), i, False, default=True) for i in range(self.dim)]
+        self.resetAreas()
+
+    def _serialize(self, serializer):
+        dict_ = serializer.serialize(
+            self, ['areas', 'defaultAreas'])
+        return dict_
+
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            raise Exception('No full deserializer is available for this class')
+        return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        serializer = serializer.clone(values={'.area.manager': self})
+
+        for areasDict in dict_.get('areas', []):
+            for areaDict in areasDict:
+                area = serializer.deserialize(areaDict)
+                self._addArea(area)
+        self.defaultAreas = serializer.deserialize(dict_.get('defaultAreas', []))
+
     @property
     def dataset(self):
         return self.model.dataset
@@ -53,57 +410,83 @@ class ContextSpatialization(Serializable):
     #         self._addArea(area.cloneTo(self))
 
     def _addArea(self, area):
-        if len(self.areas) >= self.MAX_AREAS:
+        column = area.column
+        if len(self.areas[column]) >= self.MAX_AREAS:
             return
 
-        self.centers[len(self.areas), :] = area.center.npPlain()
-        self.areas.append(area)
+        self.centers[column, len(self.areas[column]), :] = area.center.npPlain()
+        self.areas[column].append(area)
+
         self.findAllPointAreas()
         self.model.invalidateCompetences()
 
     def _removeArea(self, area):
-        index = self.areas.index(area)
-        self.centers[index:-1, :] = self.centers[index+1:, :]
-        self.areas.remove(area)
+        column = area.column
+        index = self.areas[column].index(area)
+        self.centers[column, index:-1, :] = self.centers[column, index+1:, :]
+        self.areas[column].remove(area)
+
         self.findAllPointAreas()
         self.model.invalidateCompetences()
-    
-    def resetAreas(self):
-        self.areas = []
-        self.centers = np.zeros((self.MAX_AREAS, self.space.dim))
-        self.stability = 0
-        self.model.invalidateCompetences()
-    
-    def allTrue(self):
-        self.resetAreas()
-        self._addArea(ContextArea(self, self.space.zero(), np.full(self.evaluatedSpace.dim, True)))
 
-    def findArea(self, point, space=None):
-        if not self.areas:
-            return None
+    def resetAreas(self):
+        self.areas = [[] for _ in range(self.dim)]
+        self.centers = np.zeros((self.dim, self.MAX_AREAS, self.space.dim))
+
+        self.model.invalidateCompetences()
+
+    def allTrue(self, value=True):
+        self.resetAreas()
+        for column in range(self.dim):
+            self._addArea(ContextArea(self, self.space.zero(), column, True))
+    
+    def allFalse(self):
+        self.resetAreas()
+    
+    def _findAreaForOneColumn(self, point, column, space, projection=False):
+        if not self.areas[column]:
+            return self.defaultAreas[column], math.inf
+
+        if projection:
+            point = point.projection(parameter(space, self.space))
+        nearest, d = operations.nearestNeighborsFromDataContiguous(self.centers[column, :len(self.areas[column])], point.npPlain())
+        return self.areas[column][nearest[0]], d[0]
+
+    def findAreaForOneColumn(self, point, column, space=None):
+        return self._findAreaForOneColumn(point, column, space, True)[0]
+
+    def findAreaForAllColumns(self, point, space=None):
         point = point.projection(parameter(space, self.space))
-        nearest, _ = operations.nearestNeighborsFromDataContiguous(self.centers[:len(self.areas)], point.npPlain())
-        return self.areas[nearest[0]]
+        return [self._findAreaForOneColumn(point, column, space)[0] for column in range(self.dim)]
+    
+    def findAreaForAllColumnsDistances(self, point, space=None):
+        point = point.projection(parameter(space, self.space))
+        r = [self._findAreaForOneColumn(point, column, space) for column in range(self.dim)]
+        return [item[0] for item in r], [item[1] for item in r]
     
     def columns(self, goal, space=None):
-        area = self.findArea(goal, space)
-        # print(area)
-        if not area:
-            return np.full(self.evaluatedSpace.dim, False)
-        return area.columns
+        areas = self.findAreaForAllColumns(goal, space)
+        return np.array([area.used for area in areas])
+
+    def columnsAreas(self, areas):
+        return np.array([area.used for area in areas])
     
     def findAllPointAreas(self):
-        if not self.areas:
-            return
-
-        nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(self.centers[:len(self.areas)])
-        data = self.space.getData()
-        _, indices = nbrs.kneighbors(data)
-        indices = indices.flatten()
-        for i, area in enumerate(self.areas):
-            area.ids = self.space.getIds()[np.argwhere(indices == i).flatten()]
+        for column in range(self.dim):
+            if self.areas[column]:
+                nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(self.centers[column, :len(self.areas[column])])
+                data = self.space.getData()
+                _, indices = nbrs.kneighbors(data)
+                indices = indices.flatten()
+                for i, area in enumerate(self.areas[column]):
+                    area.ids = self.space.getIds()[np.argwhere(indices == i).flatten()]
+    
+    def update(self, point):
+        self.addPoint(point)
+        self.addPoint(self.space.randomPoint())
 
     def addPoint(self, point):
+        # return
         if self.space.number < self.MINIMUM_POINTS:
             return
 
@@ -119,129 +502,158 @@ class ContextSpatialization(Serializable):
         bestDel = ()
         # print(point)
 
-        area = self.findArea(point)
-        if area:
-            stability = area.stability
+        areas, distances = self.findAreaForAllColumnsDistances(point)
+
+        # dims = np.arange(self.evaluatedSpace.dim)
+        # np.random.shuffle(areas)
+        # n = random.randint(1, min(1 + int(self.evaluatedSpace.dim * 0.4), 3))
+        # selectedAreas = areas[:n]
+        selectedAreas = areas
+
+        # print(areas)
+        for area in selectedAreas:
             area.addPoint(id_)
             area.stability += 1
-        else:
-            stability = self.stability
-            self.stability += 1
+            column = area.column
 
-        probality = max(0.05, np.exp(-stability * 0.1))
-        # print(self.model, stability, probality)
+            probality = 2.  # max(0.05, np.exp(-stability * 0.1))
+            # print(self.model, stability, probality)
 
-        fullCompAllFalse = None
-        fullCompAllTrue = None
-        if area and random.uniform(0, 1) < probality * 0.1:
-            fullComp = self.model.competence(precise=True)
+            # fullCompAllFalse = None
+            # fullCompAllTrue = None
+            # if area and random.uniform(0, 1) < probality * 0.1:
+            #     fullComp = self.model.competence(precise=True)
 
-            columnsFalse = np.full(self.evaluatedSpace.dim, False)
-            fullCompAllFalse = self.model.competence(precise=True, contextColumns=columnsFalse)
+            #     columnsFalse = np.full(self.evaluatedSpace.dim, False)
+            #     fullCompAllFalse = self.model.competence(precise=True, contextColumns=columnsFalse)
 
-            columnsTrue = np.full(self.evaluatedSpace.dim, True)
-            fullCompAllTrue = self.model.competence(precise=True, contextColumns=columnsTrue)
+            #     columnsTrue = np.full(self.evaluatedSpace.dim, True)
+            #     fullCompAllTrue = self.model.competence(precise=True, contextColumns=columnsTrue)
 
-            bestFullComp = max(fullCompAllFalse, fullCompAllTrue)
-            columns = columnsTrue if fullCompAllTrue > fullCompAllFalse else columnsFalse
+            #     bestFullComp = max(fullCompAllFalse, fullCompAllTrue)
+            #     columns = columnsTrue if fullCompAllTrue > fullCompAllFalse else columnsFalse
 
-            if fullComp < bestFullComp - self.THRESHOLD_RESET * 2:
-                # print('Reset all areas!')
-                self.resetAreas()
-                area = ContextArea(self, point, columns)
-                self._addArea(area)
+            #     if fullComp < bestFullComp - self.THRESHOLD_RESET * 2:
+            #         # print('Reset all areas!')
+            #         self.resetAreas()
+            #         area = ContextArea(self, point, columns)
+            #         self._addArea(area)
 
-        if random.uniform(0, 1) < probality:
-            currentColumns = self.columns(point)
-            c = self.model.competence(onlyIds=nearest, contextColumns=currentColumns)
+            c = None
+            if random.uniform(0, 1) < probality:
+                # print(nearest)
+                # print(self.space.getData(nearest))
+                # print(self.model.outcomeSpace.getData(nearest))
+                # print(currentColumns)
+                # print(self.evaluatedSpace.getData(nearest)[:, currentColumns])
+                if c is None:
+                    currentColumns = self.columnsAreas(areas)
+                    c = self.model.competence(onlyIds=nearest, precise=True)
+                # print(c)
 
-            dims = np.arange(self.evaluatedSpace.dim)
-            np.random.shuffle(dims)
-            n = random.randint(1, min(1 + int(self.evaluatedSpace.dim * 0.4), 3))
-            dims = dims[:n]
-            # dims = range(self.evaluatedSpace.dim)  # dims[:n]
-
-            # print(dims)
-            # for i in range(self.evaluatedSpace.dim):
-            for i in dims:
                 columns = np.copy(currentColumns)
-                columns[i] = not columns[i]
+                columns[column] = not columns[column]
                 # print(columns)
-                nc = self.model.competence(onlyIds=nearest, contextColumns=columns)
+                # print(self.evaluatedSpace.getData(nearest)[:, columns])
+                nc = self.model.competence(onlyIds=nearest, contextColumns=columns, precise=True)
                 p = nc - c
-                if columns[i] and p >= self.THRESHOLD_ADD and (not bestAdd or p > bestAdd[0]):
-                    bestAdd = (p, i, columns)
-                if not columns[i] and p >= -self.THRESHOLD_DEL and (not bestDel or p > bestDel[0]):
-                    bestDel = (p, i, columns)
+                # print(p)
+                if columns[column] and p >= self.THRESHOLD_ADD and (not bestAdd or p > bestAdd[0]):
+                    bestAdd = (p, column, columns)
+                if not columns[column] and p >= self.THRESHOLD_DEL and (not bestDel or p > bestDel[0]):
+                    bestDel = (p, column, columns)
 
-            if (bestAdd or bestDel) and not fullCompAllFalse:
-                columnsFalse = np.full(self.evaluatedSpace.dim, False)
-                fullCompAllFalse = self.model.competence(
-                    precise=True, contextColumns=columnsFalse)
+            # if (bestAdd or bestDel) and not fullCompAllFalse:
+            #     columnsFalse = np.full(self.evaluatedSpace.dim, False)
+            #     fullCompAllFalse = self.model.competence(
+            #         precise=True, contextColumns=columnsFalse)
 
-                columnsTrue = np.full(self.evaluatedSpace.dim, True)
-                fullCompAllTrue = self.model.competence(
-                    precise=True, contextColumns=columnsTrue)
+            #     columnsTrue = np.full(self.evaluatedSpace.dim, True)
+            #     fullCompAllTrue = self.model.competence(
+            #         precise=True, contextColumns=columnsTrue)
                 
-                bestFullComp = max(fullCompAllFalse, fullCompAllTrue)
+            #     bestFullComp = max(fullCompAllFalse, fullCompAllTrue)
 
-            for best, deletion, _ in ((bestAdd, False, 'add'), (bestDel, False, 'del')):
-                if best:
-                    p, i, newColumns = best
-                    # print(f'Should {verb} context column {i} (+{p}) around {point}')
-                    createNew = False
+        for best, deletion, verb in ((bestAdd, False, 'add'), (bestDel, False, 'del')):
+            if best:
+                p, column, newColumns = best
+                print(f'Should {verb} context column {column} ({c:.2f}+{p:.2f}) around {point}')
+                newArea = None
 
-                    if area:
-                        if area.attempt(newColumns, deletion):
-                            # print(f'Updating current area')
-                            previousColumns = area.columns
-                            area.columns = newColumns
-                        else:
-                            # print(f'Conflict trying to update current area, creating a new one')
-                            createNew = True
-                    else:
-                        # print(f'No existing area! Adding one')
-                        createNew = True
-                    if createNew:
-                        newArea = ContextArea(self, point, newColumns)
-                        self._addArea(newArea)
-                    fullComp = self.model.competence(precise=True)
-                    if fullComp < bestFullComp - self.THRESHOLD_RESET:
-                        # print('Aborting')
-                        if createNew:
-                            self._removeArea(newArea)
-                        else:
-                            area.columns = previousColumns
-                    elif not createNew:
-                        area.stability = 0
-            # self.model.restore()
+                area = areas[column]
+                # fullComp = self.model.competence(precise=True)
+                canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
+                if not area.default and area.attempt(currentColumns, newColumns, deletion, canCreateNew):
+                    print('Updating current area')
+                    # previousUsed = area.used
+                    area.used = newColumns[column]
+                else:
+                    if not canCreateNew:
+                        print('To close!')
+                        continue
+                    print('Creating a new area')
+                    newArea = ContextArea(self, point, column, newColumns[column])
+                    self._addArea(newArea)
+
+                # newFullComp = self.model.competence(precise=True)
+                # print(f'Variation: {newFullComp - fullComp}')
+                # if newFullComp < fullComp * self.THRESHOLD_VALID:  # bestFullComp - self.THRESHOLD_RESET:
+                #     print('Reverting...')
+                #     if newArea:
+                #         self._removeArea(newArea)
+                #     else:
+                #         area.used = previousUsed
+                #     currentColumns = newColumns
+                # else:
+                area.stability = 0
     
     # Visual
-    def visualizeAreas(self, options={}):
+    def visualizeAreaColumn(self, column=0, options={}):
+        g = Graph(title=f'Context areas from {self.space} for column {column}', options=options)
+        areas = {}
+        for area in self.areas[column]:
+            if area.used in areas.keys():
+                areas[area.used] = np.vstack((areas[area.used], self.space.getData(area.ids)))
+            else:
+                areas[area.used] = self.space.getData(area.ids)
+        for used, data in areas.items():
+            g.scatter(data, label=used, color=('orange' if used else 'gray'))
+        g.scatter(self.centers[column, :len(self.areas[column]), :], label='Center', color='red', marker='x')
+        return g
+
+    def visualizeAreaColumns(self, options={}):
         g = Graph(title=f'Context areas from {self.space}', options=options)
         areas = {}
-        for area in self.areas:
-            columns = repr(area.columns.tolist())
-            if columns in areas.keys():
-                areas[columns] = np.vstack((areas[columns], self.space.getData(area.ids)))
-            else:
-                areas[columns] = self.space.getData(area.ids)
-        for columns, data in areas.items():
-            g.scatter(data, label=columns)
+        allAreas = [b for a in self.areas for b in a]
+
+        offsetWidth = self.model.actionSpace.maxDistance * 0.01
+        offsetN = np.math.ceil(np.math.sqrt(self.dim))
+        for area in allAreas:
+            if area.used:
+                offset = np.array([offsetWidth * (-offsetN / 2 + area.column % offsetN),
+                                   offsetWidth * (-offsetN / 2 + area.column // offsetN)])
+                if area.column in areas.keys():
+                    areas[area.column] = np.vstack((areas[area.column], self.space.getData(area.ids) + offset))
+                else:
+                    areas[area.column] = self.space.getData(area.ids) + offset
+        for column, data in areas.items():
+            g.scatter(data, label=column, alpha=0.9, marker='.')
         return g
 
 
 class ContextArea(Serializable):
-    def __init__(self, manager, center, columns):
+    def __init__(self, manager, center, column, used, default=False):
         self.manager = manager
         self.center = center
-        self.columns = columns
+        self.column = column
+        self.used = used
         self.ids = np.array([])
         self.stability = 0
+        self.default = default
     
     def _serialize(self, serializer):
         dict_ = serializer.serialize(
-            self, ['center', 'columns', 'stability'])
+            self, ['center', 'column', 'stability', 'default'])
         return dict_
 
     @classmethod
@@ -249,7 +661,10 @@ class ContextArea(Serializable):
         if obj is None:
             obj = cls(serializer.get('.area.manager'),
                       serializer.deserialize(dict_.get('center')),
-                      np.array(serializer.deserialize(dict_.get('columns'))))
+                      serializer.deserialize(dict_.get('column')),
+                      serializer.deserialize(dict_.get('used')),
+                      serializer.deserialize(dict_.get('default'))
+                      )
         return super()._deserialize(dict_, serializer, obj)
 
     def _postDeserialize(self, dict_, serializer):
@@ -273,17 +688,17 @@ class ContextArea(Serializable):
     #     return new
 
     def addPoint(self, id_):
-        self.ids = np.append(self.ids, id_)
+        if not self.default:
+            self.ids = np.append(self.ids, id_)
     
-    def attempt(self, columns, deletion):
+    def attempt(self, columns, newColumns, deletion, canCreateNew, precise=True):
         c = self.manager.model.competence(
-            onlyIds=self.ids, contextColumns=self.columns)
+            onlyIds=self.ids, contextColumns=columns, precise=precise)
         nc = self.manager.model.competence(
-            onlyIds=self.ids, contextColumns=columns)
-        if deletion:
-            return nc - c > -ContextSpatialization.THRESHOLD_DEL
-        else:
-            return nc - c > ContextSpatialization.THRESHOLD_ADD
+            onlyIds=self.ids, contextColumns=newColumns, precise=precise)
+        print(f'Attempt on current region: p={nc - c}')
+        return nc - c > (ContextSpatialization.THRESHOLD_DEL if deletion else ContextSpatialization.THRESHOLD_ADD) - \
+                (0. if canCreateNew else ContextSpatialization.THRESHOLD_CANT_CREATE)
 
 
     def __repr__(self):

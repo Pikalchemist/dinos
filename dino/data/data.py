@@ -242,7 +242,7 @@ class Data(Serializable):
     def asTemplate(self, values):
         return self.__class__(self.space, values)
     
-    def bounded(self, bounds=(-1, 1)):
+    def bounded(self, bounds=(-1., 1.)):
         return self.__class__(*[part.bounded(bounds) for part in self._parts])
 
     @staticmethod
@@ -281,7 +281,7 @@ class SingleData(Data):
 
     def __init__(self, space, value):
         self.space = space
-        self.value = value if isinstance(value, list) else [value]
+        self.value = value if isinstance(value, list) or isinstance(value, np.ndarray) else [value]
         self._valueOrdered = self.value
         self._parts = [self]
         if len(self.value) != self.space.dim:
@@ -375,7 +375,7 @@ class SingleData(Data):
 
     # Flatting
     def flat(self):
-        return self
+        return [self]
 
     def plain(self):
         return self.value
@@ -397,7 +397,7 @@ class SingleData(Data):
             return self
         return self.__class__(row, self.value).setRelative(self.relative)
     
-    def bounded(self, bounds=(-1, 1)):
+    def bounded(self, bounds=(-1., 1.)):
         value = [min(max(v, bounds[0]), bounds[1]) for v in self.value]
         return self.__class__(self.space, value).setRelative(self.relative)
 

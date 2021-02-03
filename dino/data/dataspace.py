@@ -176,22 +176,36 @@ class DataSpace(Space):
         return [a.tolist() for a in list_]
 
     # Operations
-    def __computeDistances(self, x, weights=None, columns=None, restrictionLids=None):
+    def findWeights(self, columns=None, adjustSpaceWeight=None, adjustWeightFactor=1., weights=None):
+        weights = np.array(self._nnWeights) if weights is None else self._nnWeights * weights
+        if adjustSpaceWeight and columns is not None and np.any(columns):
+            adjustColumns = self.columnsFor(adjustSpaceWeight)
+            if np.any(adjustColumns):
+                weights[adjustColumns] *= adjustWeightFactor * len(adjustColumns) / np.sum(columns[adjustColumns])
+        return weights
+
+    def __computeDistances(self, x, weights=None, columns=None, restrictionLids=None, adjustSpaceWeight=None, adjustWeightFactor=1.):
         """Compute array of normalized distances between data and the point given."""
         data = self.data[:self._number]
         if restrictionLids is not None:
             data = data[restrictionLids]
-        weights = self._nnWeights if weights is None else self._nnWeights * weights
-        return operations.euclidean_distances(data, x, weights, self.maxDistance, columns)
+        weights = self.findWeights(columns, adjustSpaceWeight, adjustWeightFactor, weights)
+        # print(data)
+        # print(weights)
+        try:
+            return operations.euclidean_distances(data, x, weights, self.maxDistance, columns)
+        except Exception as e:
+            raise Exception(f'Failure __computeDistances: {data.dtype} {x.dtype} {weights.dtype}\n{self} {x} {weights} {self.maxDistance} {columns}\n{e}')
 
-    def __computePerformances(self, x, weights=None, columns=None, restrictionLids=None):
+    def __computePerformances(self, x, weights=None, columns=None, restrictionLids=None, adjustSpaceWeight=None, adjustWeightFactor=1.):
         """Compute performances for reaching the given point."""
         costs = self.costs[:self._number]
         if restrictionLids is not None:
             costs = costs[restrictionLids]
-        return self.__computeDistances(x, weights, columns, restrictionLids) * costs
+        return self.__computeDistances(x, weights, columns, restrictionLids, adjustSpaceWeight, adjustWeightFactor) * costs
 
-    def __nearestNeighbors(self, x, n=1, ignore=0, weights=None, columns=None, restrictionIds=None, otherSpace=None, useDistances=True):
+    def __nearestNeighbors(self, x, n=1, ignore=0, weights=None, columns=None, restrictionIds=None, otherSpace=None,
+                           useDistances=True, adjustSpaceWeight=None, adjustWeightFactor=1.):
         self._validate()
         if self._number == 0:
             return np.array([], dtype=np.int32), np.array([])
@@ -202,30 +216,30 @@ class DataSpace(Space):
 
         restrictionLids = operations.findRestrictionsLids(restrictionIds, self, otherSpace)
         if useDistances:
-            data = self.__computeDistances(x, weights, columns, restrictionLids)
+            data = self.__computeDistances(x, weights, columns, restrictionLids, adjustSpaceWeight, adjustWeightFactor)
         else:
-            data = self.__computePerformances(x, weights, columns, restrictionLids)
+            data = self.__computePerformances(x, weights, columns, restrictionLids, adjustSpaceWeight, adjustWeightFactor)
         return operations.nearestNeighbors(self.ids, data, n, ignore, restrictionLids, otherSpace)
 
-    def nearest(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, weights=None, columns=None):
+    def nearest(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, weights=None, columns=None, adjustSpaceWeight=None, adjustWeightFactor=1.):
         """Computes Nearest Neighbours based on performances."""
         return self.__nearestNeighbors(x.npPlain(), n=n, ignore=ignore, weights=weights, columns=columns, restrictionIds=restrictionIds,
-                                       otherSpace=otherSpace, useDistances=False)
+                                       otherSpace=otherSpace, adjustSpaceWeight=adjustSpaceWeight, adjustWeightFactor=adjustWeightFactor, useDistances=False)
 
-    def nearestDistance(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, weights=None, columns=None):
+    def nearestDistance(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, weights=None, columns=None, adjustSpaceWeight=None, adjustWeightFactor=1.):
         """Compute Nearest Neighbours based on distance."""
         return self.__nearestNeighbors(x.npPlain(), n=n, ignore=ignore, weights=weights, columns=columns, restrictionIds=restrictionIds,
-                                       otherSpace=otherSpace)
+                                       otherSpace=otherSpace, adjustSpaceWeight=adjustSpaceWeight, adjustWeightFactor=adjustWeightFactor)
 
-    def nearestPlain(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, weights=None, columns=None):
+    def nearestPlain(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, weights=None, columns=None, adjustSpaceWeight=None, adjustWeightFactor=1.):
         """Computes Nearest Neighbours based on performances."""
         return self.__nearestNeighbors(x, n=n, ignore=ignore, weights=weights, columns=columns, restrictionIds=restrictionIds,
-                                       otherSpace=otherSpace, useDistances=False)
+                                       otherSpace=otherSpace, adjustSpaceWeight=adjustSpaceWeight, adjustWeightFactor=adjustWeightFactor, useDistances=False)
 
-    def nearestDistancePlain(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, weights=None, columns=None):
+    def nearestDistancePlain(self, x, n=1, ignore=0, restrictionIds=None, otherSpace=None, weights=None, columns=None, adjustSpaceWeight=None, adjustWeightFactor=1.):
         """Compute Nearest Neighbours based on distance."""
         return self.__nearestNeighbors(x, n=n, ignore=ignore, weights=weights, columns=columns, restrictionIds=restrictionIds,
-                                       otherSpace=otherSpace)
+                                       otherSpace=otherSpace, adjustSpaceWeight=adjustSpaceWeight, adjustWeightFactor=adjustWeightFactor)
 
     @staticmethod
     def nearestFromData(points, x, n=1, ignore=0):

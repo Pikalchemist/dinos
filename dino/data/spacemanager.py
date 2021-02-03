@@ -62,7 +62,7 @@ class SpaceManager(Module, Serializable, EntityManager):
         super()._postDeserialize(dict_, serializer)
 
     def __repr__(self):
-        return f'SpaceManager({len(self.spaces)} spaces) and {EntityManager.__repr__()}'
+        return f'SpaceManager({len(self.spaces)} spaces) and {EntityManager.__repr__(self)}'
     
     @property
     def size(self):

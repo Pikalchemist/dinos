@@ -51,7 +51,7 @@ def nearestNeighbors(ids, data, n=1, ignore=0, restrictionLids=None, otherSpace=
     if restrictionLids is not None:
         ids = ids[restrictionLids]
 
-    i = data.argpartition(np.arange(ignore + 1, min(n + ignore, data.shape[0])))
+    i = data.argpartition(np.arange(ignore, min(n + ignore, data.shape[0])))
     i = i[ignore:n + ignore]
     return ids[i], data[i]
 
@@ -110,8 +110,8 @@ cdef double[::1] _euclidean_distances_weighted(double[:, ::1] vectors_a, double[
         for i in range(numb_vectors_a):
             distance = 0.0
             for k in range(numb_dims):
-                temp = vectors_a[i, k] - vectors_b[k]
-                distance += (temp*temp) * weights[k]
+                temp = (vectors_a[i, k] - vectors_b[k]) * weights[k]
+                distance += temp*temp
 
             distances[i] = sqrt(distance) / maxDist
     else:
@@ -119,8 +119,8 @@ cdef double[::1] _euclidean_distances_weighted(double[:, ::1] vectors_a, double[
             distance = 0.0
             for k in range(numb_dims):
                 if columns[k]:
-                    temp = vectors_a[i, k] - vectors_b[k]
-                    distance += (temp*temp) * weights[k]
+                    temp = (vectors_a[i, k] - vectors_b[k]) * weights[k]
+                    distance += temp*temp
 
             distances[i] = sqrt(distance) / maxDist
 

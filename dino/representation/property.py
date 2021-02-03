@@ -7,7 +7,7 @@ import numpy as np
 
 from exlab.interface.serializer import Serializable, Serializer
 
-from dino.data.data import Observation
+from dino.data.data import SingleObservation
 from dino.data.space import Space
 
 
@@ -200,7 +200,7 @@ class Observable(Property):
         if self.space is None:
             raise UnboundedProperty(
                 f"{self.name} of {self.entity} is not bounded to any space")
-        return Observation(self.space, self.space.formatData(self.observePlain(),
+        return SingleObservation(self.space, self.space.formatData(self.observePlain(),
                                                              formatParameters=formatParameters))
 
     @property

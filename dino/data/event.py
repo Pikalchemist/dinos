@@ -39,6 +39,7 @@ class InteractionEvent(Serializable):
         #         action.value = [1]
         self.actions = Action(*actions)
         self.onlyOutcomes = Observation(*onlyOutcomes)
+        self.allActions = None
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(self, ['actions', 'primitiveActions', 'outcomes', 'context',
@@ -82,6 +83,9 @@ class InteractionEvent(Serializable):
             spaceManager=spaceManager, kind=kind, toData=toData)
         self.context = self.context.convertTo(
             spaceManager=spaceManager, kind=kind, toData=toData)
+        
+        allActions = self.actions.flat() + self.primitiveActions.flat() + self.onlyOutcomes.flat()
+        self.allActions = Action(*allActions)
 
     def addToSpaces(self, cost=1.0):
         for point in self.actions.flat():

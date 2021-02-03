@@ -84,10 +84,10 @@ class EmptyScene(BaseScene):
             self._resetAgent()
     
     def setupPreTest(self, test):
-        self._resetAgent()
+        self._resetAgent(rand=False)
     
-    def _resetAgent(self):
-        self.world.child('Agent').body.position = (300, 300)
+    def _resetAgent(self, rand=True):
+        self.world.child('Agent').body.position = (random.choice([100, 200, 300, 400]), random.randint(150, 450)) if rand else (300, 300)
 
 
 class RoomWithWallsScene(EmptyScene):

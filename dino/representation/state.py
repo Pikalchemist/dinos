@@ -4,13 +4,14 @@ from dino.data.data import Data
 
 
 class State(object):
-    def __init__(self, environment, values=[], dataset=None, featureMap=None):
+    def __init__(self, environment, values=[], dataset=None, featureMap=None, enforceDataset=True):
         self.environment = environment
+        self.dataset = dataset
         self.featureMap = featureMap
         if not isinstance(values, list):
             values = [values]
         self.values = [part for value in values for part in value.flat()]
-        if dataset:
+        if dataset and enforceDataset:
             self.values = [part.convertTo(dataset) for part in self.values]
         self.update()
 
@@ -22,10 +23,10 @@ class State(object):
 
     def update(self):
         if self.featureMap:
-            self.featureMap.update(self.values)
+            self.featureMap.update(self.values, self.dataset)
         self._context = Data(*self.values)
 
-    def apply(self, action, dataset, overwrite=None):
+    def apply(self, action, dataset=None, overwrite=None):
         variations = {}
         actionSpace = action.space
         context = self.context()
@@ -61,4 +62,4 @@ class State(object):
         return diff
 
     def copy(self):
-        return self.__class__(self.environment, list(self.values))
+        return self.__class__(self.environment, list(self.values), self.dataset, self.featureMap, enforceDataset=False)

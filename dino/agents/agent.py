@@ -61,6 +61,7 @@ class Agent(Module):
         self.assertDiscrete(self.environment)
 
         self.dataset = dataset
+        self.featureMap = None
         self.options = options
         self.scheduled = None
         self.iterationEvent = threading.Event()
@@ -236,6 +237,8 @@ class Agent(Module):
         return list(set(spaces))
     
     def observe(self, formatParameters=None):
+        if self.featureMap:
+            self.featureMap.populateFrom(self.environment)
         return self.host.observeFrom(formatParameters=formatParameters)
     
     def schedule(self, method, *args, **kwargs):

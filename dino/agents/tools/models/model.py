@@ -72,7 +72,7 @@ class Model(Serializable):
 
         self.contextSpacialization = None
         if self.contextSpace:
-            self.contextSpacialization = [ContextSpatialization(self, self.outcomeSpace)] #, ContextSpatialization(self, self.contextSpace)]
+            self.contextSpacialization = [ContextSpatialization(self, self.actionSpace)] #, ContextSpatialization(self, self.contextSpace)]
 
         # self.spacesHistory = DataEventHistory()
 
@@ -184,11 +184,12 @@ class Model(Serializable):
 
     def pointAdded(self, event, progress):
         if self.contextSpacialization:
+            # print(event.allActions)
             # outcome = event.outcomes.projection(self.outcomeSpace)
-            self.contextSpacialization[0].addPoint(event.outcomes)
+            self.contextSpacialization[0].update(event.allActions)
 
             # context = event.context.projection(self.contextSpace)
-            # self.contextSpacialization[1].addPoint(context)
+            # self.contextSpacialization[1].addPoint(context, event.iteration)
 
     def updatePrecision(self, success, distanceToGoal, weight=1, index=0):
         # oldp = self.precision[index]
@@ -231,12 +232,12 @@ class Model(Serializable):
     def hasContext(self, contextSpace, contextColumns):
         return contextSpace and (contextColumns is None or np.any(contextColumns))
 
-    def contextColumns(self, contextColumns, goal, context):
+    def contextColumns(self, contextColumns, action, context):
         if contextColumns is not None:
             return contextColumns
         if not self.contextSpacialization:
             return None
-        return self.contextSpacialization[0].columns(goal, self.outcomeSpace)# & self.contextSpacialization[1].columns(context)
+        return self.contextSpacialization[0].columns(action)# & self.contextSpacialization[1].columns(context)
 
     def multiContextColumns(self, contextColumns, space, context):
         if contextColumns is None or not np.any(contextColumns) or context is None:
@@ -264,10 +265,14 @@ class Model(Serializable):
 
     def bestLocality(self, goal: Goal, context: Observation = None, contextColumns=None, entity=None, dontMove=[]):
         raise NotImplementedError()
+
+    def computeCompetence(self, error):
+        # error = min(error, 0.1)
+        return max(0, min(1., (1. - error ** 2) / np.exp((error * 20))))  # ** 3
     
-    def computeCompetence(self, error, distanceGoal=0):
-        distanceGoal = min(distanceGoal, 1.)
-        return max(0, min(1, (1. - distanceGoal - error) / np.exp((error * 4.15) ** 3)))
+    # def computeCompetence(self, error, distanceGoal=0):
+    #     distanceGoal = min(distanceGoal, 1.)
+    #     return max(0, min(1, (1. - distanceGoal - error) / np.exp((error * 4.15) ** 3)))
 
     def getIds(self):
         return self.findSharedIds(self.outcomeSpace, self.actionSpace, self.contextSpace, restrictionIds=self.restrictionIds)
@@ -295,14 +300,14 @@ class Model(Serializable):
             ids = np.intersect1d(ids, space.getIds())
         return ids
 
-    def competence(self, precise=False, onlyIds=None, contextColumns=None):
+    def competence(self, precise=False, onlyIds=None, contextColumns=None, contextColumnsOverwrite=None):
         if onlyIds is None and contextColumns is None:
             if self._lastCompetencePrecise:
                 return self._lastCompetencePrecise
             elif not precise and self._lastCompetence:
                 return self._lastCompetence
 
-        c = self.computeCompetence(self.std(precise=precise, onlyIds=onlyIds, contextColumns=contextColumns))
+        c = self.computeCompetence(self.std(precise=precise, onlyIds=onlyIds, contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite))
 
         if onlyIds is None and contextColumns is None:
             if precise:
@@ -322,48 +327,66 @@ class Model(Serializable):
         return self.competence(precise=True) >= competence and self.duration >= duration
 
     # data=None, context: Observation = None,
-    def std(self, precise=False, onlyIds=None, contextColumns=None):
-        errorsZeros = self._errorForwardAll(
-            precise=precise, almostZeros=True, onlyIds=onlyIds, contextColumns=contextColumns)
+    def std(self, precise=False, onlyIds=None, contextColumns=None, contextColumnsOverwrite=None):
+        errorsZeros, _ = self._errorForwardAll(
+            precise=precise, almostZeros=True, onlyIds=onlyIds, contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite)
         errorZeros = np.mean(errorsZeros) if len(errorsZeros) > 0 else 0.
 
-        errorsNonZeros = self._errorForwardAll(
-            precise=precise, almostZeros=False, onlyIds=onlyIds, contextColumns=contextColumns)
+        errorsNonZeros, _ = self._errorForwardAll(
+            precise=precise, almostZeros=False, onlyIds=onlyIds, contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite)
         errorNonZeros = np.mean(errorsNonZeros) if len(errorsNonZeros) > 0 else 0.
+
+        #np.percentile(errorsZeros, 65)
+        # print('---', errorZeros, errorNonZeros)
 
         return 1 - (1 - errorNonZeros) * (1 - errorZeros)
     
     def stdData(self, actions, outcomes, contexts=None, precise=False, onlyIds=None, contextColumns=None):
         errors = self._errorForwardDataAll(
             actions, outcomes, contexts, precise=precise, contextColumns=contextColumns)
+        if len(errors) == 0:
+            return 0.
         return np.mean(errors)
     
     # def variance(self, data=None, context: Observation = None, precise=False, contextColumns=None):
     #     return self.std(data=data, context=context, precise=precise, contextColumns=contextColumns) ** 2
 
-    def _errorForward(self, eventId, contextColumns=None):
+    def forwardErrors(self, precise=False, almostZeros=None, onlyIds=None, contextColumns=None, contextColumnsOverwrite=None, sortIds=False):
+        errors, ids = self._errorForwardAll(precise=precise, almostZeros=almostZeros, onlyIds=onlyIds,
+                                            contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite)
+        if sortIds:
+            order = np.argsort(-errors)
+            distanceMax = (self.outcomeSpace.maxDistance / 4 if self.outcomeSpace.maxDistance != 0 else 1.)
+            trueErrors = errors * distanceMax
+            return errors[order], ids[order], trueErrors[order]
+        return errors
+
+    def _errorForward(self, eventId, contextColumns=None, contextColumnsOverwrite=None):
         action = self.actionSpace.getPoint(eventId)[0]
         outcome = self.outcomeSpace.getPoint(eventId)[0]
         context = self.contextSpace.getPoint(eventId)[0] if self.contextSpace else None
 
-        return self._errorForwardData(action, outcome, context, contextColumns=contextColumns, eventId=eventId)
+        return self._errorForwardData(action, outcome, context, contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite, eventId=eventId)
     
-    def _errorForwardData(self, action, outcome, context=None, contextColumns=None, eventId=None):
+    def _errorForwardData(self, action, outcome, context=None, contextColumns=None, contextColumnsOverwrite=None, eventId=None):
         if not self.contextSpace:
             context = None
+        if contextColumns is not None and contextColumnsOverwrite is not None:
+            contextColumns[contextColumnsOverwrite] = self.contextSpacialization[0].columns(action)[contextColumnsOverwrite]
         # print(f'{self.actionSpace.getPoint(eventId)[0]} + {self.contextSpace.getPoint(eventId)[0]} -> {self.outcomeSpace.getPoint(eventId)[0]}')
 
-        contextColumns = self.contextColumns(contextColumns, outcome, context)
+        # contextColumns = self.contextColumns(contextColumns, action, context)
 
-        context = context if self.hasContext(
-            self.contextSpace, contextColumns) else None
+        # context = context if self.hasContext(
+        #     self.contextSpace, contextColumns) else None
 
-        if context is None:
-            contextColumns = None
+        # if context is None:
+        #     contextColumns = None
 
         # print(contextColumns)
-        outcomeEstimated = self.forward(
-            action, context, contextColumns=contextColumns, ignoreFirst=True)[0]
+        outcomeEstimated = self.forward(action, context, contextColumns=contextColumns, ignoreFirst=False)[0]
+        # acPlain = action.extends(context).npPlain()
+        # outcomeEstimated = self.outcomeSpace.point(self.fnn.predict([acPlain])[0])
         if not outcomeEstimated:
             return 1.
 
@@ -371,10 +394,11 @@ class Model(Serializable):
         # print(outcomeEstimated)
         # zeroError = (outcome.length() < 0.00001) != (
         #     outcomeEstimated.length() < 0.00001)
-        errorOutcome = outcomeEstimated.distanceTo(
-            outcome) / (outcome.space.maxDistance if outcome.space.maxDistance != 0 else 1.)# + zeroError*0.0
+        distanceMax = (outcome.space.maxDistance / 4 if outcome.space.maxDistance != 0 else 1.) + outcome.norm() / 2
+        errorOutcome = outcomeEstimated.distanceTo(outcome) / distanceMax# + zeroError*0.0
 
         errorOutcome = min(errorOutcome, 1.)
+        # print(f'{action}, {outcome} ?= {outcomeEstimated} -> {errorOutcome}')
         # self.dataset.logger.info(f'{errorOutcome:.2f} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
 
         # if errorOutcome > 0.1:
@@ -391,23 +415,23 @@ class Model(Serializable):
         #     print('---       ---')
         return errorOutcome
 
-    def _errorForwardAll(self, precise=False, almostZeros=None, onlyIds=None, contextColumns=None):
+    def _errorForwardAll(self, precise=False, almostZeros=None, onlyIds=None, contextColumns=None, contextColumnsOverwrite=None):
         ids = parameter(onlyIds, self.getIds())
         if almostZeros is not None:
             data = self.outcomeSpace.getData(ids)
             indices = np.sum(np.abs(data), axis=1) > self.outcomeSpace.maxDistance * self.ALMOST_ZERO_FACTOR
             if almostZeros:
                 indices = ~indices
-            if np.sum(indices) < 0:
-                return []
-                # ids = ids[indices]
+            if np.sum(indices) == 0:
+                return [], []
+            ids = ids[indices]
         if not precise:
             number = min(80 if not almostZeros else 50, self.outcomeSpace.number // 10)
             ids_ = np.arange(len(ids))
             np.random.shuffle(ids_)
             ids = ids[ids_[:number]]
-        errors = np.array([self._errorForward(id_, contextColumns=contextColumns) for id_ in ids])
-        return errors
+        errors = np.array([self._errorForward(id_, contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite) for id_ in ids])
+        return errors, ids
 
     def _errorForwardDataAll(self, actions, outcomes, contexts=None, precise=False, exceptAlmostZero=False, contextColumns=None):
         # data = np.hstack((actions, outcomes, contexts) if contexts is not None else (actions, outcomes))
@@ -415,8 +439,9 @@ class Model(Serializable):
         if exceptAlmostZero:
             indices = np.sum(
                 np.abs(outcomes), axis=1) > self.outcomeSpace.maxDistance * self.ALMOST_ZERO_FACTOR
-            if np.sum(indices) > 0:
-                ids = ids[indices]
+            if np.sum(indices) == 0:
+                return []
+            ids = ids[indices]
         if not precise:
             number = min(100, self.outcomeSpace.number // 10)
             ids_ = np.arange(len(ids))
