@@ -11,6 +11,12 @@ class Test(Serializable):
         self.id = id
         self.scene = None
         self.points = []
+
+        # Callbacks
+        self.preTest = None
+        self.prePointSetupEpisode = True
+        self.prePoint = None
+        self.postTest = None
     
     def _sid(self, serializer):
         return serializer.uid('test', self.name)

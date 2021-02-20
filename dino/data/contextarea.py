@@ -13,10 +13,12 @@ from . import operations
 class ContextSpatialization(Serializable):
     MAX_AREAS = 100
     NN_NUMBER = 10
-    CENTER_RADIUS = 0.25
-    MINIMUM_POINTS = 300
+    CENTER_RADIUS = 0.27
+    MINIMUM_POINTS = 10
     THRESHOLD_ADD = 0.01
-    THRESHOLD_DEL = 0.005
+    THRESHOLD_DEL = 0.01
+    THRESHOLD_ADD_POINT = 0.002
+    THRESHOLD_DEL_POINT = 0.002
     THRESHOLD_RESET = 0.05
     THRESHOLD_VALID = 0.5
     THRESHOLD_CANT_CREATE = 0.1
@@ -101,25 +103,29 @@ class ContextSpatialization(Serializable):
     def allFalse(self):
         self.resetAreas(False)
     
-    def _findAreaForOneColumn(self, point, column, space, projection=False):
-        # return 0, math.inf
-
-        # HARDCODED
-        if projection:
-            point = point.projection(parameter(space, self.space))
+    def _groundTruthLidar(self, point, column):
         if point.norm() < 0.01:
-            return 0, math.inf
+            return False
         point = point.plain()
         direction = np.arctan2(point[1], point[0]) / np.math.pi * 180.
         col = int(np.round(direction / 45)) % 8
-        colUp = int(np.ceil(direction / 45)) % 8
-        colDown = int(np.floor(direction / 45)) % 8
-        if abs(col - column) <= 1 or abs(col - column) >= 7:
-            return 1, math.inf
+        # colUp = int(np.ceil(direction / 45)) % 8
+        # colDown = int(np.floor(direction / 45)) % 8
+        if abs(col - column) <= 2 or abs(col - column) >= 6:
+            return True
         # if column in [colUp, colDown]:
         #     return 1, math.inf
         else:
-            return 0, math.inf
+            return False
+    
+    def _findAreaForOneColumn(self, point, column, space, projection=False, hardcoded=False):
+
+        if projection:
+            point = point.projection(parameter(space, self.space))
+        # HARDCODED
+        # return 1, math.inf
+        if hardcoded:
+            return int(self._groundTruthLidar(point, column)), math.inf
         # END HARDCODED
 
         if self.number[column] == 1:
@@ -146,9 +152,9 @@ class ContextSpatialization(Serializable):
     
     def columns(self, point, space=None):
         point = point.projection(parameter(space, self.space))
-        relevances = np.array([False, True])
-        return np.array([relevances[self._findAreaForOneColumn(point, column, space)[0]] for column in range(self.dim)])
-        # return np.array([self.relevances[column, self._findAreaForOneColumn(point, column, space)[0]] for column in range(self.dim)])
+        # relevances = np.array([False, True])
+        # return np.array([relevances[self._findAreaForOneColumn(point, column, space, hardcoded=True)[0]] for column in range(self.dim)])
+        return np.array([self.relevances[column, self._findAreaForOneColumn(point, column, space)[0]] for column in range(self.dim)])
     
     def columnsAreas(self, areas):
         return np.array([self.relevances[column, area] for column, area in enumerate(areas)])
@@ -168,10 +174,11 @@ class ContextSpatialization(Serializable):
         self.addPoint(point)
         self.addPoint(self.space.randomPoint())
 
-    def addPoint(self, point):
-        return
-        # if self.space.number < self.MINIMUM_POINTS:
+    def addPoint(self, point, test=False):
+        # if not test:
         #     return
+        if self.space.number < self.MINIMUM_POINTS:
+            return
 
         point = point.projection(self.space)
         nearest, _ = self.space.nearest(point, n=self.NN_NUMBER)
@@ -181,7 +188,7 @@ class ContextSpatialization(Serializable):
         bestDel = ()
 
         # print('---')
-        print(point)
+        # print(point)
         # print(c)
         # bestAdd = ()
         # bestDel = ()
@@ -194,17 +201,19 @@ class ContextSpatialization(Serializable):
         # n = random.randint(1, min(1 + int(self.evaluatedSpace.dim * 0.4), 3))
         # columns = columns[:n]
 
-        noiseMargin = 0.005
+        noiseMargin = 0.002
 
-        errors = self.model.forwardErrors(onlyIds=nearest, precise=True)
-        c = self.model.competence(onlyIds=nearest, precise=True)
+        currentColumns = self.columnsAreas(areas)
+        # currentColumns[0] = True
+
+        errors = self.model.forwardErrors(onlyIds=nearest, precise=True, contextColumns=currentColumns)
+        c = self.model.competence(onlyIds=nearest, precise=True, contextColumns=currentColumns)
 
         # print(columns)
         checkDeletion = False
-        currentColumns = self.columnsAreas(areas)
         if np.any(currentColumns) and random.uniform(0, 1) < 0.5:
             checkDeletion = True
-        print(currentColumns)
+        # print(currentColumns)
         for column in columns:
             probality = 2.  # max(0.05, np.exp(-stability * 0.1))
 
@@ -221,9 +230,12 @@ class ContextSpatialization(Serializable):
 
                 newColumns = np.copy(currentColumns)
                 newColumns[column] = not newColumns[column]
+                # newColumns[(column + 1) % 8] = not newColumns[(column + 1) % 8]
+                # newColumns[(column - 1) % 8] = not newColumns[(column - 1) % 8]
 
-                newColumnsOverwrite = np.full_like(currentColumns, True)
-                newColumnsOverwrite[column] = False
+                newColumnsOverwrite = None
+                # newColumnsOverwrite = np.full_like(currentColumns, True)
+                # newColumnsOverwrite[column] = False
                 # print(newColumns)
                 # print(self.evaluatedSpace.getData(nearest)[:, newColumns])
                 newErrors = self.model.forwardErrors(onlyIds=nearest, contextColumns=newColumns, precise=True, contextColumnsOverwrite=newColumnsOverwrite)
@@ -231,20 +243,24 @@ class ContextSpatialization(Serializable):
 
                 progress = -(newErrors - errors)
                 progress = np.sign(progress) * (np.clip(np.abs(progress) - noiseMargin, 0., None))
+
+                pointProgress = progress[0]
                 meanProgress = np.mean(progress)
                 meanRegression = np.percentile(progress, 10)
                 pc = nc - c
                 progressValue = meanProgress + meanRegression + pc * 0.02
 
-                print(f'{column}={newColumns[column]} ==== {c}+{progressValue} ({meanRegression} {meanRegression} {pc})')
-                for error, nerror, pr, ptx, ctx in zip(errors, newErrors, progress, self.space.getData(nearest), self.evaluatedSpace.getData(nearest)):
-                    print(f'{ptx} | {ctx[newColumns]} -> {error:.3f}->{nerror:.3f} {pr:.3f}')
+                should = self._groundTruthLidar(point, column)
+                if test > 1:
+                    print(f'{column}: {should}={newColumns[column]} ==== {c}+{progressValue} ({meanRegression} {meanRegression} {pc})')
+                    for error, nerror, pr, ptx, ctx in zip(errors, newErrors, progress, self.space.getData(nearest), self.evaluatedSpace.getData(nearest)):
+                        print(f'{ptx} | {ctx[newColumns]} -> {error:.3f}->{nerror:.3f} {pr:.3f}')
                 # print(progressValue)
                 # addition = newColumns[column]
 
-                if not checkDeletion and progressValue >= self.THRESHOLD_ADD and (not bestAdd or progressValue > bestAdd[0]):
+                if not checkDeletion and pointProgress >= self.THRESHOLD_ADD_POINT and progressValue >= self.THRESHOLD_ADD and (not bestAdd or progressValue > bestAdd[0]):
                     bestAdd = (progressValue, column, newColumns)
-                elif checkDeletion and progressValue >= self.THRESHOLD_DEL and (not bestDel or progressValue > bestDel[0]):
+                elif checkDeletion and pointProgress >= self.THRESHOLD_DEL_POINT and progressValue >= self.THRESHOLD_DEL and (not bestDel or progressValue > bestDel[0]):
                     bestDel = (progressValue, column, newColumns)
 
                 # registerColumns = None
@@ -272,18 +288,27 @@ class ContextSpatialization(Serializable):
                 
             #     bestFullComp = max(fullCompAllFalse, fullCompAllTrue)
 
-        for best, deletion, verb in ((bestAdd, False, 'add'), (bestDel, True, 'del')):
+        for best, deletion, verb in ((bestAdd, False, 'add'),): #, (bestDel, True, 'del')):
             if best:
                 progressValue, column, newColumns = best
-                print(f'Should {verb} context column {column} (+{progressValue:.2f}) around {point}')
+                # print(f'Should {verb} context column {column} (+{progressValue:.2f}) around {point}')
 
                 canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
-                print(f'Create new columns for {column}: {newColumns[column]} around {point.plain()} +{progressValue} new: {canCreateNew}')
+                # print(f'Create new columns for {column}: {newColumns[column]} around {point.plain()} +{progressValue} new: {canCreateNew}')
+
+                should = self._groundTruthLidar(point, column)
+                if not should:
+                    print(f'!! Invalid choice of column {column} for {point}#{nearest[0]} +{progressValue}!\n{self.columns(point)}')
+                    return 1, 0
 
                 if canCreateNew:
                     self._addArea(column, point, newColumns[column])
                 else:
                     self._updateArea(column, point, newColumns[column], areas[column])
+        
+        return 0, 1 if bestAdd else 0
+        # if not bestAdd:
+        #     print(f'>> No new column for {point}#{nearest[0]}!\n{self.columns(point)}')
 
 
         # for best, deletion, verb in ((bestAdd, False, 'add'), (bestDel, False, 'del')):

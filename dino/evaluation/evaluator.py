@@ -11,6 +11,7 @@ from scipy.spatial.distance import euclidean
 
 from exlab.interface.serializer import Serializable
 from exlab.interface.graph import Graph
+from exlab.modular.module import Module
 
 from dino.data.data import Goal, SingleData
 from dino.data.path import ActionNotFound
@@ -56,7 +57,7 @@ class Evaluation(Serializable):
         return f'Evaluation @t={self.iteration} µ={self.meanError:.3f} σ={self.meanStd:.3f} ({len(self.results)} test(s))'
 
 
-class Evaluator(Serializable):
+class Evaluator(Module):
     """Evaluation of a learning agent on a testbench."""
     DEFAULT_ERROR = 1.0
 
@@ -64,6 +65,8 @@ class Evaluator(Serializable):
         """
         agent LearningAgent
         """
+        super().__init__('Evaluator', environment, loggerTag='evaluation')
+
         self.agent = agent
         self.environment = environment
         self.options = options
@@ -121,6 +124,7 @@ class Evaluator(Serializable):
         # Will contain all evaluation information
         results = []
 
+        self.logger.debug(f'Evaluating all tests...')
         for test in self.environment.tests:
             result = self.evaluateTest(test)
             if result:
@@ -139,6 +143,7 @@ class Evaluator(Serializable):
 
         evaluation = Evaluation(self.environment.iteration, results, models)
         self.evaluations[evaluation.iteration] = evaluation
+        self.logger.info(f'Global evaluation results: {evaluation}')
 
         return evaluation
 
@@ -146,6 +151,9 @@ class Evaluator(Serializable):
         """Compute evaluation for a given task."""
         if test.id is None:
             raise Exception('A test must be assigned to a scene to be evaluated!')
+    
+        self.logger.debug(f'Evaluating test {test.name} with method {self.method}...')
+
         #assert len(self.testbench[task]) > 0
 
         # space = self.agent.dataset.space(spacename)
@@ -184,12 +192,23 @@ class Evaluator(Serializable):
         # Sum of quadratic error on testbench
         # n_ = 0
 
+        if test.preTest:
+            test.preTest()
+        else:
+            self.environment.setupPreTest(test)
+
         for rawPoint in test.points:
-            self.environment.setupEpisode(MoveConfig(evaluating=True))
+            if test.prePoint:
+                test.prePoint(rawPoint)
+            else:
+                self.environment.setupPreTestPoint(test, rawPoint)
+
             if self.agent.dataset:
                 point = self.agent.dataset.convertData(rawPoint)
             else:
                 point = rawPoint
+
+            self.logger.debug2(f'Evaluating point {point}')
 
             # print("Goal: {} {}".format(point, space))
             # -- Use distance --
@@ -197,10 +216,8 @@ class Evaluator(Serializable):
                 result = self.evaluateDistance(point)
             # -- Use planning (and perform the planned path) --
             elif self.method == 'planning':
-                self.environment.setupPreTest(test)
                 result = self.evaluatePlanning(point)
             elif self.method == 'execution':
-                self.environment.setupPreTest(test)
                 result = self.evaluateExecution(point)
             '''if tree is None:
                 dist = self.agent.dataset.outcomeSpaces[task].options['out_dist']
@@ -212,6 +229,13 @@ class Evaluator(Serializable):
             error = result[0]
             if error >= 0.:
                 results.append(result)
+        
+        testResult = TestResult(test, self.agent.iteration, results, method=self.method)
+        
+        if test.postTest:
+            test.postTest(testResult)
+
+        self.logger.info(f'Test evaluation results: {testResult}')
 
         #print(eva)
         # errors.sort()
@@ -220,7 +244,7 @@ class Evaluator(Serializable):
         #if eva > n:
         #    eva = eva[0:-n]
 
-        return TestResult(test, self.agent.iteration, results, method=self.method)
+        return testResult
 
     def evaluateDistance(self, point):
         _, dist = point.space.nearestDistance(point)
@@ -278,8 +302,8 @@ class Evaluator(Serializable):
             absoluteGoal = point.absoluteData(self.environment.state())
             self.environment.world.discretizeStates = discrete
 
-            print('@@@')
-            print(absoluteGoal)
+            # print('@@@')
+            # print(absoluteGoal)
             # print(point)
             # print(self.environment.state())
 
@@ -298,7 +322,11 @@ class Evaluator(Serializable):
                 error = min(1., distance / min(goalDistance, addDistance))
             except Exception:
                 error = 1.
-            print('DISTANCE', reached, difference, distance, error)
+            
+            self.logger.debug2(
+                f'Aiming for {absoluteGoal} and reached {reached}: diff {distance:.3f}, error {error:.3f}')
+
+            # print('DISTANCE', reached, difference, distance, error)
             return error, point, reached
             # paths, _, dist = self.agent.planner.planDistance(point)#, hierarchical=False)
             # spaces = list(env.dataset.outcomeSpaces)

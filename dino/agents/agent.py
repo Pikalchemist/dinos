@@ -50,9 +50,8 @@ class Agent(Module):
     PERFORMER_CLASS = Performer
 
     def __init__(self, host, dataset=None, performer=None, planner=None, options={}):
-        super().__init__('Agent', host.manager)
+        super().__init__('Agent', host.manager, loggerTag='agent')
         manage(self).attach_counter(AsyncCounter(self))
-        self.logger.tag = 'agent'
 
         self.host = host
         self.host.hosting = self
@@ -65,6 +64,8 @@ class Agent(Module):
         self.options = options
         self.scheduled = None
         self.iterationEvent = threading.Event()
+
+        self.learningPolicy = None
 
         self.configs = {}
         self.analyse = self.__class__.ResultAnalyser(self)

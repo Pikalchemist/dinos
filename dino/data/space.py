@@ -322,7 +322,7 @@ class Space(Serializable):
 
     def zero(self, relative=None):
         self._validate()
-        d = Data(self, [0] * self.dim)
+        d = Data(self, [0.] * self.dim)
         d.setRelative(relative)
         return d
 

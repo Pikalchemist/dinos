@@ -192,6 +192,10 @@ class Environment(SpaceManager, EntityManager):
     def setupPreTest(self, test=None):
         with self.lock:
             self.scene.setupPreTest(test)
+    
+    def setupPreTestPoint(self, test=None, point=None):
+        with self.lock:
+            self.scene.setupPreTestPoint(test, point)
 
     def state(self, dataset=None, featureMap=None):
         return State(self, self.world.observe().flat(), dataset=dataset, featureMap=featureMap)

@@ -74,9 +74,12 @@ class EmptyScene(BaseScene):
         self._testAgentMoving()
 
     def _testAgentMoving(self):
-        boundaries = [(200, 400), (200, 400)]
-        self.addTest(UniformGridTest('agent-moving', self.world.cascadingProperty(
-            'Agent.position').space, boundaries, numberByAxis=2, relative=False))
+        points = [(200, 200),
+                  (200, 400),
+                  (400, 400),
+                  (400, 200)]
+        test = PointsTest('agent-moving', self.world.cascadingProperty('Agent.position').space, points, relative=False)
+        self.addTest(test)
 
     # Resets
     def setupEpisode(self, config, forceReset=False):
@@ -84,7 +87,10 @@ class EmptyScene(BaseScene):
             self._resetAgent()
     
     def setupPreTest(self, test):
-        self._resetAgent(rand=False)
+        self.world.child('Agent').body.position = (350, 300)
+    
+    def setupPreTestPoint(self, test, point):
+        self.world.child('Agent').body.position = (350, 300)
     
     def _resetAgent(self, rand=True):
         self.world.child('Agent').body.position = (random.choice([100, 200, 300, 400]), random.randint(150, 450)) if rand else (300, 300)
@@ -102,23 +108,46 @@ class RoomWithWallsScene(EmptyScene):
         self._setupWalls()
 
     def _setupWalls(self):
-        w = 5
-        self.world.addChild(Wall((270.0, 200.0), (270.0, 400.0), w))
-        self.walls = [Wall((50.0, 50.0), (550.0, 50.0), w),
-                      Wall((550.0, 50.0), (550.0, 500.0), w),
-                      Wall((550.0, 500.0), (50.0, 500.0), w),
-                      Wall((50.0, 500.0), (50.0, 50.0), w),
-                      Wall((285.0, 380.0), (315.0, 380.0), w),
-                      Wall((285.0, 410.0), (315.0, 410.0), w)]
-        self.walls = self.walls[:-2]
+        self.walls = []
+
+        # outer walls
+        outw = 6
+        outw2 = outw // 2
+        self.walls += [Wall((50.0, 50.0), (550.0, 50.0), outw),
+                       Wall((550.0, 50.0 - outw2 + 1), (550.0, 500.0 + outw2), outw),
+                       Wall((550.0, 500.0), (50.0, 500.0), outw),
+                       Wall((50.0, 500.0 + outw2), (50.0, 50.0 - outw2 + 1), outw)]
+
+        # inner walls
+        w = 20
+        self.walls += [Wall((260.0, 200.0), (260.0, 400.0), w),
+                       Wall((335.0, 50.0), (335.0, 290.0), w)]
+        # self.walls += [Wall((285.0, 380.0), (315.0, 380.0), w),
+        #                Wall((285.0, 410.0), (315.0, 410.0), w)]
+
         for wall in self.walls:
             self.world.addChild(wall)
 
     # Tests
     def _testAgentMoving(self):
-        boundaries = [(200, 400), (200, 400)]
-        self.addTest(UniformGridTest('agent-moving', self.world.cascadingProperty(
-            'Agent.position').space, boundaries, numberByAxis=2, relative=False))
+        points = [(300, 200),
+                  (300, 400),
+                  (400, 300)]
+        test = PointsTest('agent-moving', self.world.cascadingProperty('Agent.position').space, points, relative=False)
+        self.addTest(test)
+
+        points = [(150, 250),
+                  (350, 250),
+                  (150, 350),
+                  (350, 350)]
+        test = PointsTest('agent-moving-obstacles', self.world.cascadingProperty('Agent.position').space, points, relative=False)
+
+        def prePoint(point):
+            point = point.plain()
+            self.world.child('Agent').body.position = (350 if point[0] < 260 else 150, 250 if point[1] < 300 else 350)
+
+        test.prePoint = prePoint
+        self.addTest(test)
 
 
 class OneCylinderScene(EmptyScene):

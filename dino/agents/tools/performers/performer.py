@@ -14,6 +14,7 @@ from dino.data.space import SpaceKind, FormatParameters
 from dino.data.path import Path, ActionNotFound
 
 from dino.agents.tools.planners.planner import PlanSettings
+from dino.agents.tools.policies.policy import LearningPolicy
 
 
 class Performer(Module):
@@ -25,8 +26,7 @@ class Performer(Module):
     MAX_DISTANCE = 0.01
 
     def __init__(self, agent, options={}):
-        super().__init__('Performer', agent)
-        self.logger.tag = 'performer'
+        super().__init__('Performer', agent, loggerTag='performer')
 
         self.agent = agent
         self.environment = self.agent.environment
@@ -62,6 +62,7 @@ class Performer(Module):
         Tests a specific action list and stores consequences in memory.
         """
         results = []
+        lastResults = []
         # print('((START))')
 
         # for node in list(path.nodes):
@@ -77,7 +78,7 @@ class Performer(Module):
 
         # settings
         replanning = 0
-        maxReplanning = 2
+        maxReplanning = 5
         maxDistance = 7.
         maxDerive = None
         if model:
@@ -155,17 +156,18 @@ class Performer(Module):
                     differences = observations.difference(observationsPrevious)
                     observationsPrevious = None
                 else:
-                    self.logger.debug(f'Iter (d{depth}) {i}:\n{node.model.npForward(node.action, currentState.context())}')
+                    # self.logger.debug(f'Iter (d{depth}) {i}:\n{node.model.npForward(node.action, currentState.context())}')
                     event, differences, observationsPrevious = self.performAction(
                         node, observationsPrevious, formatParameters, config)
                     results.append(event)
+                    lastResults.append(event)
                 
                 # print('=== ===')
                 # print(node.state)
                 # print(self.environment.state().context())
 
-                self.logger.debug(
-                    f'Iter (d{depth}) {i}:\n{node.ty0} Estimated state:\n{node.state.context()}\nCurrent New State:\n{self.environment.state().context()}')
+                # self.logger.debug(
+                #     f'Iter (d{depth}) {i}:\n{node.ty0} Estimated state:\n{node.state.context()}\nCurrent New State:\n{self.environment.state().context()}')
                 
                 # self.logger.info(f'Iter (d{depth}) {i}: performing {node.action}')
 
@@ -219,6 +221,11 @@ class Performer(Module):
                     # print(self.environment.state().context())
                     # print(f'Max {self.MAX_DERIVE * node.absPos.space.maxDistance}')
                 i += 1
+
+                if self.agent.learningPolicy == LearningPolicy.EACH_ITERATION:
+                    self.agent.addMemory(lastResults, config)
+                    lastResults = []
+
             nodes = None
         # if o:
         #     y = o.difference(oStart)

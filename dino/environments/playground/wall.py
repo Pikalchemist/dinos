@@ -14,7 +14,7 @@ from dino.representation.property import MethodObservable, AttributeObservable
 
 
 class Wall(PhysicalEntity):
-    def __init__(self, coordsFrom, coordsTo, width=10):
+    def __init__(self, coordsFrom, coordsTo, width=40):
         super().__init__(self.__class__.__name__)
         self.width = width
         self.coordsFrom = coordsFrom

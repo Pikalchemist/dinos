@@ -23,7 +23,6 @@ class ModelDataset(Dataset):
         options dict: parameters for the dataset
         """
         super().__init__(options=options)
-        self.logger.tag = 'dataset'
 
         self.modelClass = modelClass
         self.models = []

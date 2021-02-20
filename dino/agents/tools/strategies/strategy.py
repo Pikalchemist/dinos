@@ -6,6 +6,7 @@ from exlab.modular.module import Module
 
 from exlab.utils.io import parameter
 from dino.utils.move import MoveConfig
+from dino.utils.maths import linearValue
 
 # from ...data.dataset import Action
 # from dino.data.data import *
@@ -24,8 +25,7 @@ class Strategy(Module):
         """
         self.name = name if name else (self.__class__.__name__[
                                        :1].lower() + self.__class__.__name__[1:])
-        super().__init__(f'Strategy {self.name}', agent)
-        self.logger.tag = 'strategy'
+        super().__init__(f'Strategy {self.name}', agent, loggerTag='strategy')
 
         self.agent = agent
         self.options = options
@@ -33,6 +33,7 @@ class Strategy(Module):
 
         # Short term memory containing all actions & outcomes reached during the last learning episode
         self.memory = []
+        # self.config = None
         # self.n = 0
 
         # self.complex_actions = complex_actions
@@ -80,17 +81,18 @@ class Strategy(Module):
     def _preRun(self, config):
         self.agent.syncCounter()
         self.memory = []
+        # self.config = config
         # self.n = 0
 
     def _run(self, config):
         self.runIteration(config)
 
     def _postRun(self, config):
-        memory = self.memory
-        if self.agent.dataset:
-            for event in memory:
-                event.convertTo(spaceManager=self.agent.dataset, toData=True)
-        return memory
+        return self.memory
+    
+    # def processMemory(self, memory=None):
+    #     memory = parameter(memory, self.memory)
+    #     self.agent.addMemory(memory, self.config)
 
     def runIteration(self, config):
         self.agent.environment.checkTerminated()
@@ -103,6 +105,10 @@ class Strategy(Module):
 
     def reachGoalContext(self, config):
         if not config.goalContext:
+            return True
+
+        probFirstPass = linearValue(1., 0., (config.goalContext.space.number - 20) / 100)
+        if not config.exploitation and random.uniform(0, 1) < probFirstPass:
             return True
 
         settings = config.plannerSettings.clone(context=True)
@@ -155,6 +161,7 @@ class Strategy(Module):
         results = self.performer.perform(path, config)
         # self.n += InteractionEvent.incrementList(results, self.n)
         self.memory += results
+        # self.n += 1
 
     def __deepcopy__(self, a):
         newone = type(self).__new__(type(self))

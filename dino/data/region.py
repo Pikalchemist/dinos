@@ -18,30 +18,116 @@ from .dataspace import DataSpace
 from .data import Data
 
 
+class Point(Serializable):
+    MAX_VALUES = 10
+    WINDOW_SIZE = 5
+    NEAR_CONTEXT_DISTANCE = 0.04
+
+    def __init__(self, id_, position, context, positionContext, value=None):
+        self.id = id_
+        self.position = position
+        self.context = context
+        self.positionContext = positionContext
+
+        self.values = []
+        self.progresses = []
+        self.evaluation = 0.
+        self.cost = 1.
+
+        if value is not None:
+            self.addValue(value)
+
+    def __repr__(self):
+        return f'Point #{self.id} {self.position} {self.evaluation}'
+    
+    def _serialize(self, serializer):
+        dict_ = serializer.serialize(
+            self, ['id', 'position', 'context', 'positionContext', 'values', 'progresses', 'evaluation', 'cost'])
+        return dict_
+
+    @classmethod
+    def _deserialize(cls, dict_, serializer, obj=None):
+        if obj is None:
+            obj = cls(dict_.get('id'),
+                      dict_.get('position'),
+                      dict_.get('context'),
+                      dict_.get('positionContext'),
+                      serializer.get('.region.parent'))
+        return super()._deserialize(dict_, serializer, obj)
+
+    def _postDeserialize(self, dict_, serializer):
+        super()._postDeserialize(dict_, serializer)
+        for attr in ['values', 'progresses', 'evaluation', 'cost']:
+            setattr(self, attr, dict_.get(attr))
+    
+    @property
+    def lastValue(self):
+        return self.values[-1]
+    
+    def needUpdate(self):
+        if len(self.progresses) < 4:
+            return True
+        if random.uniform(0, 1) < self.evaluation * 10:
+            return True
+        return False
+
+    def addValue(self, value):
+        self.values.append(value)
+        self.values = self.values[-self.MAX_VALUES:]
+        self.computeEvaluation(self.values, self.WINDOW_SIZE, cost=self.cost)
+    
+    def computeEvaluation(self, values, windowSize, cost=1.):
+        """Compute evaluation of the region for given strategy."""
+        if len(values) >= windowSize:
+            self.progresses.append(self.meanProgress(values))
+            self.progresses = self.progresses[-windowSize:]
+
+        if len(self.progresses) >= 2:
+            self.evaluation = np.abs((self.progresses[-1] - self.progresses[0]) / cost)
+        elif values:
+            self.evaluation = values[-1] / cost
+        else:
+            self.evaluation = 0.
+
+    def meanProgress(self, values):
+        """Compute mean progress according to the evaluation window."""
+        return np.mean(values[-self.WINDOW_SIZE:])
+    
+    def nearContext(self, projectedContext=None):
+        if not projectedContext:
+            return True
+        distance = self.context.distanceTo(projectedContext) / self.context.space.maxDistance
+        return distance < self.NEAR_CONTEXT_DISTANCE
+
+
+
 class SpaceRegion(Serializable):
     """Implements an evaluation region."""
 
-    def __init__(self, targetSpace, options, bounds=None, parent=None, manager=None, tag='',
+    REGION_BASED = 0
+    REGION_UPDATABLE = 1
+    POINT_BASED = 2
+
+    def __init__(self, space, options, bounds=None, parent=None, manager=None, tag='',
                  contextSpace=None, regions=None):
         """
         bounds float list dict: contains min and max boundaries of the region
         options dict: different options used by the evaluation model
         """
-        self.space = targetSpace.spaceManager.multiColSpace(
-            [targetSpace, contextSpace], weight=0.5)
-        self.targetSpace = targetSpace
+        self.explorableSpace = space
+        self.explorableContextSpace = space.spaceManager.multiColSpace([space, contextSpace], weight=0.5)
         self.contextSpace = contextSpace
 
         self.parent = parent
         self._manager = manager
 
         self.bounds = copy.deepcopy(
-            bounds) if bounds else Space.infiniteBounds(self.space.dim)
+            bounds) if bounds else Space.infiniteBounds(self.explorableContextSpace.dim)
         assert(parent is not None or manager is not None)
         self.tag = tag
 
-        self.colsContext = self.space.columnsFor(self.contextSpace)
-        self.colsTarget = self.space.columnsFor(self.targetSpace)
+        self.colsExplorable = self.explorableContextSpace.columnsFor(self.explorableSpace)
+        self.colsContext = self.explorableContextSpace.columnsFor(self.contextSpace)
 
         # Contains the following keys:
         #   'minSurface': the minimum surface of a region to be still splittable
@@ -61,13 +147,9 @@ class SpaceRegion(Serializable):
 
         self.number = 0
         self.points = []
-        self.pointValues = []
         self.progresses = []
         self.evaluation = 0.
-        '''for i in range(len(options['costs'])):
-            self.points.append([])
-            self.pointValues.append([])
-            self.evaluation.append(0.0)'''
+        # self.base = Point(None, None, None, None)
 
         self.leftChild = None
         self.rightChild = None
@@ -86,14 +168,15 @@ class SpaceRegion(Serializable):
             self.lid = self.root().childrenNumber
             self.root().childrenNumber += 1
 
+        self.explorablePreSpace = self.explorableSpace.convertTo(self.dataset, kind=SpaceKind.PRE)
+
     def __repr__(self):
-        dim = len(self.points[0]) if self.points else '?'
-        cut = strtab(f'{self.splitDim}d {self.splitValue:.4f} #{dim}')
-        return f'Region {self.space} {self.evaluation}\n    Left: {self.leftChild is not None}\n    <Cut {cut}>\n    Right: {self.rightChild is not None}'
+        cut = strtab(f'{self.splitDim}th d: {self.splitValue:.4f}')
+        return f'Region {self.explorableContextSpace} {self.evaluation:.4f}\n    Left: {self.leftChild is not None}\n    <Cut {cut}>\n    Right: {self.rightChild is not None}'
 
     def _serialize(self, serializer):
         dict_ = serializer.serialize(
-            self, ['targetSpace', 'contextSpace', 'bounds', 'points', 'pointValues', 'progresses', 'evaluation',
+            self, ['explorableSpace', 'contextSpace', 'bounds', 'points', 'number', 'progresses', 'evaluation',
                    'leftChild', 'rightChild', 'splitValue', 'splitDim', 'tag'])
         return dict_
 
@@ -102,7 +185,7 @@ class SpaceRegion(Serializable):
         if obj is None:
             # leftChild = serializer.deserialize(dict_.get('leftChild'))
             # rightChild = serializer.deserialize(dict_.get('rightChild'))
-            obj = cls(serializer.deserialize(dict_.get('targetSpace')),
+            obj = cls(serializer.deserialize(dict_.get('explorableSpace')),
                       options=dict_.get('options', {}),
                       bounds=dict_.get('bounds'),
                       parent=serializer.get('.region.parent'),
@@ -118,8 +201,10 @@ class SpaceRegion(Serializable):
             '.region.manager': self.manager,
         })
 
-        for attr in ['points', 'pointValues', 'progresses', 'evaluation', 'splitValue', 'splitDim']:
+        for attr in ['number', 'progresses', 'evaluation']:
             setattr(self, attr, dict_.get(attr))
+        for attr in ['points']:
+            setattr(self, attr, serializer.deserialize(dict_.get(attr)))
 
         self.leftChild = serializer.deserialize(dict_.get('leftChild'))
         self.rightChild = serializer.deserialize(dict_.get('rightChild'))
@@ -133,40 +218,52 @@ class SpaceRegion(Serializable):
     @property
     def manager(self):
         return self.root()._manager
+    
+    @property
+    def dataset(self):
+        return self.root()._manager.dataset
+    
+    @property
+    def method(self):
+        return self.root()._manager.method
+    
+    def positions(self, withContext=True):
+        if withContext:
+            return np.array([p.positionContext for p in self.points])
+        return np.array([p.position for p in self.points])
 
     def finiteBounds(self):
-        points = np.array(self.root().getSplitData(withRegions=False)[0])
-        return [(np.min(points[:, j]) if bmin == -math.inf else bmin,
-                 np.max(points[:, j]) if bmax == math.inf else bmax)
+        # points = np.array(self.root().getSplitData(withRegions=False)[0])
+        positions = self.positions()
+        return [(np.min(positions[:, j]) if bmin == -math.inf else bmin,
+                 np.max(positions[:, j]) if bmax == math.inf else bmax)
                 for j, (bmin, bmax) in enumerate(self.bounds)]
 
     def maxDistance(self):
-        _bounds = list(zip(np.min(self.points, axis=0).tolist(),
-                           np.max(self.points, axis=0).tolist()))
-        return (sum([(bound[1] - bound[0]) ** 2 for bound in _bounds])) ** 0.5
+        positions = self.positions()
+        bounds = np.max(positions, axis=0) - np.min(positions, axis=0)
+        return np.sum(bounds ** 2) ** 0.5
 
     @property
     def splitten(self):
         return self.leftChild is not None
 
-    def nearestContext(self, context):
-        self.contextSpace._validate()
-        context = context.convertTo(kind=SpaceKind.PRE).projection(
-            self.contextSpace).plain()
+    # def nearestContext(self, context):
+    #     self.contextSpace._validate()
+    #     context = context.convertTo(kind=SpaceKind.PRE).projection(self.contextSpace).plain()
 
-        indices, distances = DataSpace.nearestFromData(np.array(self.points)[:, self.colsContext], context,
-                                                                n=self.options['maxPoints']//2)
+    #     indices, distances = DataSpace.nearestFromData(np.array(self.points)[:, self.colsContext], context,
+    #                                                             n=self.options['maxPoints']//2)
 
-        return indices, distances
+    #     return indices, distances
 
     def nearContext(self, context, tolerance=0.01):
         if not self.contextSpace:
             return True
 
         self.contextSpace._validate()
-        context = context.convertTo(kind=SpaceKind.PRE).projection(
-            self.contextSpace).plain()
-        tolerance *= self.contextSpace.maxDistance
+        context = context.convertTo(kind=SpaceKind.PRE).projection(self.contextSpace).plain()
+        tolerance = self.contextSpace.maxDistance * tolerance
 
         # Context in bounds
         inBounds = True
@@ -176,15 +273,70 @@ class SpaceRegion(Serializable):
                 break
         return inBounds
 
-    def controllableContext(self, dataset):
+    def controllableContext(self):
         if not self.contextSpace:
             return False
-        return dataset.controllableSpaces(self.contextSpace)
+        return self.dataset.controllableSpaces(self.contextSpace)
+    
+    def updatePoints(self, aroundPoint, closeIds=None):
+        for point in self.points:
+            if point.id in closeIds and point != aroundPoint:
+                self.updatePoint(point)
 
-    def addPoint(self, point, value, firstAlwaysNull=True, populating=False):
+    def updatePoint(self, point):
+        pass
+
+    def computeEvaluation(self):
+        if self.method == self.POINT_BASED:
+            self.evaluation = max(p.evaluation for p in self.points)
+        elif self.method == self.REGION_BASED:
+            values = [p.lastValue for p in self.points]
+            Point.computeEvaluation(self, values, self.options['window'])
+
+    def findRandom(self):
+        return random.choice(self.points)
+ 
+    def findBest(self, context=None, changeContext=True, favoriseBest=1.):
+        dataChangeContext, dataCurrentContext = [], []
+        if context:
+            context = context.projection(self.contextSpace)
+            dataCurrentContext += [point for point in self.points if point.nearContext(context)]
+
+        if changeContext:
+            dataChangeContext += list(self.points)
+            changeContext = self.chooseToChangeContext(max(x.evaluation for x in dataChangeContext) if dataChangeContext else -math.inf,
+                                                       max(x.evaluation for x in dataCurrentContext) if dataCurrentContext else -math.inf)
+
+        data = dataChangeContext if changeContext else dataCurrentContext
+        # data.sort(key=lambda x: -x[1])
+
+        if not data:
+            return self.findRandom(), changeContext
+        return random.choices(data, weights=[x.evaluation for x in data])[0], changeContext
+    
+    def createRandomPoint(self):
+        return self.explorableSpace.point(np.array([random.uniform(bmin, bmax) for bmin, bmax in self.finiteBounds()])[self.colsExplorable])
+    
+    def chooseToChangeContext(self, bestChangedContext, bestCurrentContext):
+        if bestCurrentContext > bestChangedContext * 4:
+            return False
+        if bestChangedContext > bestCurrentContext * 4:
+            return True
+        return random.uniform(0, bestChangedContext + bestCurrentContext) < bestChangedContext
+    
+    def getGoalContext(self, point):
+        if self.controllableContext():
+            return point.context
+        return self.explorableSpace.point(self.explorablePreSpace.getData([point.id])[0]).setRelative(False)
+
+    def addPoint(self, id_, point, context, value, closeIds=None, firstAlwaysNull=True, populating=False):
         """Add a point and its value in the attached evaluation region."""
-        point = Data.plainData(point, self.space)
-        assert len(point) == len(self.bounds)
+        pointContext = Data.npPlainData(point.extends(context), self.explorableContextSpace)
+        # point = Data.plainData(point, self.explorableSpace)
+        # context = Data.plainData(context, self.contextSpace)
+        point = point.projection(self.explorableSpace, kindSensitive=True)
+        context = context.projection(self.contextSpace, kindSensitive=True)
+        assert len(pointContext) == len(self.bounds)
 
         # print("ADDING 1 POINT", point)
         # if filterNull and np.all(np.array(point)[self.colsTarget]==0):
@@ -193,43 +345,37 @@ class SpaceRegion(Serializable):
 
         # if firstAlwaysNull and len(self.points) == 0:
         #     value = 0.
-        self.points.append(point)
-        self.pointValues.append(value)
-        self.number += 1
-        self.computeEvaluation()
-        # print(f'{self.evaluation}')
-        addedInChildren = False
 
+        p = Point(id_, point, context, pointContext, value)
+        self._addPointData(p, closeIds=closeIds, firstAlwaysNull=firstAlwaysNull, populating=populating)
+
+    def _addPointData(self, point, closeIds=None, firstAlwaysNull=True, populating=False):
+        self.points.append(point)
+        self.number += 1
+
+        if not populating and self.method == self.POINT_BASED:
+            self.updatePoints(point, closeIds)
+        self.computeEvaluation()
+
+        # addedInChildren = False
         if not self.splitten and self.splittable and self.number > self.options['pointNumberSplit']:
-            # Leave reached
-            # Region must be splat
+            # Leave reached, region must be splitten
             self.randomCut(self.options['maxAttempts'])
-            #self.greedyCut()
-            # Making sure a cut has been found
-            if self.splitDim is not None:
-                self.split()
+            self.split()
         elif self.splitten:
             # Traverse tree
-            addedInChildren = True
-            if point[self.splitDim] < self.splitValue:
-                self.leftChild.addPoint(point, value)
-            else:
-                self.rightChild.addPoint(point, value)
+            # addedInChildren = True
+            child = self.leftChild if point.positionContext[self.splitDim] < self.splitValue else self.rightChild
+            child._addPointData(point, closeIds=closeIds, populating=populating)
 
         # Remove oldest points and pointValues
-        maxPoints = self.options['maxPoints']
-        if len(self.points) > maxPoints:
-            self.points = self.points[-maxPoints:]
-            self.pointValues = self.pointValues[-maxPoints:]
-        maxPoints = self.options['window'] * 2
-        if len(self.progresses) > maxPoints:
-            self.progresses = self.progresses[-maxPoints:]
+        if self.method == self.POINT_BASED:
+            pass
+        else:
+            self.points = self.points[-self.options['maxPoints']:]
 
-        if not addedInChildren and not populating and self.manager:
-            self.manager.logger.debug(f'Adding point [{", ".join(["{:.4f}".format(p) for p in point])}] with value {value:.3e} to region {self}', tag=self.tag)
-
-    def computeEvaluation(self):
-        pass
+        # if not addedInChildren and not populating and self.manager:
+        #     self.manager.logger.debug(f'Adding point [{", ".join(["{:.4f}".format(p) for p in point])}] with value {value:.3e} to region {self}', tag=self.tag)
 
     # Splitting process
     def setSplittable(self):  # Change it to use max depth tree instead ???
@@ -242,6 +388,8 @@ class SpaceRegion(Serializable):
     def split(self):
         """Split region according to the cut decided beforehand."""
 
+        if self.splitDim is not None:
+            return
         if self.manager:
             self.manager.logger.debug(f'Splitting along dim {self.splitDim}: {self.splitValue:.4f} for {self}', tag=self.tag)
 
@@ -252,9 +400,9 @@ class SpaceRegion(Serializable):
         rightBounds[self.splitDim][0] = self.splitValue
 
         # Create empty child regions
-        self.leftChild = self.__class__(self.targetSpace, self.options, bounds=leftBounds,
+        self.leftChild = self.__class__(self.explorableSpace, self.options, bounds=leftBounds,
                                         parent=self, contextSpace=self.contextSpace, regions=self.regions)
-        self.rightChild = self.__class__(self.targetSpace, self.options, bounds=rightBounds,
+        self.rightChild = self.__class__(self.explorableSpace, self.options, bounds=rightBounds,
                                          parent=self, contextSpace=self.contextSpace, regions=self.regions)
         # root = self.root()
         # root.history.append(root.manager.getIteration(), DataEventKind.ADD, [(str(self.leftChild.lid), self.leftChild.serialize())])
@@ -283,11 +431,9 @@ class SpaceRegion(Serializable):
         #print("Split done on dimension " + str(self.splitDim) + " at value: " + str(self.splitValue))
 
         # Add all points of the parent region in the child regions according to the cut
-        for point, value in zip(self.points, self.pointValues):
-            if point[self.splitDim] < self.splitValue:
-                self.leftChild.addPoint(point, value, populating=True)
-            else:
-                self.rightChild.addPoint(point, value, populating=True)
+        for point in self.points:
+            child = self.leftChild if point.positionContext[self.splitDim] < self.splitValue else self.rightChild
+            child._addPointData(point, populating=True)
 
     # def greedyCut(self):
     #     """UNTESTED method to define a cut greedily."""
@@ -344,7 +490,7 @@ class SpaceRegion(Serializable):
         # For each dimension
         #from pprint import pprint
         for d in range(len(self.bounds)):
-            i.sort(key=lambda j: self.points[j][d])
+            i.sort(key=lambda j: self.points[j].positionContext[d])
             # For each attempt
             for k in range(numberAttempts):
                 progress_left = 0.
@@ -359,17 +505,16 @@ class SpaceRegion(Serializable):
                 # Id of the item following cut
                 idcut = int(math.floor((k+1)*n))
 
-                splitValue = (self.points[i[idcut-1]]
-                              [d] + self.points[i[idcut]][d]) / 2.
+                splitValue = (self.points[i[idcut-1]].positionContext[d] + self.points[i[idcut]].positionContext[d]) / 2.
 
                 # Make sure we are not trying to split something unsplittable
-                if self.points[i[idcut-1]][d] == splitValue:
+                if self.points[i[idcut-1]].positionContext[d] == splitValue:
                     continue
 
                 left = []
                 right = []
                 for j in range(len(self.points)):
-                    if self.points[j][d] < splitValue:
+                    if self.points[j].positionContext[d] < splitValue:
                         left.append(j)
                     else:
                         right.append(j)
@@ -382,10 +527,10 @@ class SpaceRegion(Serializable):
 
                 # Compute progress for each part
                 for j in left_filtered:
-                    progress_left += self.pointValues[j]
+                    progress_left += self.points[j].lastValue
                 progress_left /= float(max(len(left_filtered), 1))
                 for j in right_filtered:
-                    progress_right += self.pointValues[j]
+                    progress_right += self.points[j].lastValue
                 progress_right /= float(max(len(right_filtered), 1))
 
                 # Compute delta_p and Q
@@ -405,8 +550,8 @@ class SpaceRegion(Serializable):
             self.manager.logger.debug2(f'Found split along dim {self.splitDim}: {self.splitValue:.4f} for {self}', tag=self.tag)
 
     def getSplitData(self, withRegions=True):
-        points = list(self.points)
-        pointValues = list(self.pointValues)
+        points = self.positions()
+        pointValues = [point.value for point in self.points]
 
         regions = []
         if withRegions and not self.splitten:
@@ -446,10 +591,10 @@ class SpaceRegion(Serializable):
             cols = self.colsContext
             points = points[:, cols]
         elif outcomeOnly:
-            cols = self.colsTarget
+            cols = self.colsExplorable
             points = points[:, cols]
         else:
-            cols = np.arange(self.space.dim)
+            cols = np.arange(self.explorableContextSpace.dim)
 
         # pvMinimum = np.min(pointValues)
         # pvMaximum = np.max(pointValues)

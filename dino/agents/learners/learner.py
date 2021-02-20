@@ -23,6 +23,7 @@ from dino.utils.move import MoveConfig
 
 from dino.agents.tools.datasets.dataset import Dataset
 from dino.agents.tools.strategies.strategy_set import StrategySet
+from dino.agents.tools.policies.policy import LearningPolicy
 from dino.environments.priors.maps.auto import Mapper
 
 
@@ -42,6 +43,9 @@ class Learner(Agent):
                          planner=planner, options=options)
         self.dataset.attachLearner(self)
 
+        self.learningPolicy = LearningPolicy.DEFAULT
+        self.processedEvents = []
+
         # if self.dataset:
         #     self.addChildModule(self.dataset)
 
@@ -53,7 +57,7 @@ class Learner(Agent):
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
         dict_.update(serializer.serialize(
-            self, ['dataset', 'trainStrategies']))
+            self, ['dataset', 'trainStrategies', 'processedEvents']))
         return dict_
     
     def findStrategy(self, name):
@@ -72,9 +76,30 @@ class Learner(Agent):
     #                                 .deserialize(strategy, obj, options=options))
     #     return obj
     
-    def addEvent(self, event, config, cost=1.):
+    def addEvent(self, event, config, cost=1., convertToDataset=True):
+        if self.dataset and not config.evaluating and event.iteration not in self.processedEvents:
+            if convertToDataset:
+                event.convertTo(spaceManager=self.dataset, toData=True)
+            self.processedEvents.append(event.iteration)
+            self._addEvent(event, config, cost)
+    
+    def _addEvent(self, event, config, cost=1.):
+        self.dataset.addEvent(event, cost=cost)
+    
+    def addMemory(self, memory, config):
+        memory = self._convertMemory(memory)
+
+        if not config.evaluating:
+            for event in memory:
+                self.addEvent(event, config, convertToDataset=False)
+            self.dataset.updated()
+    
+    def _convertMemory(self, memory):
+        memory = list(memory)
         if self.dataset:
-            self.dataset.addEvent(event, cost=cost)
+            for event in memory:
+                event.convertTo(spaceManager=self.dataset, toData=True)
+        return memory
 
     def trainable(self):
         return True
@@ -139,17 +164,10 @@ class Learner(Agent):
     def _postEpisode(self, memory, config):
         # self.logger.info('Adding episode of length {} to the dataset'
         #                  .format(len(memory)), 'DATA')
-
-        if not config.evaluating:
-            for event in memory:
-                self.addEvent(event, config)
-            self.dataset.updated()
+        self.addMemory(memory, config)
     
     def _postTest(self, memory, config):
-        if not config.evaluating:
-            for event in memory:
-                self.addEvent(event, config)
-            self.dataset.updated()
+        self.addMemory(memory, config)
 
     class ResultAnalyser(Agent.ResultAnalyser):
         @property

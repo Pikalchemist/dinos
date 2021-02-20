@@ -89,8 +89,7 @@ class Planner(Module):
     GOAL_SAMPLE_RATE = 0.2
 
     def __init__(self, agent, hierarchical=None, chaining=None, options={}):
-        super().__init__('planner', agent)
-        self.logger.tag = 'plan'
+        super().__init__('planner', agent, loggerTag='plan')
 
         self.agent = agent
         self.environment = self.agent.environment
@@ -256,11 +255,12 @@ class Planning(object):
         return self.planner.logger
 
     def initParameters(self):
-        self.maxIter = parameter(self.settings.maxIterations, 100)
-        self.maxIterNoNodes = 5
+        ratio = self.space.number / 200
+        self.maxIter = parameter(self.settings.maxIterations, int(linearValue(10, 150, ratio)))
+        self.maxIterNoNodes = int(linearValue(10, 20, ratio))
         if self.settings.dontMoveSpaces:
-            self.maxIter *= 4
-            self.maxIterNoNodes *= 4
+            self.maxIter *= 2
+            self.maxIterNoNodes *= 2
 
         self.maxDistanceBest = self.model.getPrecision(Planner.MAX_DISTANCE, 0.5)
         self.maxDistance = self.maxDistanceBest * 3 + 0.02 * self.goal.norm()
@@ -280,6 +280,7 @@ class Planning(object):
     def initVariables(self):
         self.minDistanceReached = self.goal.norm()
         self.closestNodeToGoal = None
+        self.attemptCloseToGoal = 0
 
         self.nodes = [PathNode(pos=self.space.zero(), absPos=self.startPosition, state=self.startState)]
         # nodePositions = np.zeros((maxIter + 1, space.dim))
@@ -305,7 +306,7 @@ class Planning(object):
         self.a0, self.y0, self.c0, self.distance0 = [None, None, None, None]
     
     def execute(self):
-        if self.space._number < 100 or self.minDistanceReached < self.maxDistanceBest:
+        if self.space._number < 20 or self.minDistanceReached < self.maxDistanceBest:
             return Path(), None, 0
 
         # Main loop
@@ -602,13 +603,18 @@ class Planning(object):
         if distance > self.minDistanceReached:
             self.directGoal = False
             if self.minDistanceReached < self.maxDistance and self.closestNodeToGoal:
-                self.logger.debug(f'{self.logTag()} Iter {self.i}: close enough to the goal {self.minDistanceReached:.3f} (max {self.maxDistance:.3f})')
-                self.path = self.closestNodeToGoal.createPath(self.goal, self.pathSettings())
-                if not self.settings.performing and not self.settings.context and self.settings.depth == 0:
-                    self.settings.result.planningDistance = (self.minDistanceReached, self.maxDistance)
-                return True
+                self.attemptCloseToGoal += 1
+                if self.attemptCloseToGoal >= 3:
+                    self.logger.debug(f'{self.logTag()} Iter {self.i}: close enough to the goal {self.minDistanceReached:.3f} (max {self.maxDistance:.3f})')
+                    self.path = self.closestNodeToGoal.createPath(self.goal, self.pathSettings())
+                    if not self.settings.performing and not self.settings.context and self.settings.depth == 0:
+                        self.settings.result.planningDistance = (self.minDistanceReached, self.maxDistance)
+                    return True
+            else:
+                self.attemptCloseToGoal = 0
         else:
             self.minDistanceReached = distance
+            self.attemptCloseToGoal = 0
 
         # print(distance)
         if distance < self.maxDistanceBest:
@@ -758,7 +764,7 @@ class Planning(object):
         origin = random.uniform(0., 1.) * self.goal.npPlain()
         # point = [random.uniform(0., 1.) for _ in range(space.dim)]
         # point = point * self.goal
-        width = 1.5 * min(0.05 * self.space.maxDistance + self.goal.norm(), self.space.maxDistance)
+        width = 2. * min(0.05 * self.space.maxDistance + self.goal.norm(), self.space.maxDistance)
         point = origin + width * np.array([random.uniform(-1., 1.)
                                    for _ in range(self.space.dim)])
         return self.space.goal(point)

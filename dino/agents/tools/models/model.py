@@ -182,7 +182,7 @@ class Model(Serializable):
         # previousModel.spacesHistory.extend(self.spacesHistory)
         # self.spacesHistory = previousModel.spacesHistory
 
-    def pointAdded(self, event, progress):
+    def pointAdded(self, event):
         if self.contextSpacialization:
             # print(event.allActions)
             # outcome = event.outcomes.projection(self.outcomeSpace)
@@ -227,6 +227,9 @@ class Model(Serializable):
     def explorable(self):
         return self.precision[0] >= 0.
         #  and self.precision[0] <= self.outcomeSpace.maxDistance * 0.25
+    
+    def maxDistance(self, outcome):
+        return (self.outcomeSpace.maxDistance / 4 if self.outcomeSpace.maxDistance != 0 else 1.) + outcome.norm() / 2
 
     # Context
     def hasContext(self, contextSpace, contextColumns):
@@ -328,11 +331,11 @@ class Model(Serializable):
 
     # data=None, context: Observation = None,
     def std(self, precise=False, onlyIds=None, contextColumns=None, contextColumnsOverwrite=None):
-        errorsZeros, _ = self._errorForwardAll(
+        errorsZeros, _, _ = self._errorForwardAll(
             precise=precise, almostZeros=True, onlyIds=onlyIds, contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite)
         errorZeros = np.mean(errorsZeros) if len(errorsZeros) > 0 else 0.
 
-        errorsNonZeros, _ = self._errorForwardAll(
+        errorsNonZeros, _, _ = self._errorForwardAll(
             precise=precise, almostZeros=False, onlyIds=onlyIds, contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite)
         errorNonZeros = np.mean(errorsNonZeros) if len(errorsNonZeros) > 0 else 0.
 
@@ -342,7 +345,7 @@ class Model(Serializable):
         return 1 - (1 - errorNonZeros) * (1 - errorZeros)
     
     def stdData(self, actions, outcomes, contexts=None, precise=False, onlyIds=None, contextColumns=None):
-        errors = self._errorForwardDataAll(
+        errors, _ = self._errorForwardDataAll(
             actions, outcomes, contexts, precise=precise, contextColumns=contextColumns)
         if len(errors) == 0:
             return 0.
@@ -352,7 +355,7 @@ class Model(Serializable):
     #     return self.std(data=data, context=context, precise=precise, contextColumns=contextColumns) ** 2
 
     def forwardErrors(self, precise=False, almostZeros=None, onlyIds=None, contextColumns=None, contextColumnsOverwrite=None, sortIds=False):
-        errors, ids = self._errorForwardAll(precise=precise, almostZeros=almostZeros, onlyIds=onlyIds,
+        errors, _, ids = self._errorForwardAll(precise=precise, almostZeros=almostZeros, onlyIds=onlyIds,
                                             contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite)
         if sortIds:
             order = np.argsort(-errors)
@@ -361,7 +364,7 @@ class Model(Serializable):
             return errors[order], ids[order], trueErrors[order]
         return errors
 
-    def _errorForward(self, eventId, contextColumns=None, contextColumnsOverwrite=None):
+    def forwardError(self, eventId, contextColumns=None, contextColumnsOverwrite=None):
         action = self.actionSpace.getPoint(eventId)[0]
         outcome = self.outcomeSpace.getPoint(eventId)[0]
         context = self.contextSpace.getPoint(eventId)[0] if self.contextSpace else None
@@ -384,7 +387,7 @@ class Model(Serializable):
         #     contextColumns = None
 
         # print(contextColumns)
-        outcomeEstimated = self.forward(action, context, contextColumns=contextColumns, ignoreFirst=False)[0]
+        outcomeEstimated, linearError = self.forward(action, context, contextColumns=contextColumns, ignoreFirst=False)
         # acPlain = action.extends(context).npPlain()
         # outcomeEstimated = self.outcomeSpace.point(self.fnn.predict([acPlain])[0])
         if not outcomeEstimated:
@@ -392,10 +395,8 @@ class Model(Serializable):
 
         # print(outcome)
         # print(outcomeEstimated)
-        # zeroError = (outcome.length() < 0.00001) != (
-        #     outcomeEstimated.length() < 0.00001)
-        distanceMax = (outcome.space.maxDistance / 4 if outcome.space.maxDistance != 0 else 1.) + outcome.norm() / 2
-        errorOutcome = outcomeEstimated.distanceTo(outcome) / distanceMax# + zeroError*0.0
+        # print(linearError)
+        errorOutcome = outcomeEstimated.distanceTo(outcome) / self.maxDistance(outcome) + min(linearError, 1.) * 0.1
 
         errorOutcome = min(errorOutcome, 1.)
         # print(f'{action}, {outcome} ?= {outcomeEstimated} -> {errorOutcome}')
@@ -413,7 +414,7 @@ class Model(Serializable):
         #     print(context)
         #     print(action)
         #     print('---       ---')
-        return errorOutcome
+        return errorOutcome, linearError
 
     def _errorForwardAll(self, precise=False, almostZeros=None, onlyIds=None, contextColumns=None, contextColumnsOverwrite=None):
         ids = parameter(onlyIds, self.getIds())
@@ -423,15 +424,15 @@ class Model(Serializable):
             if almostZeros:
                 indices = ~indices
             if np.sum(indices) == 0:
-                return [], []
+                return [], [], []
             ids = ids[indices]
         if not precise:
             number = min(80 if not almostZeros else 50, self.outcomeSpace.number // 10)
             ids_ = np.arange(len(ids))
             np.random.shuffle(ids_)
             ids = ids[ids_[:number]]
-        errors = np.array([self._errorForward(id_, contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite) for id_ in ids])
-        return errors, ids
+        errors = np.array([self.forwardError(id_, contextColumns=contextColumns, contextColumnsOverwrite=contextColumnsOverwrite) for id_ in ids]).T
+        return errors[0], errors[1], ids
 
     def _errorForwardDataAll(self, actions, outcomes, contexts=None, precise=False, exceptAlmostZero=False, contextColumns=None):
         # data = np.hstack((actions, outcomes, contexts) if contexts is not None else (actions, outcomes))
@@ -442,18 +443,19 @@ class Model(Serializable):
             if np.sum(indices) == 0:
                 return []
             ids = ids[indices]
+
         if not precise:
             number = min(100, self.outcomeSpace.number // 10)
             ids_ = np.arange(len(ids))
             np.random.shuffle(ids_)
             ids = ids[ids_[:number]]
+
         if contexts is not None:
-            errors = np.array(
-                [self._errorForwardData(*data, contextColumns=contextColumns) for data in zip(actions, outcomes, contexts)])
+            data = zip(actions, outcomes, contexts)
         else:
-            errors = np.array(
-                [self._errorForwardData(*data, contextColumns=contextColumns) for data in zip(actions, outcomes)])
-        return errors
+            data = zip(actions, outcomes)
+        errors = np.array([self._errorForwardData(*d, contextColumns=contextColumns) for d in data]).T
+        return errors[0], errors[1]
 
     # Space coverage
     def reachesSpaces(self, spaces):

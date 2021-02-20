@@ -41,8 +41,8 @@ class AutonomousStrategy(RandomStrategy):
             'randomThreshold', 0.1)  # 1 -> only random
         self.randomFirstPassStart = 1.
         self.randomFirstPassEnd = 0.4
-        self.randomFirstPassNumber = 250
-        self.randomFirstPassNumberMin = 100
+        self.randomFirstPassNumber = 150
+        self.randomFirstPassNumberMin = 20
 
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
@@ -113,12 +113,13 @@ class AutonomousStrategy(RandomStrategy):
         try:
             path, _, distance = self.planner.planDistance(goal, model=config.model, settings=config.plannerSettings)
         except ActionNotFound:
-            path = None
+            path = Path()
+        # print(path)
         if not path:
             config.result.reachedGoal = 'planning failed'
             self.logger.warning(
                 f"Planning failed for goal {goal}, switching to random")
-            return 1., path  # Random action
+            return 1., Path()  # Random action
 
         # Compute criteria
         if config.exploitation:

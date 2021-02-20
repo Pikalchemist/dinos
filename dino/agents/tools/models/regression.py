@@ -30,13 +30,14 @@ class RegressionModel(Model):
     MAXIMUM_NULL = 5
     OUTLIER_MAX_DISTANCE = 100
     ENFORCE_MAX_NN_DISTANCE = False
-    MAX_ERROR_REACHABLE = 0.1
+    MAX_ERROR_REACHABLE = 0.02
 
     def __init__(self, dataset, actionSpace, outcomeSpace, contextSpace=[], restrictionIds=None, model=None,
                  register=True, metaData={}):
         super().__init__(dataset, actionSpace, outcomeSpace,
                          contextSpace, restrictionIds, model, register, metaData)
         self.bestLocalityCandidates = [[], []]
+        self.lastCloseIds = None
 
     # def computeCompetence(self, error, distanceGoal=0):
     #     distanceGoal = min(distanceGoal, 1.)
@@ -311,6 +312,8 @@ class RegressionModel(Model):
         
         # print(f'HEYHEY {goalContextPlain} {self.actionContextSpace.getNpPlainPoint(restrictionIds)}')
 
+        # print('===')
+        # print(D)
         # Compute best locality candidates
         # nearestUseContext = False
         useRestrictionIds = restrictionIds
@@ -350,7 +353,8 @@ class RegressionModel(Model):
             # nearestUseContext = False
         
         # print('===')
-        # # print(distanceToGoal)
+        # # # print(distanceToGoal)
+        # print(ids)
         # print(self.actionSpace.getData(ids))
         # print(self.contextSpace.getData(ids)[:, contextColumns])
         # print(self.outcomeSpace.getData(ids))
@@ -387,6 +391,9 @@ class RegressionModel(Model):
                     data = data[indices]
             # if np.sum(indices) > 0:
             #     data = data[indices]
+
+        # Record ids
+        self.lastCloseIds = ids
 
         if not differentRestrictionIds:
             restrictionIdsWithZeros = restrictionIds
