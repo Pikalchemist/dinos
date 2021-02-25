@@ -33,10 +33,6 @@ class AutonomousStrategy(RandomStrategy):
         # Contains the following keys:
         #   'min_points': min number of iterations before enabling the use of local exploration
         #   'nb_iteration': number of iterations per learning episode
-        # Store method chosen for every iteration with the strategy, stored by learning episode
-        self.methods = []
-        # Store local global criteria for every iteration with the strategy, stored by learning episode
-        self.criteria = []
         self.randomThreshold = self.options.get(
             'randomThreshold', 0.1)  # 1 -> only random
         self.randomFirstPassStart = 1.
@@ -60,21 +56,19 @@ class AutonomousStrategy(RandomStrategy):
     def _preRun(self, config):
         super()._preRun(config)
 
-        # Add a list with the choices of methods for the episode
-        self.methods.append([])
-        self.criteria.append([])
-
     def _runIteration(self, config):
-        if config.goal and self.reachGoalContext(config):
-            self.exploreGoal(config)
-        else:
-            self.testRandomAction(config)
+        if config.goal:
+            for _ in range(2):
+                if self.reachGoalContext(config):
+                    if self.exploreGoal(config):
+                        return
+                else:
+                    break
+        self.testRandomAction(config)
 
     def exploreGoal(self, config):
         # assert config.exploitation is False
         assert config.depth == 0
-        config.result.reachedGoal = 'random chosen instead'
-        path = None
 
         # for _ in self.performer.iterative():
         # Choose between local and global exploration
@@ -82,18 +76,26 @@ class AutonomousStrategy(RandomStrategy):
         probUseRandom, path = self.useGoalCriteria(config.goal, config)
         useGoal = random.uniform(0, 1) > probUseRandom
         config.result.randomProbability = probUseRandom
-        self.logger.debug(
-            f'goal exploration decision: criteriaRandom={probUseRandom}->useGoal={useGoal} exploration={config.exploitation} path={path}')
+
+        self.logger.debug(f'goal exploration decision: criteriaRandom={probUseRandom}->useGoal={useGoal} exploration={config.exploitation} path={path}')
 
         if useGoal:  # We have chosen local optimizattion
             self.testPath(path, config)
             config.result.reachedGoal = self.agent.environment.state().context().projection(config.goal.space)
+            config.result.reachedGoalDistance = (config.result.reachedGoal - config.absoluteGoal).norm()
+            config.result.reachedGoalStatus = 'goal attempted'
         elif not config.exploitation:  # We have chosen random exploration
-            self.testRandomAction(config)
+            if config.goalContext and not config.changeContext:
+                config.changeContext = True
+                return False
+            else:
+                self.testRandomAction(config)
+                config.result.reachedGoalStatus = 'random chosen instead'
         else:
             self.testRandomAction(config, zero=True)
+            config.result.reachedGoalStatus = 'zero chosen because exploitation'
 
-        return path
+        return True
 
     def useGoalCriteria(self, goal, config):
         """Criteria used to choose between local and global exploration (Straight from Matlab SGIM code)."""
@@ -101,13 +103,13 @@ class AutonomousStrategy(RandomStrategy):
 
         # First pass: only random
         if goal.space.number < self.randomFirstPassNumberMin:
-            return 1., Path()
+            return 30., Path()
 
         probFirstPass = linearValue(self.randomFirstPassStart, self.randomFirstPassEnd,
                                     (goal.space.number - self.randomFirstPassNumberMin) / self.randomFirstPassNumber)
         # print(probFirstPass)
         if not config.exploitation and random.uniform(0, 1) < probFirstPass:
-            return 1., Path()  # Random action
+            return 20. + probFirstPass, Path()  # Random action
 
         # Try planning to goal
         try:
@@ -119,7 +121,7 @@ class AutonomousStrategy(RandomStrategy):
             config.result.reachedGoal = 'planning failed'
             self.logger.warning(
                 f"Planning failed for goal {goal}, switching to random")
-            return 1., Path()  # Random action
+            return 10., Path()  # Random action
 
         # Compute criteria
         if config.exploitation:

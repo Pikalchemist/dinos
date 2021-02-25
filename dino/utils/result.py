@@ -8,7 +8,11 @@ class Result(Serializable):
         self.config = config
 
         self.reachedGoal = None
+        self.reachedGoalDistance = None
+        self.reachedGoalStatus = None
         self.reachedContext = None
+        self.reachedContextDistance = None
+        self.reachedContextStatus = None
         self.action = None
 
         self.randomProbability = None
@@ -22,7 +26,8 @@ class Result(Serializable):
         self.performerDerive = []
     
     def _serialize(self, serializer):
-        dict_ = serializer.serialize(self, ['reachedGoal', 'reachedContext', 'action', 'randomProbability', 'planningSuccess', 'planningDistance',
+        dict_ = serializer.serialize(self, ['reachedGoal', 'reachedGoalDistance', 'reachedGoalStatus', 'reachedContext', 'reachedContextDistance',
+                                            'reachedContextStatus', 'action', 'randomProbability', 'planningSuccess', 'planningDistance',
                                             'planningSteps', 'planningChangeContextSteps', 'performerReplanning', 'performerReplanning', 'performerReplanningSteps',
                                             'performerDistance', 'performerDerive'])
         return dict_
@@ -35,7 +40,8 @@ class Result(Serializable):
 
     def _postDeserialize(self, dict_, serializer):
         super()._postDeserialize(dict_, serializer)
-        for attr in ['reachedGoal', 'reachedContext', 'action', 'randomProbability', 'planningSuccess', 'planningDistance',
+        for attr in ['reachedGoal', 'reachedGoalDistance', 'reachedGoalStatus', 'reachedContext', 'reachedContextDistance', 'reachedContextStatus',
+                     'action', 'randomProbability', 'planningSuccess', 'planningDistance',
                      'planningSteps', 'planningChangeContextSteps', 'performerReplanning', 'performerReplanning', 'performerReplanningSteps',
                      'performerDistance', 'performerDerive']:
             if attr in dict_:
@@ -78,7 +84,8 @@ class Result(Serializable):
         return f'{valid}: {score} ({txt})'
 
     def __repr__(self):
-        attrResults = ['action', 'reachedGoal', 'reachedContext', 'randomProbability',
+        attrResults = ['action', 'reachedGoal', 'reachedGoalDistance', 'reachedGoalStatus',
+                       'reachedContext', 'reachedContextDistance', 'reachedContextStatus', 'randomProbability',
                        'planningSuccess', 'planningDistance', 'planningSteps',
                        'planningChangeContextSteps', 'performerReplanning',
                        'performerReplanningSteps', 'performerDistance', 'performerDerive']

@@ -39,8 +39,8 @@ class MoveConfig(Serializable):
     """
 
     def __init__(self, model=None, exploitation=False, depth=0, strategy=None, goal=None, goalContext=None,
-                 lastEvent=None, sampling='', iterations=1, iteration=-1, allowReplanning=True, evaluating=False,
-                 plannerSettings=None):
+                 changeContext=False, lastEvent=None, sampling='', iterations=1, iteration=-1, allowReplanning=True,
+                 evaluating=False, plannerSettings=None):
         self.exploitation = exploitation
         self.evaluating = evaluating
         self.depth = depth
@@ -49,6 +49,7 @@ class MoveConfig(Serializable):
         self.model = model
         self.goal = goal
         self.goalContext = goalContext
+        self.changeContext = changeContext
         self.absoluteGoal = None
         self.sampling = sampling
 

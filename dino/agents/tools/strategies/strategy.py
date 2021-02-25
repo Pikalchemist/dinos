@@ -18,6 +18,7 @@ from dino.data.path import ActionNotFound
 
 class Strategy(Module):
     """Strategy usable by a learning agent."""
+    DISTANCE_MAX_CONTEXT = 0.05
 
     def __init__(self, agent, name=None, performer=None, planner=None, options={}):
         """
@@ -104,30 +105,38 @@ class Strategy(Module):
         pass
 
     def reachGoalContext(self, config):
-        if not config.goalContext:
+        if not config.goalContext or not config.changeContext:
+            config.result.reachedContextStatus = 'not required'
             return True
 
-        probFirstPass = linearValue(1., 0., (config.goalContext.space.number - 20) / 100)
+        probFirstPass = linearValue(1., 0., (config.goalContext.space.number - 20) / 50)
         if not config.exploitation and random.uniform(0, 1) < probFirstPass:
+            config.result.reachedContextStatus = f'aborted (prob={probFirstPass:.3f})'
             return True
 
         settings = config.plannerSettings.clone(context=True)
         if config.goal and not config.goal.space.matches(config.goalContext.space, kindSensitive=False):
             settings.dontMoveSpaces.append(config.goal.space)
+
         try:
             path, _, _ = self.planner.planDistance(config.goalContext.setRelative(False), settings=settings)
         except ActionNotFound:
-            config.result.reachedContext = 'planning failed'
             path = None
 
         if not path:
-            self.logger.warning(
-                f"Planning failed for pre-goal context {config.goalContext}")
+            config.result.reachedContextStatus = 'planning failed'
+            self.logger.warning(f"Planning failed for pre-goal context {config.goalContext}")
             return False
-        
-        self.testPath(path, config.clone(model=None))
 
+        self.testPath(path, config.clone(model=None))
         config.result.reachedContext = self.agent.environment.state().context().projection(config.goalContext.space)
+        config.result.reachedContextDistance = (config.result.reachedContext - config.goalContext).norm()
+        model = path.model
+        if not model or config.result.reachedContextDistance >= model.outcomeSpace.maxDistance * self.DISTANCE_MAX_CONTEXT:
+            config.result.reachedContextStatus = 'too far from context goal'
+            return False
+
+        config.result.reachedContextStatus = 'context successfully reached'
         return True
 
         # config.goalContext = config.goalContext.convertTo(

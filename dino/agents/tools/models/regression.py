@@ -487,7 +487,7 @@ class RegressionModel(Model):
             if np.any(a0Plain > maxOutliers):
                 # print(f'/!!!!\\ {a0Plain} => {aPlain[-1]}\n{aPlain}')
                 a0Plain = aPlain[-1]
-            a0 = self.actionSpace.action(a0Plain)
+            a0 = self.actionSpace.action(a0Plain).setRelative(True)
 
 
             # print(f'a{i}: {a0} |a|={a0.norm()} A YC GC\n{aPlain}\n{ycPlain}\n{goalContextPlain}')
