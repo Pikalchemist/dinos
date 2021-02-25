@@ -42,6 +42,8 @@ class DataSpace(Space):
 
         self.contiguous = True  # ids == lids
         self.incoherentRowsAlignement = False
+
+        self._nnWeightsCache = {}
     
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
@@ -177,12 +179,32 @@ class DataSpace(Space):
 
     # Operations
     def findWeights(self, columns=None, adjustSpaceWeight=None, adjustWeightFactor=1., weights=None):
-        weights = np.array(self._nnWeights) if weights is None else self._nnWeights * weights
+        # weights = np.array(self._nnWeights) if weights is None else self._nnWeights * weights
         if adjustSpaceWeight and columns is not None and np.any(columns):
-            adjustColumns = self.columnsFor(adjustSpaceWeight)
-            if np.any(adjustColumns):
-                weights[adjustColumns] *= adjustWeightFactor * len(adjustColumns) / np.sum(columns[adjustColumns])
-        return weights
+            key = (adjustSpaceWeight, adjustWeightFactor, tuple(columns))
+            if key in self._nnWeightsCache:
+                newWeights = self._nnWeightsCache[key] * self._nnWeights
+            else:
+                newWeights = np.ones(self.dim)
+                adjustColumns = self.columnsFor(adjustSpaceWeight)
+                if np.any(adjustColumns):
+                    newWeights[adjustColumns] *= adjustWeightFactor * len(adjustColumns) / np.sum(columns[adjustColumns])
+                self._nnWeightsCache[key] = newWeights
+                newWeights = newWeights * self._nnWeights
+        else:
+            newWeights = self._nnWeights
+        return newWeights if weights is None else newWeights * weights
+    
+    # def findWeights(self, columns=None, adjustSpaceWeight=None, adjustWeightFactor=1., weights=None):
+    #     weights = np.array(self._nnWeights) if weights is None else self._nnWeights * weights
+    #     if adjustSpaceWeight and columns is not None and np.any(columns):
+    #         key = (adjustSpaceWeight, adjustWeightFactor, columns)
+    #         if key in self._nnWeightsCache:
+    #             return self._nnWeightsCache[key]
+    #         adjustColumns = self.columnsFor(adjustSpaceWeight)
+    #         if np.any(adjustColumns):
+    #             weights[adjustColumns] *= adjustWeightFactor * len(adjustColumns) / np.sum(columns[adjustColumns])
+    #     return weights
 
     def __computeDistances(self, x, weights=None, columns=None, restrictionLids=None, adjustSpaceWeight=None, adjustWeightFactor=1.):
         """Compute array of normalized distances between data and the point given."""
