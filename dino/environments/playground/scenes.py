@@ -120,8 +120,8 @@ class RoomWithWallsScene(EmptyScene):
 
         # inner walls
         w = 20
-        self.walls += [Wall((260.0, 200.0), (260.0, 400.0), w),
-                       Wall((335.0, 50.0), (335.0, 290.0), w)]
+        self.walls += [Wall((260.0, 200.0), (260.0, 400.0), w)]
+        # ,Wall((335.0, 50.0), (335.0, 290.0), w)
         # self.walls += [Wall((285.0, 380.0), (315.0, 380.0), w),
         #                Wall((285.0, 410.0), (315.0, 410.0), w)]
 
@@ -130,12 +130,14 @@ class RoomWithWallsScene(EmptyScene):
 
     # Tests
     def _testAgentMoving(self):
+        # Test
         points = [(300, 200),
                   (300, 400),
                   (400, 300)]
         test = PointsTest('agent-moving', self.world.cascadingProperty('Agent.position').space, points, relative=False)
         self.addTest(test)
 
+        # Test
         points = [(150, 250),
                   (350, 250),
                   (150, 350),
@@ -179,7 +181,7 @@ class OneCylinderScene(EmptyScene):
         # self.world.addEntity(self.agent)
 
     def _setupCylinder1(self):
-        self.world.addChild(Cylinder((200, 300), name='Cylinder1'))
+        self.world.addChild(Cylinder((450, 300), name='Cylinder1'))
 
     def _setupCylinder2(self):
         self.world.addChild(Cylinder((500, 300), name='Cylinder2'))
@@ -193,8 +195,20 @@ class OneCylinderScene(EmptyScene):
         self._testMovingCylinder()
 
     def _testMovingCylinder(self):
-        self.addTest(PointsTest('cylinder1-moving', self.world.cascadingProperty(
-            '#Cylinder1.position').space, [[-25, 0]], relative=True))
+        # Test
+        points = [(-25, 0),
+                  (-25, 1),
+                  (25, 0),
+                  (25, 1)]
+        test = PointsTest('cylinder1-moving', self.world.cascadingProperty('Agent.position').space, points, relative=True)
+
+        def prePoint(point):
+            point = point.plain()
+            self.world.child('#Cylinder1').body.position = (150 if point[0] < 0 else 350, 300)
+            self.world.child('Agent').body.position = (200 if point[0] < 0 else 300, 150 if point[1] == 1 else 300)
+
+        test.prePoint = prePoint
+        self.addTest(test)
 
     # Resets
     def setupEpisode(self, config, forceReset=False):
@@ -204,24 +218,37 @@ class OneCylinderScene(EmptyScene):
 
     def setupPreTest(self, test):
         self._resetAgent()
-        self.world.child('#Cylinder1').body.position = (200, 250)
+        self.world.child('#Cylinder1').body.position = (450, 300)
         if self.world.child('#Cylinder2'):
             self.world.child('#Cylinder2').body.position = (300, 150)
 
     def _resetCylinders(self):
-        pos = self.world.child('Agent').body.position
+        cyl1 = self.world.child('#Cylinder1').body
+        cyl1.position = (random.choice([150, 350]), random.randint(200, 400))
 
-        distance = 40. if self.environment.iteration < 100 else 120.
+        # pos = self.world.child('Agent').body.position
 
-        obj = self.world.child('#Cylinder1').body
-        if self.world.child('#Cylinder2'):
-            if random.uniform(0, 1) < 0.5:
-                obj2 = obj
-                obj = self.world.child('#Cylinder2').body
-            else:
-                obj2 = self.world.child('#Cylinder2').body
-            obj2.position = pos + Vec2d(240. + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
-        obj.position = pos + Vec2d(distance + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
+        # distance = 40. if self.environment.iteration < 100 else 120.
+
+        # obj = self.world.child('#Cylinder1').body
+        # if self.world.child('#Cylinder2'):
+        #     if random.uniform(0, 1) < 0.5:
+        #         obj2 = obj
+        #         obj = self.world.child('#Cylinder2').body
+        #     else:
+        #         obj2 = self.world.child('#Cylinder2').body
+        #     obj2.position = pos + Vec2d(240. + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
+        # obj.position = pos + Vec2d(distance + np.random.uniform(0.), 0).rotated(np.random.uniform(2*np.pi))
+
+
+class CylinderWallsScene(OneCylinderScene, RoomWithWallsScene):
+    # Setup
+    def _setup(self):
+        self._baseSetup()
+
+        self._setupAgent()
+        self._setupWalls()
+        self._setupCylinder1()
 
 
 class OneCylinderPlusFixedScene(OneCylinderScene):

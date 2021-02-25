@@ -19,6 +19,7 @@ class Cylinder(PhysicalEntity):
         super().__init__(self.__class__.__name__, name)
         self.coordsInit = coords
         self.coords = coords
+        self.direction = 0.
 
         self.radius = radius
         self.color = color if color else (

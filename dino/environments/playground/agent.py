@@ -91,6 +91,8 @@ class Agent(Cylinder):
             self.body.apply_impulse_at_local_point(Vec2d(1.0, 0.0) * pw * float(wl + random.uniform(-noise, noise)) +
                                                    Vec2d(0.0, 1.0) * pw * float(wr + random.uniform(-noise, noise)),
                                                    (0, 0))
+            if wl != 0. or wr != 0.:
+                self.direction = np.arctan2(wl, wr)
         else:
             pass
 
@@ -119,6 +121,6 @@ class Agent(Cylinder):
                              (self.sufaceWidth // 2 + self.radius // 2, self.sufaceWidth // 2 + pos * self.radius // 2), 3)
 
         surface = pygame.transform.rotate(
-            self.surface, np.rad2deg(self.body.angle))
+            self.surface, np.rad2deg(self.direction) - 90.)
         screen.blit(surface, list(
             map(lambda x: int(x) - surface.get_width() // 2, self.absolutePosition())))
