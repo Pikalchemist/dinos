@@ -24,6 +24,7 @@ class Performer(Module):
 
     MAX_DERIVE = 0.04
     MAX_DISTANCE = 0.01
+    RECOMPUTE_EXECUTION = False
 
     def __init__(self, agent, options={}):
         super().__init__('Performer', agent, loggerTag='performer')
@@ -130,7 +131,7 @@ class Performer(Module):
                 # print(node.action.space.primitive())
                 # print(node.execution)
 
-                if not node.action.space.primitive() and not node.execution:
+                if not node.action.space.primitive() and (self.RECOMPUTE_EXECUTION or not node.execution):
                     try:
                         node.execution, _ = self.agent.planner.plan(node.action, settings=PlanSettings(performing=True))
                     except ActionNotFound:
@@ -170,6 +171,11 @@ class Performer(Module):
                 #     f'Iter (d{depth}) {i}:\n{node.ty0} Estimated state:\n{node.state.context()}\nCurrent New State:\n{self.environment.state().context()}')
                 
                 # self.logger.info(f'Iter (d{depth}) {i}: performing {node.action}')
+
+                # ===============
+                if self.agent.learningPolicy == LearningPolicy.EACH_ITERATION:
+                    self.agent.addMemory(lastResults, config)
+                    lastResults = []
 
                 currentState = self.environment.state()
                 # self.logger.warning(currentState)
@@ -221,11 +227,6 @@ class Performer(Module):
                     # print(self.environment.state().context())
                     # print(f'Max {self.MAX_DERIVE * node.absPos.space.maxDistance}')
                 i += 1
-
-                if self.agent.learningPolicy == LearningPolicy.EACH_ITERATION:
-                    self.agent.addMemory(lastResults, config)
-                    lastResults = []
-
             nodes = None
         # if o:
         #     y = o.difference(oStart)

@@ -22,12 +22,15 @@ class Point(Serializable):
     MAX_VALUES = 10
     WINDOW_SIZE = 5
     NEAR_CONTEXT_DISTANCE = 0.04
+    ZERO_RANGE = 0.001
 
     def __init__(self, id_, position, context, positionContext, value=None):
         self.id = id_
         self.position = position
         self.context = context
         self.positionContext = positionContext
+
+        self.zero = position.norm() < self.ZERO_RANGE
 
         self.values = []
         self.progresses = []
@@ -147,6 +150,7 @@ class SpaceRegion(Serializable):
 
         self.number = 0
         self.points = []
+        self.nonZeroPoints = []
         self.progresses = []
         self.evaluation = 0.
         # self.base = Point(None, None, None, None)
@@ -205,6 +209,7 @@ class SpaceRegion(Serializable):
             setattr(self, attr, dict_.get(attr))
         for attr in ['points']:
             setattr(self, attr, serializer.deserialize(dict_.get(attr)))
+        self.nonZeroPoints = [p for p in self.points if not p.zero]
 
         self.leftChild = serializer.deserialize(dict_.get('leftChild'))
         self.rightChild = serializer.deserialize(dict_.get('rightChild'))
@@ -279,7 +284,7 @@ class SpaceRegion(Serializable):
         return self.dataset.controllableSpaces(self.contextSpace)
     
     def updatePoints(self, aroundPoint, closeIds=None):
-        for point in self.points:
+        for point in self.nonZeroPoints:
             if point.id in closeIds and point != aroundPoint:
                 self.updatePoint(point)
 
@@ -293,17 +298,21 @@ class SpaceRegion(Serializable):
             values = [p.lastValue for p in self.points]
             Point.computeEvaluation(self, values, self.options['window'])
 
-    def findRandom(self):
-        return random.choice(self.points)
+    def findRandom(self, allowZeros=False):
+        if allowZeros:
+            return random.choice(self.points)
+        if not self.nonZeroPoints:
+            return None
+        return random.choice(self.nonZeroPoints)
  
     def findBest(self, context=None, changeContext=True, favoriseBest=1.):
         dataChangeContext, dataCurrentContext = [], []
         if context:
             context = context.projection(self.contextSpace)
-            dataCurrentContext += [point for point in self.points if point.nearContext(context)]
+            dataCurrentContext += [point for point in self.nonZeroPoints if point.nearContext(context)]
 
         if changeContext:
-            dataChangeContext += list(self.points)
+            dataChangeContext += list(self.nonZeroPoints)
             changeContext = self.chooseToChangeContext(max(x.evaluation for x in dataChangeContext) if dataChangeContext else -math.inf,
                                                        max(x.evaluation for x in dataCurrentContext) if dataCurrentContext else -math.inf)
 
@@ -351,6 +360,8 @@ class SpaceRegion(Serializable):
 
     def _addPointData(self, point, closeIds=None, firstAlwaysNull=True, populating=False):
         self.points.append(point)
+        if not point.zero:
+            self.nonZeroPoints.append(point)
         self.number += 1
 
         if not populating and self.method == self.POINT_BASED:

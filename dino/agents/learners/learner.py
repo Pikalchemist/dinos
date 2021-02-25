@@ -43,7 +43,7 @@ class Learner(Agent):
                          planner=planner, options=options)
         self.dataset.attachLearner(self)
 
-        self.learningPolicy = LearningPolicy.DEFAULT
+        self.learningPolicy = LearningPolicy.EACH_ITERATION
         self.processedEvents = []
 
         # if self.dataset:
