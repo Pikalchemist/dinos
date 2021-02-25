@@ -6,6 +6,8 @@
 
 import numpy as np
 
+from exlab.utils.io import parameter
+
 from dino.data.space import SpaceKind
 from dino.agents.tools.models.model import Model
 
@@ -150,8 +152,15 @@ class ModelDataset(Dataset):
             model.invalidateCompetences()
 
     # Graph
+    def controlledSpaces(self, models=None):
+        controlledModels = self.dependencyGraph(models)
+        spaces = set()
+        for model in controlledModels:
+            spaces |= set(model.outcomeSpace.flatSpaces)
+        return spaces
+
     def dependencyGraph(self, models=None):
-        models = models if models else self.enabledModels()
+        models = parameter(models, self.enabledModels())
 
         graph = {}
         for model in models:

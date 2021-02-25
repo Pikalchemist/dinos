@@ -43,6 +43,7 @@ class PlanSettings(object):
         self.length = 0
         self.depth = -1
         self.context = False
+        self.subPlanning = False
 
         self.controlledSpaces = []
         self.dontMoveSpaces = []
@@ -242,7 +243,7 @@ class Planning(object):
         self.checkSpaceIsControllable(self.goal, self.space)
 
         self.logger.debug(
-            f'== Relative goal is {self.goal} (starting pos {self.startPosition})')
+            f'== Relative goal is {self.goal} (starting pos {self.startPosition}) {self.startState}')
 
         self.initParameters()
         self.initVariables()
@@ -258,13 +259,18 @@ class Planning(object):
         ratio = self.space.number / 200
         self.maxIter = parameter(self.settings.maxIterations, int(linearValue(10, 150, ratio)))
         self.maxIterNoNodes = int(linearValue(10, 20, ratio))
-        if self.settings.dontMoveSpaces:
-            self.maxIter *= 2
-            self.maxIterNoNodes *= 2
 
         self.maxDistanceBest = self.model.getPrecision(Planner.MAX_DISTANCE, 0.5)
         self.maxDistance = self.maxDistanceBest * 3 + 0.02 * self.goal.norm()
         self.maxDistanceIncomplete = self.maxDistanceBest * 8 + 0.1 * self.goal.norm()
+
+        if self.settings.dontMoveSpaces:
+            self.maxIter *= 2
+            self.maxIterNoNodes *= 2
+        if self.settings.subPlanning:
+            self.maxIter = min(self.maxIter, 2)
+            self.maxIterNoNodes = min(self.maxIterNoNodes, 2)
+            self.maxDistanceIncomplete = self.maxDistance
 
         self.contextPlanningPossible = True
         if not self.model.contextSpace:
@@ -350,6 +356,14 @@ class Planning(object):
                 continue
             reachable, contextPath = self.searchWithDifferentContext(baseMove, reachable)
 
+            childPath = None
+            if reachable:
+                childPath = self.checkControllableHierarchy(self.a0)
+                if not childPath:
+                    reachable = False
+                if childPath is True:
+                    childPath = None
+
             # self.logger.info(f'{self.logTag()} Iter {self.i}: end {reachable}')
             if not reachable:
                 self.directGoal = False
@@ -363,7 +377,7 @@ class Planning(object):
                     nearestNode.cantConnectToGoal = True
                 continue
         
-            newNode = self.addNode(nearestNode, contextPath, useGoal)
+            newNode = self.addNode(nearestNode, contextPath, useGoal, childPath)
             if not newNode:
                 continue
 
@@ -373,7 +387,7 @@ class Planning(object):
         if self.closestNodeToGoal and not self.path:
             self.path = self.closestNodeToGoal.createPath(self.goal, self.pathSettings())
 
-        if self.logger.isDebugging():
+        if self.logger.isDebugging() and not self.settings.subPlanning:
             self._plotNodes(self.nodes, self.goal, self.space, self.attemptedUnreachable, self.attemptedBreakConstraint)
 
         self.logger.debug(
@@ -549,7 +563,7 @@ class Planning(object):
 
         return reachable, contextPath
     
-    def addNode(self, nearestNode, contextPath, useGoal=False):
+    def addNode(self, nearestNode, contextPath, useGoal=False, childPath=None):
         newPosition = nearestNode.pos + self.y0
         absPosition = self.startPosition + newPosition
         goalDistance = euclidean(newPosition.plain(), self.goal.plain())
@@ -570,6 +584,7 @@ class Planning(object):
 
         newNode = PathNode(pos=newPosition, absPos=absPosition, action=self.a0, goal=self.y0, model=self.model, parent=nearestNode,
                             state=newState)
+        newNode.execution = childPath
         newNode.context = contextPath
         newNode.ty0 = self.model.npForward(self.a0, self.state.context())
         # nodePositions[len(nodes)] = newPosition.npPlain()
@@ -714,6 +729,18 @@ class Planning(object):
             return self.planner.plan(context.setRelative(False), state, settings=settings)
         except ActionNotFound:
             return None, None
+    
+    def checkControllableHierarchy(self, controllable):
+        if controllable.space.primitive():
+            return True
+        try:
+            settings = self.settings.clone(subPlanning=True)
+            path, state = self.planner.plan(controllable, self.state, settings=settings)
+            if path:
+                self.state = state
+            return path
+        except ActionNotFound:
+            return None
     
     def checkSpaceIsControllable(self, goal, space):
         if not self.settings.freeSpace(space):

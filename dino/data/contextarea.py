@@ -30,6 +30,10 @@ class ContextSpatialization(Serializable):
         self.evaluatedSpace = self.model.contextSpace
         self.dim = self.evaluatedSpace.dim
         self.boolean = boolean
+
+        # if 
+
+        self.stability = 0
     
         self.resetAreas(False)
     
@@ -180,169 +184,160 @@ class ContextSpatialization(Serializable):
         if self.space.number < self.MINIMUM_POINTS:
             return
 
-        point = point.projection(self.space)
-        nearest, _ = self.space.nearest(point, n=self.NN_NUMBER)
-        # id_ = nearest[0]
-
-        bestAdd = ()
-        bestDel = ()
-
-        # print('---')
-        # print(point)
-        # print(c)
-        # bestAdd = ()
-        # bestDel = ()
-        # print(point)
-
-        areas, distances = self.findAreaForAllColumnsDistances(point)
-
-        columns = np.arange(self.evaluatedSpace.dim)
-        # np.random.shuffle(columns)
-        # n = random.randint(1, min(1 + int(self.evaluatedSpace.dim * 0.4), 3))
-        # columns = columns[:n]
-
         noiseMargin = 0.002
 
-        currentColumns = self.columnsAreas(areas)
-        # currentColumns[0] = True
+        probality = max(0.2, np.exp(-self.stability * 0.05))
+        if random.uniform(0, 1) < probality:
+            self.stability += 1
 
-        errors = self.model.forwardErrors(onlyIds=nearest, precise=True, contextColumns=currentColumns)
-        c = self.model.competence(onlyIds=nearest, precise=True, contextColumns=currentColumns)
+            point = point.projection(self.space)
+            nearest, _ = self.space.nearest(point, n=self.NN_NUMBER)
 
-        # print(columns)
-        checkDeletion = False
-        if np.any(currentColumns) and random.uniform(0, 1) < 0.5:
-            checkDeletion = True
-        # print(currentColumns)
-        for column in columns:
-            probality = 2.  # max(0.05, np.exp(-stability * 0.1))
+            areas, distances = self.findAreaForAllColumnsDistances(point)
 
-            # c = None
-            if currentColumns[column] == checkDeletion and random.uniform(0, 1) < probality:
-                # print(nearest)
-                # print(self.space.getData(nearest))
-                # print(self.model.outcomeSpace.getData(nearest))
-                # print(currentColumns)
-                # print(self.evaluatedSpace.getData(nearest)[:, currentColumns])
-                # if c is None:
+            currentColumns = self.columnsAreas(areas)
 
-                # print(c)
+            errors = self.model.forwardErrors(onlyIds=nearest, precise=True, contextColumns=currentColumns)
+            c = self.model.computeCompetence(np.mean(errors))
+            # c = self.model.competence(onlyIds=nearest, precise=True, contextColumns=currentColumns)
 
-                newColumns = np.copy(currentColumns)
-                newColumns[column] = not newColumns[column]
-                # newColumns[(column + 1) % 8] = not newColumns[(column + 1) % 8]
-                # newColumns[(column - 1) % 8] = not newColumns[(column - 1) % 8]
+            # print(columns)
+            columns = np.arange(self.evaluatedSpace.dim)
+            bestAdd = ()
+            bestDel = ()
+            checkDeletion = False
+            if np.any(currentColumns) and random.uniform(0, 1) < 0.5:
+                checkDeletion = True
 
-                newColumnsOverwrite = None
-                # newColumnsOverwrite = np.full_like(currentColumns, True)
-                # newColumnsOverwrite[column] = False
-                # print(newColumns)
-                # print(self.evaluatedSpace.getData(nearest)[:, newColumns])
-                newErrors = self.model.forwardErrors(onlyIds=nearest, contextColumns=newColumns, precise=True, contextColumnsOverwrite=newColumnsOverwrite)
-                nc = self.model.competence(onlyIds=nearest, contextColumns=newColumns, precise=True, contextColumnsOverwrite=newColumnsOverwrite)
+            # print(currentColumns)
+            for column in columns:
+                if currentColumns[column] == checkDeletion:
+                    # print(nearest)
+                    # print(self.space.getData(nearest))
+                    # print(self.model.outcomeSpace.getData(nearest))
+                    # print(currentColumns)
+                    # print(self.evaluatedSpace.getData(nearest)[:, currentColumns])
+                    # if c is None:
 
-                progress = -(newErrors - errors)
-                progress = np.sign(progress) * (np.clip(np.abs(progress) - noiseMargin, 0., None))
+                    # print(c)
 
-                pointProgress = progress[0]
-                meanProgress = np.mean(progress)
-                meanRegression = np.percentile(progress, 10)
-                pc = nc - c
-                progressValue = meanProgress + meanRegression + pc * 0.02
+                    newColumns = np.copy(currentColumns)
+                    newColumns[column] = not newColumns[column]
+                    # newColumns[(column + 1) % 8] = not newColumns[(column + 1) % 8]
+                    # newColumns[(column - 1) % 8] = not newColumns[(column - 1) % 8]
 
-                should = self._groundTruthLidar(point, column)
-                if test > 1:
-                    print(f'{column}: {should}={newColumns[column]} ==== {c}+{progressValue} ({meanRegression} {meanRegression} {pc})')
-                    for error, nerror, pr, ptx, ctx in zip(errors, newErrors, progress, self.space.getData(nearest), self.evaluatedSpace.getData(nearest)):
-                        print(f'{ptx} | {ctx[newColumns]} -> {error:.3f}->{nerror:.3f} {pr:.3f}')
-                # print(progressValue)
-                # addition = newColumns[column]
+                    # newColumnsOverwrite = None
+                    newColumnsOverwrite = np.full_like(currentColumns, True)
+                    newColumnsOverwrite[column] = False
+                    # print(newColumns)
+                    # print(self.evaluatedSpace.getData(nearest)[:, newColumns])
+                    newErrors = self.model.forwardErrors(onlyIds=nearest, contextColumns=newColumns, precise=True, contextColumnsOverwrite=newColumnsOverwrite)
+                    nc = self.model.computeCompetence(np.mean(newErrors))
+                    # nc = self.model.competence(onlyIds=nearest, contextColumns=newColumns, precise=True, contextColumnsOverwrite=newColumnsOverwrite)
 
-                if not checkDeletion and pointProgress >= self.THRESHOLD_ADD_POINT and progressValue >= self.THRESHOLD_ADD and (not bestAdd or progressValue > bestAdd[0]):
-                    bestAdd = (progressValue, column, newColumns)
-                elif checkDeletion and pointProgress >= self.THRESHOLD_DEL_POINT and progressValue >= self.THRESHOLD_DEL and (not bestDel or progressValue > bestDel[0]):
-                    bestDel = (progressValue, column, newColumns)
+                    progress = -(newErrors - errors)
+                    progress = np.sign(progress) * (np.clip(np.abs(progress) - noiseMargin, 0., None))
 
-                # registerColumns = None
-                # if (addition and p >= self.THRESHOLD_ADD) or (not addition and p >= self.THRESHOLD_DEL):
-                #     registerColumns = newColumns
-                # # else:
-                # #     registerColumns = currentColumns
-                # if registerColumns is not None:
-                #     canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
-                #     print(f'Create new columns for {column}: {registerColumns[column]} around {point.plain()} {p}')
+                    pointProgress = progress[0]
+                    meanProgress = np.mean(progress)
+                    meanRegression = np.percentile(progress, 10)
+                    pc = nc - c
+                    progressValue = meanProgress + meanRegression + pc * 0.02
 
-                #     if canCreateNew:
-                #         self._addArea(column, point, registerColumns[column])
-                #     else:
-                #         self._updateArea(column, point, registerColumns[column], areas[column])
+                    # should = self._groundTruthLidar(point, column)
+                    if test > 1:
+                        print(f'{column}: ={newColumns[column]} ==== {c}+{progressValue} ({meanRegression} {meanRegression} {pc})')
+                        for error, nerror, pr, ptx, ctx in zip(errors, newErrors, progress, self.space.getData(nearest), self.evaluatedSpace.getData(nearest)):
+                            print(f'{ptx} | {ctx[newColumns]} -> {error:.3f}->{nerror:.3f} {pr:.3f}')
+                    # print(progressValue)
+                    # addition = newColumns[column]
 
-            # if (bestAdd or bestDel) and not fullCompAllFalse:
-            #     columnsFalse = np.full(self.evaluatedSpace.dim, False)
-            #     fullCompAllFalse = self.model.competence(
-            #         precise=True, contextColumns=columnsFalse)
+                    if not checkDeletion and pointProgress >= self.THRESHOLD_ADD_POINT and progressValue >= self.THRESHOLD_ADD and (not bestAdd or progressValue > bestAdd[0]):
+                        bestAdd = (progressValue, column, newColumns)
+                    elif checkDeletion and pointProgress >= self.THRESHOLD_DEL_POINT and progressValue >= self.THRESHOLD_DEL and (not bestDel or progressValue > bestDel[0]):
+                        bestDel = (progressValue, column, newColumns)
 
-            #     columnsTrue = np.full(self.evaluatedSpace.dim, True)
-            #     fullCompAllTrue = self.model.competence(
-            #         precise=True, contextColumns=columnsTrue)
-                
-            #     bestFullComp = max(fullCompAllFalse, fullCompAllTrue)
+                    # registerColumns = None
+                    # if (addition and p >= self.THRESHOLD_ADD) or (not addition and p >= self.THRESHOLD_DEL):
+                    #     registerColumns = newColumns
+                    # # else:
+                    # #     registerColumns = currentColumns
+                    # if registerColumns is not None:
+                    #     canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
+                    #     print(f'Create new columns for {column}: {registerColumns[column]} around {point.plain()} {p}')
 
-        for best, deletion, verb in ((bestAdd, False, 'add'),): #, (bestDel, True, 'del')):
-            if best:
-                progressValue, column, newColumns = best
-                # print(f'Should {verb} context column {column} (+{progressValue:.2f}) around {point}')
+                    #     if canCreateNew:
+                    #         self._addArea(column, point, registerColumns[column])
+                    #     else:
+                    #         self._updateArea(column, point, registerColumns[column], areas[column])
 
-                canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
-                # print(f'Create new columns for {column}: {newColumns[column]} around {point.plain()} +{progressValue} new: {canCreateNew}')
+                # if (bestAdd or bestDel) and not fullCompAllFalse:
+                #     columnsFalse = np.full(self.evaluatedSpace.dim, False)
+                #     fullCompAllFalse = self.model.competence(
+                #         precise=True, contextColumns=columnsFalse)
 
-                should = self._groundTruthLidar(point, column)
-                if not should:
-                    print(f'!! Invalid choice of column {column} for {point}#{nearest[0]} +{progressValue}!\n{self.columns(point)}')
-                    return 1, 0
+                #     columnsTrue = np.full(self.evaluatedSpace.dim, True)
+                #     fullCompAllTrue = self.model.competence(
+                #         precise=True, contextColumns=columnsTrue)
+                    
+                #     bestFullComp = max(fullCompAllFalse, fullCompAllTrue)
 
-                if canCreateNew:
-                    self._addArea(column, point, newColumns[column])
-                else:
-                    self._updateArea(column, point, newColumns[column], areas[column])
-        
-        return 0, 1 if bestAdd else 0
-        # if not bestAdd:
-        #     print(f'>> No new column for {point}#{nearest[0]}!\n{self.columns(point)}')
+            for best, deletion, verb in ((bestAdd, False, 'add'),): #, (bestDel, True, 'del')):
+                if best:
+                    self.stability = 0
+                    progressValue, column, newColumns = best
+                    # print(f'Should {verb} context column {column} (+{progressValue:.2f}) around {point}')
+
+                    canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
+                    # print(f'Create new columns for {column}: {newColumns[column]} around {point.plain()} +{progressValue} new: {canCreateNew}')
+
+                    # should = self._groundTruthLidar(point, column)
+                    # if not should:
+                    #     print(f'!! Invalid choice of column {column} for {point}#{nearest[0]} +{progressValue}!\n{self.columns(point)}')
+                    #     return 1, 0
+
+                    if canCreateNew:
+                        self._addArea(column, point, newColumns[column])
+                    else:
+                        self._updateArea(column, point, newColumns[column], areas[column])
+            
+            # return 0, 1 if bestAdd else 0
+            # if not bestAdd:
+            #     print(f'>> No new column for {point}#{nearest[0]}!\n{self.columns(point)}')
 
 
-        # for best, deletion, verb in ((bestAdd, False, 'add'), (bestDel, False, 'del')):
-        #     if best:
-        #         p, column, newColumns = best
-        #         print(f'Should {verb} context column {column} ({c:.2f}+{p:.2f}) around {point}')
-        #         newArea = None
+            # for best, deletion, verb in ((bestAdd, False, 'add'), (bestDel, False, 'del')):
+            #     if best:
+            #         p, column, newColumns = best
+            #         print(f'Should {verb} context column {column} ({c:.2f}+{p:.2f}) around {point}')
+            #         newArea = None
 
-        #         area = areas[column]
-        #         # fullComp = self.model.competence(precise=True)
-        #         canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
-        #         if not area.default and area.attempt(currentColumns, newColumns, deletion, canCreateNew):
-        #             print('Updating current area')
-        #             # previousUsed = area.used
-        #             area.used = newColumns[column]
-        #         else:
-        #             if not canCreateNew:
-        #                 print('To close!')
-        #                 continue
-        #             print('Creating a new area')
-        #             newArea = ContextArea(self, point, column, newColumns[column])
-        #             self._addArea(newArea)
+            #         area = areas[column]
+            #         # fullComp = self.model.competence(precise=True)
+            #         canCreateNew = distances[column] >= self.space.maxDistance * self.MIN_DISTANCE_CENTERS
+            #         if not area.default and area.attempt(currentColumns, newColumns, deletion, canCreateNew):
+            #             print('Updating current area')
+            #             # previousUsed = area.used
+            #             area.used = newColumns[column]
+            #         else:
+            #             if not canCreateNew:
+            #                 print('To close!')
+            #                 continue
+            #             print('Creating a new area')
+            #             newArea = ContextArea(self, point, column, newColumns[column])
+            #             self._addArea(newArea)
 
-        #         # newFullComp = self.model.competence(precise=True)
-        #         # print(f'Variation: {newFullComp - fullComp}')
-        #         # if newFullComp < fullComp * self.THRESHOLD_VALID:  # bestFullComp - self.THRESHOLD_RESET:
-        #         #     print('Reverting...')
-        #         #     if newArea:
-        #         #         self._removeArea(newArea)
-        #         #     else:
-        #         #         area.used = previousUsed
-        #         #     currentColumns = newColumns
-        #         # else:
-        #         area.stability = 0
+            #         # newFullComp = self.model.competence(precise=True)
+            #         # print(f'Variation: {newFullComp - fullComp}')
+            #         # if newFullComp < fullComp * self.THRESHOLD_VALID:  # bestFullComp - self.THRESHOLD_RESET:
+            #         #     print('Reverting...')
+            #         #     if newArea:
+            #         #         self._removeArea(newArea)
+            #         #     else:
+            #         #         area.used = previousUsed
+            #         #     currentColumns = newColumns
+            #         # else:
+            #         area.stability = 0
     
     # Visual
     def visualizeAreaColumn(self, column=0, options={}):
