@@ -137,12 +137,24 @@ class ModelDataset(Dataset):
         return (self.findModelsByOutcomeSpace(outcomeSpace, models) + [None])[0]
 
     def findModelsByOutcomeSpace(self, outcomeSpace, models=None):
-        models = models if models else self.enabledModels()
+        models = parameter(models, self.enabledModels())
         return [m for m in models if m.coversOutcomeSpaces(outcomeSpace)]
 
     def findModelsByActionSpace(self, actionSpace, models=None):
-        models = models if models else self.enabledModels()
+        models = parameter(models, self.enabledModels())
         return [m for m in models if m.coversActionSpaces(actionSpace)]
+    
+    def findModelsByEvent(self, event, models=None):
+        models = parameter(models, self.enabledModels())
+
+        outcomes = event.outcomes
+        outcomeSpace = outcomes.space
+        contextSpace = event.context.space
+
+        return [model for model in models
+                if model.isCoveredByOutcomeSpaces(outcomeSpace)
+                and model.isCoveredByContextSpaces(contextSpace)
+                and not np.all(outcomes.projection(model.outcomeSpace).npPlain() == 0)]
     
     def competences(self, precise=False):
         return {model: model.competence(precise=precise) for model in self.models if model.enabled}
@@ -153,20 +165,26 @@ class ModelDataset(Dataset):
 
     # Graph
     def controlledSpaces(self, models=None):
-        controlledModels = self.dependencyGraph(models)
+        controlledModels = self.dependencyGraph(startModels=models, hierarchical=True)
         spaces = set()
         for model in controlledModels:
             spaces |= set(model.outcomeSpace.flatSpaces)
         return spaces
 
-    def dependencyGraph(self, models=None):
+    def dependencyGraph(self, models=None, startModels=None, hierarchical=False):
         models = parameter(models, self.enabledModels())
+        startModels = parameter(startModels, models)
 
         graph = {}
-        for model in models:
+        for model in startModels:
             edges = set()
             for space in model.outcomeSpace.flatSpaces:
-                edges.update(set(self.findModelsByActionSpace(space, models)))
+                dependencies = self.findModelsByActionSpace(space, models)
+                edges.update(set(dependencies))
+                if hierarchical:
+                    for d in dependencies:
+                        if d not in startModels:
+                            startModels.append(d)
             graph[model] = tuple(edges)
 
         return graph

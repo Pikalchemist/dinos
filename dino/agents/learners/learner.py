@@ -86,8 +86,20 @@ class Learner(Agent):
     def _addEvent(self, event, config, cost=1.):
         self.dataset.addEvent(event, cost=cost)
     
+    def preProcessEvent(self, event, config, cost=1., convertToDataset=False):
+        if self.dataset and event.iteration not in self.processedEvents:
+            if convertToDataset:
+                event.convertTo(spaceManager=self.dataset, toData=True)
+            self._preProcessEvent(event, config, cost)
+    
+    def _preProcessEvent(self, event, config, cost=1.):
+        pass
+    
     def addMemory(self, memory, config):
         memory = self._convertMemory(memory)
+
+        for event in memory:
+            self.preProcessEvent(event, config)
 
         if not config.evaluating:
             for event in memory:
@@ -249,7 +261,7 @@ class Learner(Agent):
 
         def visualizeReachedContextGoals(self, range_=None, color=False, options={}):
             return self.visualizeGeneralData(self.reachedContextGoals(range_=range_), title='Reached ContextGoals', color=color, options=options)
-        
+
         def visualizeGoalErrors(self, range_=None, color=False, options={}):
             title = 'Goal Errors'
             data = self.goalErrors(range_=range_)

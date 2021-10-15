@@ -181,6 +181,14 @@ class Model(Serializable):
 
         # previousModel.spacesHistory.extend(self.spacesHistory)
         # self.spacesHistory = previousModel.spacesHistory
+    
+    def findActionFromEvent(self, event):
+        if self.isCoveredByActionSpaces(event.actions.space):
+            return event.actions.projection(self.actionSpace)
+        elif self.isCoveredByActionSpaces(event.primitiveActions.space):
+            return event.primitiveActions.projection(self.actionSpace)
+        else:
+            return event.outcomes.projection(self.actionSpace)
 
     def pointAdded(self, event):
         if self.contextSpacialization:
@@ -270,7 +278,7 @@ class Model(Serializable):
         raise NotImplementedError()
 
     def computeCompetence(self, error):
-        # error = min(error, 0.1)
+        error = min(error, 2)
         return max(0, min(1., (1. - error ** 2) / np.exp((error * 20))))  # ** 3
     
     # def computeCompetence(self, error, distanceGoal=0):
@@ -293,7 +301,7 @@ class Model(Serializable):
     
     @staticmethod
     def findSharedIds(self, *spaces, restrictionIds):
-        assert(len(spaces) > 0, 'At least 1 space is required!')
+        assert len(spaces) > 0, 'At least 1 space is required!'
 
         spaces = list(spaces)
         ids = spaces.pop(0).getIds()
@@ -402,18 +410,18 @@ class Model(Serializable):
         # print(f'{action}, {outcome} ?= {outcomeEstimated} -> {errorOutcome}')
         # self.dataset.logger.info(f'{errorOutcome:.2f} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
 
-        # if errorOutcome > 0.1:
+        # if errorOutcome > 0.1 or linearError > 0.1:
         #     if context:
         #         context = context.plain()
         #     print(
-        #         f'Failed {errorOutcome:.2f} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
-        #     print('--- ERROR ---')
-        #     print(outcome)
-        #     print(outcomeEstimated)
-        #     print(errorOutcome)
-        #     print(context)
-        #     print(action)
-        #     print('---       ---')
+        #         f'Failed {errorOutcome:.3f} {linearError:.3f} #{eventId}: {action.plain()} + {context} -> {outcome.plain()} vs estimated {outcomeEstimated.plain()}')
+            # print('--- ERROR ---')
+            # print(outcome)
+            # print(outcomeEstimated)
+            # print(errorOutcome)
+            # print(context)
+            # print(action)
+            # print('---       ---')
         return errorOutcome, linearError
 
     def _errorForwardAll(self, precise=False, almostZeros=None, onlyIds=None, contextColumns=None, contextColumnsOverwrite=None):
