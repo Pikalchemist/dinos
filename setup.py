@@ -23,5 +23,6 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    install_requires=["exlab", "Cython", "matplotlib", "numpy", "panda3d", "Pillow", "pygame", "pymunk", "scikit-learn", "scipy", "sklearn"],
+    install_requires=["exlab", "Cython", "matplotlib==3.2", "numpy", "panda3d",
+                      "Pillow", "pygame", "pymunk", "scikit-learn", "scipy", "sklearn"],
 )
