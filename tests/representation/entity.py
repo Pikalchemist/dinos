@@ -2,9 +2,9 @@ import unittest
 from pathlib import Path
 
 
-from dino.data.spacemanager import SpaceManager
-from dino.representation.entity import Entity
-from dino.representation.property import Property
+from dinos.data.spacemanager import SpaceManager
+from dinos.representation.entity import Entity
+from dinos.representation.property import Property
 
 
 class TestEntity(unittest.TestCase):

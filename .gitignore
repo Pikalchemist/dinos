@@ -10,7 +10,7 @@ __pycache__/
 
 # C extensions
 *.so
-dino/data/*.c
+dinos/data/*.c
 
 # Distribution / packaging
 .Python

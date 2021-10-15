@@ -2,8 +2,8 @@ import unittest
 from pathlib import Path
 
 
-from dino.data.spacemanager import SpaceManager
-from dino.data.space import Space
+from dinos.data.spacemanager import SpaceManager
+from dinos.data.space import Space
 
 
 class TestLoader(unittest.TestCase):

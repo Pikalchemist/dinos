@@ -1,13 +1,13 @@
-# Dino
+# Dinos
 
-Dino is a simulation environment for active learning algorithms.
+Dinos is a simulation environment for active learning algorithms.
 
 
 # Getting started
 
 First of all, install the package either using pip:
 
-    pip install dino
+    pip install dinos
 
 Or from the git repository:
 
@@ -19,17 +19,17 @@ Examples are provided in the `examples` folder from the git repository.
 
 # How does it works
 
-To run a Dino experiment you need an `Environment` and an `Agent`.  
+To run a Dinos experiment you need an `Environment` and an `Agent`.  
 For instance, an environment may be initialized as follow:
 
-    from dino.environments.playground import PlaygroundEnvironment
+    from dinos.environments.playground import PlaygroundEnvironment
     env = PlaygroundEnvironment()
 
-From there you can either use your own code and use low level API to interact with the environment: `env.step(self, action, actionParameters=[], config=None)` as detailed later on. The second option is to use the Dino Agent system to manage your algorithm.
+From there you can either use your own code and use low level API to interact with the environment: `env.step(self, action, actionParameters=[], config=None)` as detailed later on. The second option is to use the Dinos Agent system to manage your algorithm.
 
 For instance to create an agent that will perform a random action at each step:
 
-    from dino.agents.random import RandomAgent
+    from dinos.agents.random import RandomAgent
     agent = RandomAgent(env.world.findHost())
 
 > `env.world.findHost()` let you find an entity in the environment that can be controlled by your learner (we call such entity an *host*)
