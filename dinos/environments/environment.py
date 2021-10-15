@@ -96,7 +96,7 @@ class Environment(SpaceManager, EntityManager):
         self.scene = None
         self.sceneClass = self.defaultSceneCls
 
-        if issubclass(sceneCls, SceneSetup):
+        if sceneCls is not None and issubclass(sceneCls, SceneSetup):
             self.registerScene(sceneCls)
             self.sceneClass = sceneCls
         elif isinstance(sceneCls, str):
