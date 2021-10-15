@@ -898,6 +898,7 @@ class Planning(object):
     
     def _searchBestMove(self, baseMove, number, close, context):
         move = baseMove.clone()
+        distanceToCenter = None
         for j in range(10):
             if j > 0:
                 move *= 1. * distanceToCenter / move.norm()

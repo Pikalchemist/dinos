@@ -5,6 +5,7 @@
 '''
 
 from PIL import Image
+from dinos import utils
 
 
 class Engine(object):
