@@ -30,7 +30,7 @@ class RegressionModel(Model):
     MAXIMUM_NULL = 5
     OUTLIER_MAX_DISTANCE = 100
     ENFORCE_MAX_NN_DISTANCE = False
-    MAX_ERROR_REACHABLE = 0.02
+    MAX_ERROR_REACHABLE = 0.002
 
     def __init__(self, dataset, actionSpace, outcomeSpace, contextSpace=[], restrictionIds=None, model=None,
                  register=True, metaData={}):
@@ -44,7 +44,7 @@ class RegressionModel(Model):
     #     error = min(error, 0.1)
     #     return max(0, min(1., (1. - distanceGoal - error ** 2) / np.exp((error * 20) ** 3)))
 
-    def reachable(self, goal: Goal, context: Observation = None, precision=0.5, precisionOrientation=0.1, inverse=True, contextColumns=None, dontMove=[], adaptContext=False):
+    def reachable(self, goal: Goal, context: Observation = None, precision=0.25, precisionOrientation=0.1, inverse=True, contextColumns=None, dontMove=[], adaptContext=False):
         assert(goal is not None)
         try:
             # norm = goal.norm() / goal.space.maxDistance

@@ -37,8 +37,8 @@ class AutonomousStrategy(RandomStrategy):
             'randomThreshold', 0.1)  # 1 -> only random
         self.randomFirstPassStart = 1.
         self.randomFirstPassEnd = 0.4
-        self.randomFirstPassNumber = 150
-        self.randomFirstPassNumberMin = 20
+        self.randomFirstPassNumber = 200
+        self.randomFirstPassNumberMin = 100
 
     def _serialize(self, serializer):
         dict_ = super()._serialize(serializer)
@@ -131,7 +131,7 @@ class AutonomousStrategy(RandomStrategy):
             # (distance - space.options['err']) / space.options['range']
             # prob = 0.8*(sigmoid(error) - 0.5) + 0.5
             # prob = (prob - self.randomFirstPass) / (1. - self.randomFirstPass)
-            prob = error  # threshold(prob, self.randomThreshold)
+            prob = 0.1 + 0.9 * error  # threshold(prob, self.randomThreshold)
 
         '''space = goal.space
         if len(space.data) > self.options['min_points']:

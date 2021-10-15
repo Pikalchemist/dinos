@@ -108,8 +108,8 @@ class ContextSpatialization(Serializable):
         self.resetAreas(False)
     
     def _groundTruthLidar(self, point, column):
-        if point.norm() < 0.01:
-            return False
+        if point.norm() < 0.2:
+            return True
         point = point.plain()
         direction = np.arctan2(point[1], point[0]) / np.math.pi * 180.
         col = int(np.round(direction / 45)) % 8
@@ -156,8 +156,8 @@ class ContextSpatialization(Serializable):
     
     def columns(self, point, space=None):
         point = point.projection(parameter(space, self.space))
-        # relevances = np.array([False, True])
-        # return np.array([relevances[self._findAreaForOneColumn(point, column, space, hardcoded=True)[0]] for column in range(self.dim)])
+        relevances = np.array([False, True])
+        return np.array([relevances[self._findAreaForOneColumn(point, column, space, hardcoded=True)[0]] for column in range(self.dim)])
         return np.array([self.relevances[column, self._findAreaForOneColumn(point, column, space)[0]] for column in range(self.dim)])
     
     def columnsAreas(self, areas):
