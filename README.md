@@ -11,7 +11,6 @@ First of all, install the package either using pip:
 
 Or from the git repository:
 
-    pip install -r ./requirements.txt
     pip install -e .
 
 Examples are provided in the `examples` folder from the git repository.
