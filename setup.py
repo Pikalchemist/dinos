@@ -8,7 +8,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="dino",
-    version="0.0.1",
+    version="0.1.1",
     author="Alexandre Manoury",
     author_email="alex@pika.tf",
     description="Active Learning Environments",
@@ -17,10 +17,11 @@ setup(
     url="https://github.com/Pikalchemist/dino",
     ext_modules=cythonize("dino/data/operations.pyx"),
     include_dirs=[np.get_include()],
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(exclude=('tests', 'examples')),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    install_requires=["Cython", "matplotlib", "numpy", "panda3d", "Pillow", "pygame", "pymunk", "scikit-learn", "scipy", "sklearn"],
 )
