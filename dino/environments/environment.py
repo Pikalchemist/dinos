@@ -10,6 +10,7 @@ import copy
 import random
 import numpy as np
 import threading
+from pathlib import Path
 
 from exlab.lab.counter import IterationCounter
 from exlab.modular.module import manage
@@ -55,6 +56,8 @@ class Environment(SpaceManager, EntityManager):
 
     sceneClasses = []
     defaultSceneCls = None
+
+    RESOURCE_FOLDERNAME = 'resources'
 
     def __init__(self, sceneCls=None, options={}):
         """
@@ -142,6 +145,9 @@ class Environment(SpaceManager, EntityManager):
         if name.endswith(self.CLASS_ENDNAME):
             name = name[:-len(self.CLASS_ENDNAME)]
         return name
+    
+    def resourcesPath(self, filepath=''):
+        return Path(sys.modules[self.__class__.__module__].__file__).parent / self.RESOURCE_FOLDERNAME / filepath
 
     # Scenes
     @classmethod
@@ -364,7 +370,7 @@ class Environment(SpaceManager, EntityManager):
 
     # Wrappers
     def image(self):
-        return self.engine.image()
+        return self.engine.graphicalEngine.image()
     
     def show(self):
         self.engine.show()
@@ -374,10 +380,10 @@ class Environment(SpaceManager, EntityManager):
     
     @property
     def gui(self):
-        return self.engine.gui
+        return self.engine.graphicalEngine.gui
     
     def displayGui(self, gui=True):
-        self.engine.displayGui(gui)
+        self.engine.graphicalEngine.displayGui(gui)
     
     # Visual
     def visualizeTimeByIteration(self, options=None):

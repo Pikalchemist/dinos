@@ -49,7 +49,7 @@ class Test(Serializable):
         self.scene.testIds[self.id] = self
 
     def __repr__(self):
-        return f'Test on {self.space} ({len(self.points)} point(s))'
+        return f'Test \'{self.name}\' on {self.space} ({len(self.points)} point(s))'
 
 
 class TestResult(Serializable):
