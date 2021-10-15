@@ -16,7 +16,7 @@ Or from the git repository:
 Examples are provided in the `examples` folder from the git repository.
 
 
-# How does it works
+# How does it work
 
 To run a Dinos experiment you need an `Environment` and an `Agent`.  
 For instance, an environment may be initialized as follow:
