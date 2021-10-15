@@ -9,15 +9,15 @@ from dinos.representation.property import Property
 
 class TestEntity(unittest.TestCase):
     def test_simple(self):
-        sm = SpaceManager()
+        sm = SpaceManager('test')
 
         obj1 = Entity('box')
-        sm.scene.addChild(obj1)
+        sm.world.addChild(obj1)
 
         color = Property(obj1, 'color', 1)
 
-        print(sm.scene.cascadingChildren())
-        print(sm.scene.cascadingProperties())
+        # print(sm.world.cascadingChildren())
+        # print(sm.world.cascadingProperties())
 
 
 if __name__ == '__main__':
