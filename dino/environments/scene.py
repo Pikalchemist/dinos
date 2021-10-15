@@ -95,7 +95,7 @@ class SceneSetup(object):
     def _reset(self):
         pass
 
-    def _draw(self):
+    def _draw(self, base, drawOptions):
         pass
 
     def _preIteration(self):

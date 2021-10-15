@@ -10,6 +10,9 @@ import pymunk
 from pymunk import Vec2d
 import pymunk.pygame_util
 
+from panda3d.core import Point2, Point3, Vec2, Vec3, Vec4
+from dino.environments.engines.tools.panda import PandaTools
+
 from dino.representation.physical_entity import PhysicalEntity
 from dino.representation.property import MethodObservable, AttributeObservable
 
@@ -20,6 +23,8 @@ class Cylinder(PhysicalEntity):
         self.coordsInit = coords
         self.coords = coords
         self.direction = 0.
+
+        self.pandaInit = False
 
         self.radius = radius
         self.color = color if color else (
@@ -73,6 +78,19 @@ class Cylinder(PhysicalEntity):
     def stopPhysics(self, physics):
         physics.remove(self.body, self.shape)
 
-    def draw(self, screen):
-        pygame.draw.circle(screen, self.color, list(
-            map(int, self.absolutePosition())), self.radius)
+    def draw(self, base, drawOptions):
+        if drawOptions.pygame:
+            pygame.draw.circle(base, self.color, list(map(int, self.absolutePosition())), self.radius)
+        if drawOptions.panda:
+            if not self.pandaInit:
+                self.pandaInit = True
+
+                pt = PandaTools()
+                pt.color = Vec4(*self.color, 1.)
+                pt.cylinder(self.radius, 40.)
+                node = pt.end()
+
+                self.nodePath = base.render.attachNewNode(node)
+                self.nodePath.setShaderAuto()
+            self.nodePath.setPos(*self.body.position, 0.)
+            

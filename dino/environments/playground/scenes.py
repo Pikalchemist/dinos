@@ -6,6 +6,9 @@ import random
 from dino.environments.scene import SceneSetup
 from dino.evaluation.tests import UniformGridTest, PointsTest
 
+from panda3d.core import Point2, Point3, Vec3, Vec4
+from dino.environments.engines.tools.panda import PandaTools
+
 from .environment import PlaygroundEnvironment
 from .cylinder import Cylinder
 from .button import Button
@@ -19,6 +22,7 @@ class BaseScene(SceneSetup):
     # Setup
     def _baseSetup(self):
         self.iterationReset = 0
+        self.pandaInit = False
 
     # Resets
     def countReset(self, forceReset=False):
@@ -43,6 +47,8 @@ class BaseScene(SceneSetup):
 class EmptyScene(BaseScene):
     DESCRIPTION = 'Just a mobile robot with no obstacle and no other objects.\n' +\
                   'Use: learning how to move.'
+    
+
 
     # Setup
     def _setup(self):
@@ -74,10 +80,14 @@ class EmptyScene(BaseScene):
         self._testAgentMoving()
 
     def _testAgentMoving(self):
-        points = [(200, 200),
-                  (200, 400),
+        points = [(300, 300),
+                  (500, 300),
+                  (400, 200),
                   (400, 400),
-                  (400, 200)]
+                  (300, 200),
+                  (300, 400),
+                  (500, 400),
+                  (500, 200)]
         test = PointsTest('agent-moving', self.world.cascadingProperty('Agent.position').space, points, relative=False)
         self.addTest(test)
 
@@ -87,13 +97,35 @@ class EmptyScene(BaseScene):
             self._resetAgent()
     
     def setupPreTest(self, test):
-        self.world.child('Agent').body.position = (350, 300)
+        self.world.child('Agent').body.position = (400, 300)
     
     def setupPreTestPoint(self, test, point):
-        self.world.child('Agent').body.position = (350, 300)
+        self.world.child('Agent').body.position = (400, 300)
     
     def _resetAgent(self, rand=True):
         self.world.child('Agent').body.position = (random.choice([100, 200, 300, 400]), random.randint(150, 450)) if rand else (300, 300)
+    
+    def _draw(self, base, drawOptions):
+        if drawOptions.panda:
+            if not self.pandaInit:
+                self.pandaInit = True
+            
+            W, H = 600, 550
+            base.cam.setPos(W * 0.4, H * 1.8, H * 2)
+            base.cam.lookAt(W // 2, H // 2, 0)
+
+            pt = PandaTools()
+            pt.color = Vec4(0.59, 0.54, 0.16, 1.)
+            # pt.horizontalPlane(Point3(0, 0, 0), Point3(W, H, 0))
+            pt.horizontalPlane(Point3(50, 50, 0), Point3(550, 500, 0))
+            pt.color = Vec4(0.69, 0.7, 0.71, 1.)
+            Z = 10000
+            pt.horizontalPlane(Point3(-Z, -Z, -1), Point3(Z, Z, -1))
+            node = pt.end()
+
+            nodePath = base.render.attachNewNode(node)
+            nodePath.setPos(0., 0., 0.)
+            nodePath.setShaderAuto()
 
 
 class RoomWithWallsScene(EmptyScene):
@@ -129,13 +161,19 @@ class RoomWithWallsScene(EmptyScene):
             self.world.addChild(wall)
 
     # Tests
-    def _testAgentMoving(self):
+    def _setupTests(self):
+        self._testAgentMoving()
+        self._testAgentMovingObstacles()
+
+    def _testAgentMovingObstacles(self):
         # Test
-        points = [(300, 200),
-                  (300, 400),
-                  (400, 300)]
-        test = PointsTest('agent-moving', self.world.cascadingProperty('Agent.position').space, points, relative=False)
-        self.addTest(test)
+        # points = [(300, 200),
+        #           (300, 400),
+        #           (500, 400),
+        #           (500, 200)]
+        # test = PointsTest('agent-moving', self.world.cascadingProperty('Agent.position').space, points, relative=False)
+        # self.addTest(test)
+        # EmptyScene._testAgentMoving(self)
 
         # Test
         points = [(150, 250),
@@ -146,7 +184,8 @@ class RoomWithWallsScene(EmptyScene):
 
         def prePoint(point):
             point = point.plain()
-            self.world.child('Agent').body.position = (350 if point[0] < 260 else 150, 250 if point[1] < 300 else 350)
+            self.world.child('Agent').body.position = (350 if point[0] < 260 else 150,
+                                                       250 if point[1] < 300 else 350)
 
         test.prePoint = prePoint
         self.addTest(test)

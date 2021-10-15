@@ -43,6 +43,6 @@ class Button(LiveEntity):
         return False
         # return [self.shape.body.position.x, self.shape.body.position.y]
 
-    def draw(self, screen):
-        pygame.draw.circle(screen, (0, 0, 200), (int(
-            self.coords.x), int(self.coords.y)), self.radius)
+    def draw(self, base, drawOptions):
+        if drawOptions.pygame:
+            pygame.draw.circle(base, (0, 0, 200), (int(self.coords.x), int(self.coords.y)), self.radius)

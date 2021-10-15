@@ -10,6 +10,10 @@ import pymunk
 from pymunk import Vec2d
 import pymunk.pygame_util
 
+from direct.actor import Actor
+from panda3d.core import Point2, Point3, Vec2, Vec3, Vec4, Material
+from dino.environments.engines.tools.panda import PandaTools
+
 from dino.representation.physical_entity import PhysicalEntity
 from dino.representation.property import MethodObservable, AttributeObservable, MethodEffector
 from .cylinder import Cylinder
@@ -96,31 +100,55 @@ class Agent(Cylinder):
         else:
             pass
 
-    def draw(self, screen):
-        pygame.draw.circle(screen, (224, 224, 0), list(
-            map(int, self.absolutePosition())), self.radius, 1)
+    def draw(self, base, drawOptions):
+        if drawOptions.pygame:
+            pygame.draw.circle(base, (224, 224, 0), list(
+                map(int, self.absolutePosition())), self.radius, 1)
 
-        pygame.draw.circle(self.surface, (224, 224, 224),
-                           (self.sufaceWidth // 2, self.sufaceWidth // 2), self.radius)
-        pygame.draw.circle(self.surface, self.color, (self.sufaceWidth //
-                                                      2, self.sufaceWidth // 2), self.radius, 1)
+            pygame.draw.circle(self.surface, (224, 224, 224),
+                            (self.sufaceWidth // 2, self.sufaceWidth // 2), self.radius)
+            pygame.draw.circle(self.surface, self.color, (self.sufaceWidth //
+                                                        2, self.sufaceWidth // 2), self.radius, 1)
 
-        # Orientation
-        w = 10
-        points = [(self.sufaceWidth // 2 + self.radius, self.sufaceWidth // 2),
-                  (self.sufaceWidth // 2 + self.radius -
-                   w, self.sufaceWidth // 2 - w // 2),
-                  (self.sufaceWidth // 2 + self.radius - w, self.sufaceWidth // 2 + w // 2)]
-        pygame.draw.polygon(self.surface, self.color, points)
+            # Orientation
+            w = 10
+            points = [(self.sufaceWidth // 2 + self.radius, self.sufaceWidth // 2),
+                    (self.sufaceWidth // 2 + self.radius -
+                    w, self.sufaceWidth // 2 - w // 2),
+                    (self.sufaceWidth // 2 + self.radius - w, self.sufaceWidth // 2 + w // 2)]
+            pygame.draw.polygon(self.surface, self.color, points)
 
-        # Wheels
-        for pos in (-1, 1):
-            pygame.draw.line(self.surface, self.color,
-                             (self.sufaceWidth // 2 - self.radius // 2,
-                              self.sufaceWidth // 2 + pos * self.radius // 2),
-                             (self.sufaceWidth // 2 + self.radius // 2, self.sufaceWidth // 2 + pos * self.radius // 2), 3)
+            # Wheels
+            for pos in (-1, 1):
+                pygame.draw.line(self.surface, self.color,
+                                (self.sufaceWidth // 2 - self.radius // 2,
+                                self.sufaceWidth // 2 + pos * self.radius // 2),
+                                (self.sufaceWidth // 2 + self.radius // 2, self.sufaceWidth // 2 + pos * self.radius // 2), 3)
 
-        surface = pygame.transform.rotate(
-            self.surface, np.rad2deg(self.direction) - 90.)
-        screen.blit(surface, list(
-            map(lambda x: int(x) - surface.get_width() // 2, self.absolutePosition())))
+            surface = pygame.transform.rotate(
+                self.surface, np.rad2deg(self.direction) - 90.)
+            base.blit(surface, list(
+                map(lambda x: int(x) - surface.get_width() // 2, self.absolutePosition())))
+        if drawOptions.panda:
+            if not self.pandaInit:
+                self.pandaInit = True
+
+                self.robotNode = base.render.attachNewNode('robot axis')
+                # self.robotModel = Actor.Actor('panda-model', {'walk': 'panda-walk4'})
+                self.robotModel = base.loader.loadModel('rb1.bam')
+                self.robotModel.reparentTo(self.robotNode)
+                self.robotModel.setScale(self.radius / 0.8)
+                # self.robotModel.setScale(0.5)
+                # self.pandaWalk = self.robotModel.actorInterval('walk', playRate=1.8)
+                # self.pandaWalk.loop()
+
+                print(self.robotModel.findAllMaterials())
+
+                material = Material()
+                material.setShininess(5.0)
+                material.setBaseColor((0, 0, 1, 1))
+                # material.setAmbient((0, 0, 1, 1))
+                self.robotModel.setMaterial(material)
+            self.robotNode.setPos(*self.body.position, 10.)
+            self.robotNode.setHpr(-np.rad2deg(self.direction) - 90, 0., 0.)
+

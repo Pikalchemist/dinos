@@ -1,4 +1,4 @@
-from ..engine import Engine
+from ..engine import Engine, GraphicalEngine, DrawOptions
 
 
 class InternalEngine(Engine):
