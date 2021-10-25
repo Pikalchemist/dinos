@@ -3,7 +3,7 @@
 Dinos is a simulation environment for active learning algorithms.
 
 
-# Getting started
+## Getting started
 
 First of all, install the package either using pip:
 
@@ -16,7 +16,7 @@ Or from the git repository:
 Examples are provided in the `examples` folder from the git repository.
 
 
-# How does it work
+## How does it work
 
 To run a Dinos experiment you need an `Environment` and an `Agent`.  
 For instance, an environment may be initialized as follow:
@@ -40,3 +40,9 @@ Additionally a specific type of agent exists: `Learner`. This class is designed 
 Each `Learner` has a `train(self, iterations=None, untilIteration=None, episodes=None, untilEpisode=None)` method used to train your learner for a given number of iterations or episodes.
 
 More details are present in the `examples` folder from the git repository.
+
+
+## Algorithms
+
+Dinos includes basic agent and learners but more sofisticated ones may be found here:
+- [Curiosity Driven Learners](https://github.com/Pikalchemist/cdl)
