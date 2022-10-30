@@ -184,7 +184,10 @@ class Panda3DGE(GraphicalEngine):
         self.base = ShowBase.ShowBase()
 
         getModelPath().appendDirectory(self.pandaResourcesPath())
-        print(getModelPath())
+
+        # import simplepbr
+        # pipeline = simplepbr.init()
+        # pipeline.enable_shadows = True
 
         # if self.gui:
         self.base.cam.setPos(50, 50, 50)
@@ -227,6 +230,11 @@ class Panda3DGE(GraphicalEngine):
         alight.setColor((0.3, 0.3, 0.3, 1))
         alnp = self.base.render.attachNewNode(alight)
         self.base.render.setLight(alnp)
+
+        from panda3d.core import RenderState, CullFaceAttrib, ColorWriteAttrib
+
+        self.sun.node().setInitialState(RenderState.make(
+            CullFaceAttrib.makeReverse(), ColorWriteAttrib.make(ColorWriteAttrib.COff)))
 
         self.base.render.setShaderAuto()
 

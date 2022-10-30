@@ -135,20 +135,35 @@ class Agent(Cylinder):
 
                 self.robotNode = base.render.attachNewNode('robot axis')
                 # self.robotModel = Actor.Actor('panda-model', {'walk': 'panda-walk4'})
-                self.robotModel = base.loader.loadModel('rb1.bam')
+                self.robotModel = base.loader.loadModel('robot.bam')
+                # self.robotModel = base.loader.loadModel('robot.egg')
                 self.robotModel.reparentTo(self.robotNode)
-                self.robotModel.setScale(self.radius / 0.8)
+                self.robotModel.setScale(self.radius / 0.7)
                 # self.robotModel.setScale(0.5)
                 # self.pandaWalk = self.robotModel.actorInterval('walk', playRate=1.8)
                 # self.pandaWalk.loop()
 
-                print(self.robotModel.findAllMaterials())
+                # for s in ('Base'):#, 'Lidar', 'Wheel'):
+                #     material = self.robotModel.findMaterial(s)
+                #     # material = Material()
+                #     # material = m
+                #     material.setShininess(5.)
+                #     material.setBaseColor((0, 0, 1, 1))
+                #     # material.setDiffuse((0, 0, 1, 1))
+                #     # material.setAmbient((0, 1, 0, 1))
+                #     # material.setEmission((0.5, 0.5, 0.5, 1))
+                #     # material.setSpecular((1, 1, 1, 1))
+                #     print(material)
+                #     # print(m)
+                #     # self.robotModel.replaceMaterial(m, material)
 
-                material = Material()
-                material.setShininess(5.0)
-                material.setBaseColor((0, 0, 1, 1))
-                # material.setAmbient((0, 0, 1, 1))
-                self.robotModel.setMaterial(material)
+                # material = self.robotModel.findMaterial('Lidar')
+                # material.setBaseColor((1, 1, 1, 1))
+
+                self.robotModel.setColor(0.4, 0.4, 0.45, 1)
+
+                # print(self.robotModel.findAllMaterials())
+                # self.robotNode.setShaderAuto()
             self.robotNode.setPos(*self.body.position, 10.)
             self.robotNode.setHpr(-np.rad2deg(self.direction) - 90, 0., 0.)
 

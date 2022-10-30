@@ -345,6 +345,7 @@ class Performance(object):
                 self.lastSequenceNode.startingPredictionDerive = predictionDerive
 
                 # if predictionDerive > self.maxDerive * .5 or 
+                return False
                 if predictedLinearError > self.MAX_PREDICTED_LINEAR_ERROR:
                     self.root.lastSequence.append(PerformedInfo(
                         f'Replanning because of exceeding prediction derive {predictionDerive:.4f} > {self.maxDerive:.4f} ({predictedLinearError:.6f})'))

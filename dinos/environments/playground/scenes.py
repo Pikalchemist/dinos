@@ -48,7 +48,10 @@ class EmptyScene(BaseScene):
     DESCRIPTION = 'Just a mobile robot with no obstacle and no other objects.\n' +\
                   'Use: learning how to move.'
     
-
+    X1 = 50
+    X2 = 550
+    Y1 = 50
+    Y2 = 500
 
     # Setup
     def _setup(self):
@@ -117,7 +120,7 @@ class EmptyScene(BaseScene):
             pt = PandaTools()
             pt.color = Vec4(0.59, 0.54, 0.16, 1.)
             # pt.horizontalPlane(Point3(0, 0, 0), Point3(W, H, 0))
-            pt.horizontalPlane(Point3(50, 50, 0), Point3(550, 500, 0))
+            pt.horizontalPlane(Point3(self.X1, self.Y1, 0), Point3(self.X2, self.Y2, 0))
             pt.color = Vec4(0.69, 0.7, 0.71, 1.)
             Z = 10000
             pt.horizontalPlane(Point3(-Z, -Z, -1), Point3(Z, Z, -1))
@@ -287,7 +290,85 @@ class CylinderWallsScene(OneCylinderScene, RoomWithWallsScene):
 
         self._setupAgent()
         self._setupWalls()
-        self._setupCylinder1()
+        self._setupCylinders()
+
+
+class MultiCylindersWallsScene(OneCylinderScene, RoomWithWallsScene):
+    X1 = -250
+    X2 = 850
+
+    # Setup
+    def _setup(self):
+        self._baseSetup()
+
+        self._setupAgent()
+        self._setupWalls()
+        self._setupCylinders()
+    
+    def _setupCylinders(self):
+        numberMovable = 3
+        numberFixed = 4
+
+        self.cylinders = []
+        for i in range(numberMovable + numberFixed):
+            cylinder = Cylinder((450, 300),name=f'Cylinder{i}', movable=i < numberMovable,
+                                radius=random.randint(10, 22),
+                                height=random.randint(20, 50))
+            self.cylinders.append(cylinder)
+            self.world.addChild(cylinder)
+        self._resetCylinders()
+
+    def _setupWalls(self):
+        self.walls = []
+
+        # outer walls
+        outw = 6
+        outw2 = outw // 2
+        self.walls += [Wall((self.X1, 50.0), (self.X2, 50.0), outw),
+                       Wall((self.X2, 50.0 - outw2 + 1), (self.X2, 500.0 + outw2), outw),
+                       Wall((self.X2, 500.0), (self.X1, 500.0), outw),
+                       Wall((self.X1, 500.0 + outw2), (self.X1, 50.0 - outw2 + 1), outw)]
+
+        # inner walls
+        w = 20
+        w2 = 10
+        self.walls += [Wall((260.0, 200.0), (260.0, 400.0), w),
+                       Wall((50, 50), (50, 350), w2),
+                       Wall((-100, 200), (-100, 500), w2),
+                       Wall((550, 50), (550, 200), w2),
+                       Wall((550, 350), (550, 500), w2),
+                       Wall((700, 175), (700, 375), w2),
+                       ]
+
+        for wall in self.walls:
+            self.world.addChild(wall)
+
+    # Resets
+    def setupEpisode(self, config, forceReset=False):
+        if self.countReset(forceReset):
+            self._resetAgent()
+            self._resetCylinders()
+
+    def setupPreTest(self, test):
+        self._resetAgent()
+        self._resetCylinders()
+
+    def _resetCylinders(self):
+        minDistance = 40
+        avoid = [self.world.child('Agent').position]
+        avoidXs = np.array([-100, 50, 260, 550, 700])
+        for cylinder in self.cylinders:
+            while True:
+                position = (random.randint(-175, 775), random.randint(125, 425))
+                if np.any(np.abs((avoidXs[:, None] - np.array(position))[:, 0]) < minDistance):
+                    continue
+                distances = np.sum((np.array(avoid) - np.array(position)) ** 2, axis=1) ** .5
+                if np.any(distances < minDistance):
+                    continue
+                break
+
+            cylinder.position = position
+            avoid.append(position)
 
 
 class OneCylinderPlusFixedScene(OneCylinderScene):
@@ -309,4 +390,5 @@ PlaygroundEnvironment.registerScene(EmptyScene, True)
 PlaygroundEnvironment.registerScene(RoomWithWallsScene)
 PlaygroundEnvironment.registerScene(OneCylinderScene)
 PlaygroundEnvironment.registerScene(OneCylinderPlusFixedScene)
+PlaygroundEnvironment.registerScene(MultiCylindersWallsScene)
 

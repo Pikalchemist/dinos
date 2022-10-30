@@ -18,7 +18,7 @@ from dinos.representation.property import MethodObservable, AttributeObservable
 
 
 class Cylinder(PhysicalEntity):
-    def __init__(self, coords=(480, 300), radius=20, movable=True, name='', color=None, xydiscretization=20):
+    def __init__(self, coords=(480, 300), radius=20, movable=True, name='', color=None, height=40, xydiscretization=20):
         super().__init__(self.__class__.__name__, name)
         self.coordsInit = coords
         self.coords = coords
@@ -27,8 +27,9 @@ class Cylinder(PhysicalEntity):
         self.pandaInit = False
 
         self.radius = radius
+        self.height = height
         self.color = color if color else (
-            (0, 224, 128) if movable else (255, 0, 0))
+            (25, 255, 254) if movable else (240, 0, 64))
         self.mass = 1. if movable else 1000000.
 
         MethodObservable(self, 'position', self.absolutePosition,
@@ -45,6 +46,20 @@ class Cylinder(PhysicalEntity):
     #     # - self.env.agents[0].shape.body.position
     #     relativePosition = self.body.position
     #     return [relativePosition.x, relativePosition.y]
+
+    @property
+    def position(self):
+        if self.shape is not None:
+            return self.body.position
+        else:
+            return self.coords
+    
+    @position.setter
+    def position(self, coords):
+        if self.shape is not None:
+            self.body.position = coords
+        else:
+            self.coords = coords
 
     def absolutePosition(self, property=None):
         return [self.shape.body.position.x, self.shape.body.position.y]
@@ -86,8 +101,8 @@ class Cylinder(PhysicalEntity):
                 self.pandaInit = True
 
                 pt = PandaTools()
-                pt.color = Vec4(*self.color, 1.)
-                pt.cylinder(self.radius, 40.)
+                pt.color = Vec4(*map(lambda x: x/255., self.color), 1.)
+                pt.cylinder(self.radius, self.height)
                 node = pt.end()
 
                 self.nodePath = base.render.attachNewNode(node)
